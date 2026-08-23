@@ -572,6 +572,36 @@ class TypedSessionTests(unittest.IsolatedAsyncioTestCase):
             await session.close()
         self.assertEqual(peer.close_count, 1)
 
+    async def test_invalid_result_cancelled_during_cleanup_rejoins_on_close(self) -> None:
+        import codex_app_server_client as client_api
+
+        for cleanup_fails in (False, True):
+            with self.subTest(cleanup_fails=cleanup_fails):
+                peer = ScriptedSessionPeer()
+                peer.close_gate = asyncio.Event()
+                if cleanup_fails:
+                    peer.close_error = RuntimeError("private-cleanup-content")
+                peer.result_overrides["thread/read"] = {"invalid": True}
+                _, session = await self.initialize(peer)
+                operation = asyncio.create_task(
+                    session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                )
+                await peer.close_started.wait()
+                operation.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await operation
+                retry = asyncio.create_task(session.close())
+                await asyncio.sleep(0)
+                self.assertFalse(retry.done())
+                peer.close_gate.set()
+                if cleanup_fails:
+                    with self.assertRaises(TransportCleanupError) as raised:
+                        await retry
+                    self.assertNotIn("private", repr(vars(raised.exception)))
+                else:
+                    await retry
+                self.assertEqual(peer.close_count, 1)
+
 
 class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
     NOTIFICATIONS = (
@@ -755,6 +785,41 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                     await anext(session.callbacks())
                 self.assertNotIn(str(overflow), str(raised.exception))
 
+    async def test_lone_surrogate_callback_id_is_rejected_before_publication(self) -> None:
+        peer = ScriptedSessionPeer()
+        client, session = await self.initialize(peer, limits=ClientLimits(max_callbacks=1))
+        params = model_fixture("FileChangeRequestApprovalParams")
+        assert isinstance(params, dict)
+        peer.queue_callback("\ud800", "item/fileChange/requestApproval", params)
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        with self.assertRaises(JsonRpcFramingError):
+            await anext(session.callbacks())
+        self.assertEqual(len(client._coordinator._callback_states), 0)
+        self.assertEqual(
+            sum("result" in write for write in peer.writes),
+            0,
+        )
+
+    async def test_lone_surrogate_notification_value_and_key_fail_before_queueing(
+        self,
+    ) -> None:
+        cases = (
+            {"method": "warning", "params": {"message": "\ud800"}},
+            {
+                "method": "warning",
+                "params": {"message": "safe", "\ud800": "value"},
+            },
+        )
+        for notification in cases:
+            with self.subTest(notification_keys=tuple(notification["params"])):
+                peer = ScriptedSessionPeer()
+                client, session = await self.initialize(peer)
+                peer._queue_notification(notification)
+                await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+                with self.assertRaises(JsonRpcFramingError):
+                    await anext(session.events())
+                self.assertEqual(len(client._coordinator._events), 0)
+
     async def test_all_callback_families_echo_string_and_signed_int64_ids(self) -> None:
         peer = ScriptedSessionPeer()
         _, session = await self.initialize(peer)
@@ -812,7 +877,12 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         await peer.callback_response_started.wait()
         response_task = callback._state.response_task
         assert response_task is not None
-        response_task.add_done_callback(lambda _task: waiter.cancel())
+
+        def cancel_waiter_twice(_task: asyncio.Task[None]) -> None:
+            waiter.cancel()
+            waiter.cancel()
+
+        response_task.add_done_callback(cancel_waiter_twice)
         peer.callback_response_gate.set()
         await waiter
         self.assertEqual(waiter.cancelling(), 0)
@@ -834,7 +904,12 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         await peer.callback_response_started.wait()
         response_task = callback._state.response_task
         assert response_task is not None
-        response_task.add_done_callback(lambda _task: waiter.cancel())
+
+        def cancel_waiter_twice(_task: asyncio.Task[None]) -> None:
+            waiter.cancel()
+            waiter.cancel()
+
+        response_task.add_done_callback(cancel_waiter_twice)
         peer.closed = True
         peer.callback_response_gate.set()
         with self.assertRaises(DisconnectedError):
@@ -1047,6 +1122,98 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(DisconnectedError):
             await anext(session.events())
 
+    async def test_retained_timed_out_and_cancelled_writes_hold_request_capacity(
+        self,
+    ) -> None:
+        import codex_app_server_client as client_api
+
+        for terminal_cause in ("timeout", "cancellation"):
+            with self.subTest(terminal_cause=terminal_cause):
+                peer = ScriptedSessionPeer()
+                client, session = await self.initialize(
+                    peer, limits=ClientLimits(max_pending_calls=1)
+                )
+                peer.request_write_gate = asyncio.Event()
+                if terminal_cause == "timeout":
+                    with self.assertRaises(CallTimeoutError):
+                        await session.read_thread(
+                            client_api.ThreadReadParams(threadId="thread"), timeout=0.01
+                        )
+                else:
+                    operation = asyncio.create_task(
+                        session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                    )
+                    await peer.request_write_started.wait()
+                    operation.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await operation
+                self.assertEqual(client._engine.pending_count, 0)
+                self.assertEqual(len(client._engine._request_writes), 1)
+                for _ in range(2):
+                    with self.assertRaises(RequestLimitError):
+                        await session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                self.assertEqual(
+                    sum(write.get("method") == "thread/read" for write in peer.writes),
+                    0,
+                )
+                peer.request_write_gate.set()
+                for _ in range(100):
+                    if not client._engine._request_writes and not client._engine._abandoned:
+                        break
+                    await asyncio.sleep(0)
+                self.assertEqual(len(client._engine._request_writes), 0)
+                self.assertEqual(len(client._engine._abandoned), 0)
+                self.assertIsNone(client._engine.failure)
+                result = await session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                self.assertIsInstance(result, client_api.ThreadReadResponse)
+                self.assertEqual(
+                    sum(write.get("method") == "thread/read" for write in peer.writes),
+                    2,
+                )
+                await session.close()
+
+    async def test_written_abandoned_calls_hold_capacity_until_late_response(self) -> None:
+        import codex_app_server_client as client_api
+
+        for terminal_cause in ("timeout", "cancellation"):
+            with self.subTest(terminal_cause=terminal_cause):
+                peer = ScriptedSessionPeer()
+                peer.deferred_methods.add("thread/read")
+                client, session = await self.initialize(
+                    peer, limits=ClientLimits(max_pending_calls=1)
+                )
+                operation = asyncio.create_task(
+                    session.read_thread(
+                        client_api.ThreadReadParams(threadId="thread"),
+                        timeout=0.01 if terminal_cause == "timeout" else None,
+                    )
+                )
+                request = await self.wait_for_deferred(peer)
+                if terminal_cause == "timeout":
+                    with self.assertRaises(CallTimeoutError):
+                        await operation
+                else:
+                    operation.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await operation
+                self.assertEqual(client._engine.pending_count, 0)
+                self.assertEqual(len(client._engine._request_writes), 0)
+                self.assertEqual(len(client._engine._abandoned), 1)
+                for _ in range(2):
+                    with self.assertRaises(RequestLimitError):
+                        await session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                peer.queue_response(request, model_fixture("ThreadReadResponse"))
+                for _ in range(100):
+                    if not client._engine._abandoned:
+                        break
+                    await asyncio.sleep(0)
+                self.assertEqual(len(client._engine._abandoned), 0)
+                self.assertIsNone(client._engine.failure)
+                peer.deferred_methods.clear()
+                result = await session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                self.assertIsInstance(result, client_api.ThreadReadResponse)
+                await session.close()
+
     async def test_selected_call_response_wins_cancellation_before_waiter_resumes(self) -> None:
         import codex_app_server_client as client_api
 
@@ -1072,6 +1239,7 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                 )
                 client._engine._accept_message(json.dumps(response).encode("utf-8") + b"\n")
                 self.assertEqual(client._engine.pending_count, 0)
+                operation.cancel()
                 operation.cancel()
                 if remote_error:
                     with self.assertRaises(RemoteRpcError):
@@ -1105,6 +1273,7 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                     await asyncio.sleep(0)
                 self.assertEqual(client._engine.pending_count, 0)
                 operation.cancel()
+                operation.cancel()
                 if remote_error:
                     with self.assertRaises(RemoteRpcError):
                         await operation
@@ -1116,6 +1285,69 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                 await peer.request_write_returned.wait()
                 await asyncio.sleep(0)
                 await session.close()
+
+    async def test_selected_call_response_completes_before_retained_write_loss(self) -> None:
+        import codex_app_server_client as client_api
+
+        for remote_error in (False, True):
+            with self.subTest(remote_error=remote_error):
+                peer = ScriptedSessionPeer()
+                peer.request_write_return_gate = asyncio.Event()
+                if remote_error:
+                    peer.error_overrides["thread/read"] = {
+                        "code": -32_000,
+                        "message": "private-selected-error",
+                    }
+                client, session = await self.initialize(peer)
+                operation = asyncio.create_task(
+                    session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                )
+                await peer.request_response_queued.wait()
+                for _ in range(100):
+                    if client._engine.pending_count == 0 and operation.done():
+                        break
+                    await asyncio.sleep(0)
+                self.assertTrue(operation.done())
+                if remote_error:
+                    with self.assertRaises(RemoteRpcError):
+                        await operation
+                else:
+                    result = await operation
+                    self.assertIsInstance(result, client_api.ThreadReadResponse)
+                peer.closed = True
+                peer.request_write_return_gate.set()
+                await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+                self.assertIsInstance(client._engine.failure, DisconnectedError)
+
+    async def test_selected_call_response_wins_explicit_close_during_write(self) -> None:
+        import codex_app_server_client as client_api
+
+        for remote_error in (False, True):
+            with self.subTest(remote_error=remote_error):
+                peer = ScriptedSessionPeer()
+                peer.request_write_return_gate = asyncio.Event()
+                if remote_error:
+                    peer.error_overrides["thread/read"] = {
+                        "code": -32_000,
+                        "message": "private-selected-error",
+                    }
+                client, session = await self.initialize(peer)
+                operation = asyncio.create_task(
+                    session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                )
+                await peer.request_response_queued.wait()
+                for _ in range(100):
+                    if client._engine.pending_count == 0:
+                        break
+                    await asyncio.sleep(0)
+                self.assertEqual(client._engine.pending_count, 0)
+                await asyncio.wait_for(session.close(), 1.0)
+                if remote_error:
+                    with self.assertRaises(RemoteRpcError):
+                        await operation
+                else:
+                    result = await operation
+                    self.assertIsInstance(result, client_api.ThreadReadResponse)
 
     async def test_task_cancellation_propagates_and_late_response_is_ignored(self) -> None:
         import codex_app_server_client as client_api

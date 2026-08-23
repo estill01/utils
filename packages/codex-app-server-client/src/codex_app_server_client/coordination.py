@@ -174,7 +174,7 @@ def _consume_task_exception(task: asyncio.Task[None]) -> None:
 
 def _consume_current_cancellation() -> None:
     task = asyncio.current_task()
-    if task is not None:
+    while task is not None and task.cancelling():
         task.uncancel()
 
 

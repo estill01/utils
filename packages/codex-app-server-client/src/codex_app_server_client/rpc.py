@@ -8,6 +8,7 @@ from collections import deque
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Protocol
 
 from .compatibility import (
@@ -286,6 +287,7 @@ class _RpcEngine:
         self._limits = limits or _RpcLimits()
         self._validator = _EnvelopeValidator(compatibility)
         self._pending: dict[int, _PendingCall] = {}
+        self._request_writes: set[int] = set()
         history_size = max(2, self._limits.max_pending_calls * 2)
         self._settled_order: deque[int] = deque(maxlen=history_size)
         self._settled: set[int] = set()
@@ -296,7 +298,8 @@ class _RpcEngine:
         self._reader_task: asyncio.Task[None] | None = None
         self._closed = asyncio.Event()
         self._failure: BaseException | None = None
-        self._channel_closed = False
+        self._channel_close_task: asyncio.Task[None] | None = None
+        self._channel_close_done = asyncio.Event()
         self._cleanup_failure: TransportCleanupError | None = None
         self._inbound_handler: _InboundHandler | None = None
 
@@ -313,6 +316,10 @@ class _RpcEngine:
             raise self._failure
         if self._reader_task is None:
             self._reader_task = asyncio.create_task(self._read_messages())
+            self._reader_task.add_done_callback(self._finish_reader)
+
+    def _finish_reader(self, task: asyncio.Task[None]) -> None:
+        _consume_task_exception(task)
 
     def _set_inbound_handler(self, handler: _InboundHandler) -> None:
         if self._inbound_handler is not None or self._reader_task is not None:
@@ -384,9 +391,10 @@ class _RpcEngine:
             self._discard_unsent(request_id, future)
             raise
         write_task = asyncio.create_task(self._write_request(line, request_id))
-        write_task.add_done_callback(_consume_task_exception)
+        self._request_writes.add(request_id)
+        write_task.add_done_callback(partial(self._finish_request_write, request_id))
         try:
-            await _await_before_deadline(write_task, deadline)
+            await _await_first_before_deadline((write_task, future), deadline)
         except TimeoutError:
             if _has_selected_result(future):
                 return future.result()
@@ -398,6 +406,10 @@ class _RpcEngine:
                 return future.result()
             self._abandon(request_id, future)
             raise
+        if _has_selected_result(future):
+            return future.result()
+        try:
+            write_task.result()
         except Exception:
             self._discard_unsent(request_id, future)
             raise
@@ -431,6 +443,10 @@ class _RpcEngine:
             await self._fail(failure)
             raise failure
 
+    def _finish_request_write(self, request_id: int, task: asyncio.Task[None]) -> None:
+        self._request_writes.discard(request_id)
+        _consume_task_exception(task)
+
     async def wait_closed(self) -> None:
         await self._closed.wait()
 
@@ -451,7 +467,8 @@ class _RpcEngine:
     def _register(self, capability: RequestCapability | None) -> tuple[int, asyncio.Future[Any]]:
         if self._failure is not None:
             raise self._failure
-        if len(self._pending) >= self._limits.max_pending_calls:
+        active_request_ids = self._pending.keys() | self._request_writes | self._abandoned
+        if len(active_request_ids) >= self._limits.max_pending_calls:
             raise RequestLimitError(
                 f"pending request limit reached: {self._limits.max_pending_calls}"
             )
@@ -506,7 +523,7 @@ class _RpcEngine:
                     raise
                 except Exception as error:
                     failure = self._io_failure("byte-channel read failed", error)
-                    await self._fail(failure)
+                    self._begin_failure(failure)
                     return
                 self._accept_message(line)
         except asyncio.CancelledError:
@@ -517,9 +534,7 @@ class _RpcEngine:
                 if isinstance(error, AppServerClientError)
                 else JsonRpcFramingError("byte-channel read failed")
             )
-            await self._fail(failure)
-        finally:
-            self._closed.set()
+            self._begin_failure(failure)
 
     def _accept_message(self, line: bytes) -> None:
         value = self._decode_line(line)
@@ -608,7 +623,7 @@ class _RpcEngine:
         if not payload:
             raise JsonRpcFramingError("inbound line is empty")
         try:
-            return json.loads(
+            value = json.loads(
                 payload,
                 object_pairs_hook=_unique_object,
                 parse_constant=_reject_constant,
@@ -617,6 +632,7 @@ class _RpcEngine:
             value = None
         if value is None:
             raise JsonRpcFramingError("inbound line is not strict JSON")
+        _require_unicode_scalars(value)
         return value
 
     def _discard_unsent(self, request_id: int, future: asyncio.Future[Any]) -> None:
@@ -649,6 +665,10 @@ class _RpcEngine:
         order.remove(request_id)
 
     async def _fail(self, failure: BaseException) -> None:
+        self._begin_failure(failure)
+        await self._close_channel()
+
+    def _begin_failure(self, failure: BaseException) -> None:
         if self._failure is None:
             self._failure = failure
             pending, self._pending = self._pending, {}
@@ -662,13 +682,24 @@ class _RpcEngine:
                     if isinstance(failure, AppServerClientError)
                     else DisconnectedError("connection coordination failed")
                 )
-        await self._close_channel()
-        self._closed.set()
+        self._start_channel_close()
 
     async def _close_channel(self) -> None:
-        if self._channel_closed:
-            return
-        self._channel_closed = True
+        self._start_channel_close()
+        await self._channel_close_done.wait()
+        self._channel_close_task.result()
+
+    def _start_channel_close(self) -> None:
+        if self._channel_close_task is None:
+            self._channel_close_task = asyncio.create_task(self._run_channel_close())
+            self._channel_close_task.add_done_callback(self._finish_channel_close)
+
+    def _finish_channel_close(self, task: asyncio.Task[None]) -> None:
+        _consume_task_exception(task)
+        self._channel_close_done.set()
+        self._closed.set()
+
+    async def _run_channel_close(self) -> None:
         try:
             await self._channel.close()
         except TransportCleanupError as error:
@@ -683,13 +714,31 @@ def _consume_task_exception(task: asyncio.Task[None]) -> None:
             task.exception()
 
 
+def _require_unicode_scalars(value: object) -> None:
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, str):
+            try:
+                current.encode("utf-8")
+            except UnicodeEncodeError:
+                raise JsonRpcFramingError(
+                    "inbound line contains a non-Unicode-scalar string"
+                ) from None
+        elif isinstance(current, Mapping):
+            pending.extend(current.keys())
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+
+
 def _has_selected_result(future: asyncio.Future[Any]) -> bool:
     return future.done() and not future.cancelled()
 
 
 def _consume_current_cancellation() -> None:
     task = asyncio.current_task()
-    if task is not None:
+    while task is not None and task.cancelling():
         task.uncancel()
 
 
@@ -703,3 +752,20 @@ async def _await_before_deadline(future: asyncio.Future[Any], deadline: float | 
     if future not in done:
         raise TimeoutError
     return future.result()
+
+
+async def _await_first_before_deadline(
+    futures: tuple[asyncio.Future[Any], ...], deadline: float | None
+) -> None:
+    if any(future.done() for future in futures):
+        return
+    remaining = None if deadline is None else deadline - asyncio.get_running_loop().time()
+    if remaining is not None and remaining <= 0:
+        raise TimeoutError
+    done, _ = await asyncio.wait(
+        futures,
+        timeout=remaining,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    if not done:
+        raise TimeoutError

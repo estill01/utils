@@ -309,6 +309,7 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
         await peer.raw(b'{"private-response-content"\n')
         with self.assertRaises(JsonRpcFramingError) as raised:
             await call
+        await engine.close()
         self.assert_exception_graph_excludes(raised.exception, "private-response-content")
 
     async def test_outbound_validation_does_not_retain_request_content(self) -> None:
@@ -342,22 +343,48 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
             contexts,
         )
 
-    async def test_partial_write_success_race_consumes_completed_future(self) -> None:
+    async def test_partial_write_success_response_wins_late_write_failure(self) -> None:
         engine, peer = self.engine()
         peer.response_during_write = {"result": {"delivered": True}}
         peer.write_error = RuntimeError("drain failed")
-        contexts = await self.assert_failed_write_has_no_orphan(engine)
+        loop = asyncio.get_running_loop()
+        contexts: list[dict[str, object]] = []
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: contexts.append(context))
+        try:
+            self.assertEqual(
+                await engine.call(RequestCapability.THREAD_READ, {}),
+                {"delivered": True},
+            )
+            await engine.wait_closed()
+            gc.collect()
+            await asyncio.sleep(0)
+        finally:
+            loop.set_exception_handler(previous_handler)
+        self.assertIsInstance(engine.failure, JsonRpcFramingError)
         self.assertEqual(engine.pending_count, 0)
         self.assertFalse(
             any("Future exception was never retrieved" in str(item) for item in contexts),
             contexts,
         )
 
-    async def test_partial_write_remote_error_race_consumes_completed_future(self) -> None:
+    async def test_partial_write_remote_error_wins_late_write_failure(self) -> None:
         engine, peer = self.engine()
         peer.response_during_write = {"error": {"code": -32002, "message": "already resolved"}}
         peer.write_error = RuntimeError("drain failed")
-        contexts = await self.assert_failed_write_has_no_orphan(engine)
+        loop = asyncio.get_running_loop()
+        contexts: list[dict[str, object]] = []
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: contexts.append(context))
+        try:
+            with self.assertRaises(RemoteRpcError):
+                await engine.call(RequestCapability.THREAD_READ, {})
+            await engine.wait_closed()
+            gc.collect()
+            await asyncio.sleep(0)
+        finally:
+            loop.set_exception_handler(previous_handler)
+        self.assertIsInstance(engine.failure, JsonRpcFramingError)
         self.assertEqual(engine.pending_count, 0)
         self.assertFalse(
             any("Future exception was never retrieved" in str(item) for item in contexts),
@@ -409,22 +436,6 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
                 stack.append(current.__cause__)
             if current.__context__ is not None:
                 stack.append(current.__context__)
-
-    async def assert_failed_write_has_no_orphan(
-        self, engine: _RpcEngine
-    ) -> list[dict[str, object]]:
-        loop = asyncio.get_running_loop()
-        contexts: list[dict[str, object]] = []
-        previous_handler = loop.get_exception_handler()
-        loop.set_exception_handler(lambda _loop, context: contexts.append(context))
-        try:
-            with self.assertRaises(JsonRpcFramingError):
-                await engine.call(RequestCapability.THREAD_READ, {})
-            gc.collect()
-            await asyncio.sleep(0)
-        finally:
-            loop.set_exception_handler(previous_handler)
-        return contexts
 
 
 class RpcLimitTests(unittest.TestCase):
