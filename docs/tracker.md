@@ -302,7 +302,7 @@ govern execution.
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `completed` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `completed` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `completed` |
-| 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `not-started` |
+| 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `in-progress` |
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `not-started` |
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `not-started` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `not-started` |
@@ -1021,7 +1021,7 @@ Stop before starting a subprocess or opening a Unix socket.
 
 ## Block 5 — Implement local transports and explicit process ownership
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
