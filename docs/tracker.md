@@ -309,7 +309,7 @@ govern execution.
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `completed` |
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `completed` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `completed` |
-| 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `not-started` |
+| 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `in-progress` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `not-started` |
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `not-started` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `not-started` |
@@ -2047,7 +2047,7 @@ Stop before cross-package composition or downstream manifest adoption.
 
 ## Block 12 — Prove independent distribution isolation
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
