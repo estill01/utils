@@ -75,6 +75,7 @@ class _StreamByteChannel:
         self._active_write: asyncio.Task[None] | None = None
         self._failed = False
         self._cleanup_task: asyncio.Task[None] | None = None
+        self._cleanup_done = asyncio.Event()
 
     async def read_line(self, *, max_bytes: int) -> bytes:
         if max_bytes < 1:
@@ -148,9 +149,14 @@ class _StreamByteChannel:
         async with self._close_lock:
             if self._cleanup_task is None:
                 self._cleanup_task = asyncio.create_task(self._run_cleanup())
-                self._cleanup_task.add_done_callback(_consume_task_exception)
+                self._cleanup_task.add_done_callback(self._finish_cleanup)
             cleanup_task = self._cleanup_task
-        await asyncio.shield(cleanup_task)
+        await self._cleanup_done.wait()
+        cleanup_task.result()
+
+    def _finish_cleanup(self, task: asyncio.Task[None]) -> None:
+        _consume_task_exception(task)
+        self._cleanup_done.set()
 
     async def _run_cleanup(self) -> None:
         self._buffer.clear()
@@ -276,6 +282,7 @@ class _InjectedByteChannel:
         self._active_write: asyncio.Task[None] | None = None
         self._failed = False
         self._cleanup_task: asyncio.Task[None] | None = None
+        self._cleanup_done = asyncio.Event()
 
     async def read_line(self, *, max_bytes: int) -> bytes:
         if max_bytes < 1:
@@ -339,9 +346,14 @@ class _InjectedByteChannel:
         async with self._close_lock:
             if self._cleanup_task is None:
                 self._cleanup_task = asyncio.create_task(self._run_cleanup())
-                self._cleanup_task.add_done_callback(_consume_task_exception)
+                self._cleanup_task.add_done_callback(self._finish_cleanup)
             cleanup_task = self._cleanup_task
-        await asyncio.shield(cleanup_task)
+        await self._cleanup_done.wait()
+        cleanup_task.result()
+
+    def _finish_cleanup(self, task: asyncio.Task[None]) -> None:
+        _consume_task_exception(task)
+        self._cleanup_done.set()
 
     async def _run_cleanup(self) -> None:
         active = [task for task in (self._active_read, self._active_write) if task is not None]

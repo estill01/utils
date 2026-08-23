@@ -267,6 +267,35 @@ class InjectedTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(underlying.close_completed)
         self.assertEqual(underlying.close_count, 1)
 
+    async def test_cancelled_owned_close_reports_eventual_failure_only_to_retry(self) -> None:
+        underlying = MemoryChannel()
+        underlying.close_gate = asyncio.Event()
+        underlying.close_error = RuntimeError("private-cleanup-content")
+        channel = await InjectedTransport(
+            underlying, ownership=TransportOwnership.OWNED
+        )._open_channel()
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        unexpected_contexts: list[dict[str, object]] = []
+        loop.set_exception_handler(lambda _loop, context: unexpected_contexts.append(context))
+        try:
+            first_close = asyncio.create_task(channel.close())
+            await underlying.close_started.wait()
+            first_close.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await first_close
+            retry = asyncio.create_task(channel.close())
+            await asyncio.sleep(0)
+            self.assertFalse(retry.done())
+            underlying.close_gate.set()
+            with self.assertRaises(TransportCleanupError):
+                await retry
+            await asyncio.sleep(0)
+            self.assertEqual(unexpected_contexts, [])
+            self.assertEqual(underlying.close_count, 1)
+        finally:
+            loop.set_exception_handler(previous_handler)
+
     async def test_injected_eof_and_failed_owned_cleanup_are_discriminating(self) -> None:
         eof = MemoryChannel()
         eof_channel = await InjectedTransport(
@@ -371,6 +400,32 @@ class StreamChannelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(process.returncode, 0)
         self.assertEqual(process.terminate_count, 0)
         self.assertEqual(process.kill_count, 0)
+
+    async def test_cancelled_stream_close_reports_eventual_failure_only_to_retry(self) -> None:
+        writer = FakeWriter()
+        writer.wait_gate = asyncio.Event()
+        writer.wait_error = RuntimeError("private-cleanup-content")
+        channel = _StreamByteChannel(asyncio.StreamReader(), writer)
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        unexpected_contexts: list[dict[str, object]] = []
+        loop.set_exception_handler(lambda _loop, context: unexpected_contexts.append(context))
+        try:
+            first_close = asyncio.create_task(channel.close())
+            await writer.wait_started.wait()
+            first_close.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await first_close
+            retry = asyncio.create_task(channel.close())
+            await asyncio.sleep(0)
+            self.assertFalse(retry.done())
+            writer.wait_gate.set()
+            with self.assertRaises(TransportCleanupError):
+                await retry
+            await asyncio.sleep(0)
+            self.assertEqual(unexpected_contexts, [])
+        finally:
+            loop.set_exception_handler(previous_handler)
 
     async def test_stream_bound_eof_partial_write_and_post_close(self) -> None:
         oversized_reader = asyncio.StreamReader()
