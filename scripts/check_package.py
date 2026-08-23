@@ -309,8 +309,10 @@ def validated_wheel_member_names(archive: zipfile.ZipFile) -> tuple[str, ...]:
         (info.filename[:-1] if info.is_dir() else info.filename, info.filename)
         for info in archive.infolist()
     )
-    names = tuple(normalized for normalized, _raw in entries)
-    duplicates = sorted(name for name, count in collections.Counter(names).items() if count > 1)
+    normalized_names = tuple(normalized for normalized, _raw in entries)
+    duplicates = sorted(
+        name for name, count in collections.Counter(normalized_names).items() if count > 1
+    )
     if duplicates:
         raise RuntimeError(f"wheel contains duplicate member name(s): {duplicates}")
     invalid: list[str] = []
@@ -326,7 +328,7 @@ def validated_wheel_member_names(archive: zipfile.ZipFile) -> tuple[str, ...]:
             invalid.append(raw_name)
     if invalid:
         raise RuntimeError(f"wheel contains unsafe member path(s): {sorted(invalid)}")
-    return names
+    return tuple(raw_name for _normalized, raw_name in entries)
 
 
 def wheel_distribution_component(distribution: str) -> str:
@@ -352,10 +354,7 @@ def audit_wheel_layout(
     unexpected = sorted(
         name
         for name in member_names
-        if name != import_root
-        and not name.startswith(import_prefix)
-        and name != dist_info
-        and not name.startswith(metadata_prefix)
+        if not name.startswith(import_prefix) and not name.startswith(metadata_prefix)
     )
     if unexpected:
         raise RuntimeError(f"wheel contains unexpected top-level member(s): {unexpected}")

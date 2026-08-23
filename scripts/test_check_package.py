@@ -241,6 +241,40 @@ class PackageIsolationAuditTests(unittest.TestCase):
                         with self.assertRaisesRegex(RuntimeError, "unsafe member path"):
                             check_package.validated_wheel_member_names(archive)
 
+    def test_wheel_root_files_cannot_masquerade_as_directories(self) -> None:
+        for collision in ("neutral", "neutral-1.dist-info"):
+            with self.subTest(collision=collision):
+                buffer = io.BytesIO()
+                with zipfile.ZipFile(buffer, "w") as archive:
+                    archive.writestr(collision, b"regular file")
+                    archive.writestr("neutral/__init__.py", b"")
+                    archive.writestr("neutral-1.dist-info/METADATA", b"")
+                    archive.writestr("neutral-1.dist-info/RECORD", b"")
+                    archive.writestr("neutral-1.dist-info/WHEEL", b"")
+                buffer.seek(0)
+                with (
+                    zipfile.ZipFile(buffer) as archive,
+                    self.assertRaisesRegex(RuntimeError, "unexpected top-level member"),
+                ):
+                    names = check_package.validated_wheel_member_names(archive)
+                    check_package.audit_wheel_layout(
+                        names,
+                        distribution="neutral",
+                        import_root="neutral",
+                        version="1",
+                    )
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("neutral", b"regular file")
+            archive.writestr("neutral/", b"")
+        buffer.seek(0)
+        with (
+            zipfile.ZipFile(buffer) as archive,
+            self.assertRaisesRegex(RuntimeError, "duplicate member name.*neutral"),
+        ):
+            check_package.validated_wheel_member_names(archive)
+
     def test_wheel_metadata_singleton_headers_are_exact(self) -> None:
         for field, conflicting in (
             ("Name", "other"),
