@@ -304,7 +304,7 @@ govern execution.
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `completed` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `completed` |
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `completed` |
-| 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `not-started` |
+| 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `in-progress` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `not-started` |
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `not-started` |
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `not-started` |
@@ -1299,7 +1299,7 @@ Stop before notifications, server callbacks, cancellation, or restart behavior.
 
 ## Block 7 — Implement asynchronous events, callbacks, and call termination
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
