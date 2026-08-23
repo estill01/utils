@@ -297,7 +297,7 @@ govern execution.
 
 | Block | Functionality targeted | Depends on | Status |
 |---:|---|---:|---|
-| 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `accepted` |
+| 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `in-progress` |
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `not-started` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `not-started` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
@@ -325,7 +325,7 @@ Required order:
 
 ## Block 0 — Decide package admission and architecture boundaries
 
-Status: `accepted`
+Status: `in-progress`
 
 ### Objective
 
@@ -422,9 +422,13 @@ leakage, and whether any candidate is speculative.
 - Remediation closure: reviewer found one naming-location contradiction at
   `b6e0e0e`; commit `58b6d70` confines consumer identifiers to governing scope
   documentation and the bounded admission record while keeping all package
-  implementation and artifacts consumer-neutral.
-- Independent review: distinct read-only reviewer `/root/block0_reviewer`
-  returned `ACCEPT` for exact commit `58b6d70665c6d7148426c4ff212552f196e09b3e`.
+  implementation and artifacts consumer-neutral. A later provenance check
+  found that the request hash omitted its canonical terminating newline; the
+  admission record now binds exact task, turn, item, bytes, and corrected
+  SHA-256. Fresh exact-revision review is pending.
+- Independent review: prior distinct read-only review accepted commit
+  `58b6d70665c6d7148426c4ff212552f196e09b3e`; the source-hash remediation
+  requires a fresh exact-revision disposition before re-acceptance.
 - Product-capability review:
   - Trigger: consequential Block 0 posture.
   - Frame identity: `docs/tracker.md`, Block 0, frame SHA-256
@@ -447,7 +451,8 @@ leakage, and whether any candidate is speculative.
 - Downstream-interaction audit: clean; no consumer repository was opened,
   executed, imported, changed, or tested.
 - License/release posture: `no-license-selected/unpublished`.
-- Post-block audit: `accepted`.
+- Post-block audit: `reopened` for exact direct-source hash correction and
+  otherwise unchanged.
 - Git durability: candidate and remediation commits pushed to `origin/main`;
   accepted status is recorded by the next scoped tracker checkpoint.
 
