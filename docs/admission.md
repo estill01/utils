@@ -16,9 +16,9 @@ implementation scope.
 - Direct full-tracker implementation request: task
   `01a02d73-47f5-7ec1-a680-2a95966ab148`, turn
   `01a02d95-4301-7432-8aee-8af40ce52ff1`, item
-  `01a02d95-4487-7bd1-a654-3ad825e59589`; exact UTF-8 bytes include the
-  terminating newline and have SHA-256
-  `1435cf90b2899e0f2bacf5c24bab5acd2f2a7b539cd5f3fd9cfa11f304f249ec`.
+  `01a02d95-4487-7bd1-a654-3ad825e59589`; the exact 194 UTF-8/ASCII bytes
+  include the terminating LF and have SHA-256
+  `28e24451f8ba423e25b3b6e8861ba059a5e80de67e62a8615e8125e6d726032d`.
 - Cross-project coordination source: direct-user instruction transported from
   task `01a02cf9-50b4-7f03-9dd7-8b443b42cb0e`, which identifies Software
   Factory, libRSI, and Patent Studio as external consumers and identifies the

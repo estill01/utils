@@ -424,8 +424,10 @@ leakage, and whether any candidate is speculative.
   documentation and the bounded admission record while keeping all package
   implementation and artifacts consumer-neutral. A later provenance check
   found that the request hash omitted its canonical terminating newline; the
-  admission record now binds exact task, turn, item, bytes, and corrected
-  SHA-256. Fresh exact-revision review is pending.
+  first correction attempt also suffered shell expansion of the `$implement`
+  token. The admission record now binds the canonical task, turn, item, exact
+  194-byte length, terminating LF, and reviewer-confirmed SHA-256. Fresh
+  exact-revision review is pending.
 - Independent review: prior distinct read-only review accepted commit
   `58b6d70665c6d7148426c4ff212552f196e09b3e`; the source-hash remediation
   requires a fresh exact-revision disposition before re-acceptance.
