@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import math
+import sys
 import weakref
 from collections.abc import AsyncIterator
 from contextlib import aclosing, suppress
@@ -54,7 +55,13 @@ from .models import (
 from .restart import BackoffHook, RestartContext
 from .rpc import _EnvelopeValidator, _RpcEngine, _RpcLimits
 from .surface import FeatureSet, NotificationCapability, RequestCapability, TransportCapability
-from .transport import ClientTransport
+from .transport import (
+    ClientTransport,
+    InjectedTransport,
+    StdioTransport,
+    TransportOwnership,
+    UnixSocketTransport,
+)
 
 _ModelT = TypeVar("_ModelT")
 _MAX_CONNECTION_LINEAGES = 256
@@ -73,6 +80,11 @@ def _consume_current_cancellation() -> None:
     task = asyncio.current_task()
     while task is not None and task.cancelling():
         task.uncancel()
+
+
+def _current_task_is_cancelling() -> bool:
+    task = asyncio.current_task()
+    return task is not None and bool(task.cancelling())
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +109,8 @@ class ClientLimits:
                 raise ValueError(f"{name} must be a positive integer")
         if self.max_message_bytes < 2:
             raise ValueError("max_message_bytes must accommodate content and a newline")
+        if self.max_pending_calls > sys.maxsize // 2:
+            raise ValueError("max_pending_calls exceeds the safe request-history bound")
         if (
             type(self.max_backoff_seconds) not in (int, float)
             or not _is_finite_number(self.max_backoff_seconds)
@@ -179,6 +193,13 @@ class AppServerClient:
         self._failure: AppServerClientError | None = None
         self._max_connection_lineages = _MAX_CONNECTION_LINEAGES
         self._connection_lineages: list[weakref.ReferenceType[object]] = []
+        self._injected_replacement_safe = type(transport) in (
+            StdioTransport,
+            UnixSocketTransport,
+        ) or (
+            type(transport) is InjectedTransport
+            and transport._ownership is TransportOwnership.OWNED
+        )
         self._remember_connection_lineages(declared_lineage, channel_lineage)
 
     @classmethod
@@ -224,8 +245,18 @@ class AppServerClient:
             )
         return capability
 
+    def _replacement_transport_is_package_owned(self, transport: ClientTransport) -> bool:
+        if type(transport) in (StdioTransport, UnixSocketTransport):
+            return True
+        return (
+            self._injected_replacement_safe
+            and type(transport) is InjectedTransport
+            and transport._ownership is TransportOwnership.OWNED
+        )
+
     @staticmethod
     def _proposed_transport_lineage(transport: ClientTransport) -> object | None:
+        failed = False
         try:
             provider = getattr(transport, "_connection_lineage", None)
             if not callable(provider):
@@ -233,9 +264,18 @@ class AppServerClient:
             lineage = provider()
             if inspect.iscoroutine(lineage):
                 lineage.close()
-                raise TypeError("transport connection lineage is unavailable")
+                failed = True
+                lineage = None
+        except asyncio.CancelledError:
+            if _current_task_is_cancelling():
+                raise
+            failed = True
+            lineage = None
         except Exception:
-            raise TypeError("transport connection lineage is unavailable") from None
+            failed = True
+            lineage = None
+        if failed:
+            raise TypeError("transport connection lineage is unavailable")
         if lineage is None:
             raise TypeError("transport connection lineage is unavailable")
         return lineage
@@ -257,7 +297,11 @@ class AppServerClient:
                 unique.append(lineage)
         return unique
 
-    def _lineages_are_available(self, *lineages: object | None) -> bool:
+    def _lineages_are_available(
+        self,
+        *lineages: object | None,
+        required_capacity: int | None = None,
+    ) -> bool:
         retained: list[weakref.ReferenceType[object]] = []
         for reference in self._connection_lineages:
             if reference() is not None:
@@ -273,10 +317,13 @@ class AppServerClient:
             for lineage in proposed
         ):
             return False
-        return len(retained) + len(proposed) <= self._max_connection_lineages
+        capacity = len(proposed) if required_capacity is None else required_capacity
+        return len(retained) + max(len(proposed), capacity) <= self._max_connection_lineages
 
     def _remember_connection_lineages(self, *lineages: object | None) -> None:
         for lineage in self._unique_lineages(*lineages):
+            if any(reference() is lineage for reference in self._connection_lineages):
+                continue
             reference = self._lineage_reference(lineage)
             if reference is not None:
                 self._connection_lineages.append(reference)
@@ -291,7 +338,12 @@ class AppServerClient:
         generation: int,
     ) -> tuple[_RpcEngine, _AsyncCoordinator, object | None, object]:
         proposed_lineage = cls._proposed_transport_lineage(transport)
-        channel = await transport._open_channel()
+        try:
+            channel = await transport._open_channel()
+        except asyncio.CancelledError:
+            if _current_task_is_cancelling():
+                raise
+            raise TransportCleanupError("transport start cleanup is unproven") from None
         try:
             engine = _RpcEngine(
                 channel,
@@ -333,9 +385,11 @@ class AppServerClient:
                 await self._initialize_engine(self._engine, identity)
             except asyncio.CancelledError:
                 self._state = "failed"
-                self._failure = InitializationError("app-server initialization was cancelled")
-                await self._close_after_failed_initialization()
-                raise
+                if _current_task_is_cancelling():
+                    self._failure = InitializationError("app-server initialization was cancelled")
+                    await self._close_after_failed_initialization()
+                    raise
+                initialization_failed = True
             except Exception:
                 initialization_failed = True
             if initialization_failed:
@@ -413,6 +467,8 @@ class AppServerClient:
                 replacement_generation=replacement_generation,
                 cause=self._engine_failure(),
             )
+            if not self._replacement_transport_is_package_owned(transport):
+                raise self._restart_error(context, "transport-lineage")
             delay = self._backoff_delay(backoff, context)
             lineage_failed = False
             try:
@@ -422,7 +478,7 @@ class AppServerClient:
                 proposed_lineage = None
             if lineage_failed or proposed_lineage is None:
                 raise self._restart_error(context, "transport-lineage")
-            if not self._lineages_are_available(proposed_lineage):
+            if not self._lineages_are_available(proposed_lineage, required_capacity=2):
                 raise self._restart_error(context, "transport-lineage")
             stale = StaleGenerationError(
                 generation=failed_generation,
@@ -470,7 +526,7 @@ class AppServerClient:
                     generation=replacement_generation,
                 )
             except asyncio.CancelledError:
-                self._state = "failed"
+                self._state = "cleanup-failed"
                 self._failure = self._restart_error(context, "transport-start-cancelled")
                 raise
             except TransportCleanupError:
@@ -487,9 +543,14 @@ class AppServerClient:
                 self._state = "failed"
                 self._failure = self._restart_error(context, "transport-start")
                 raise self._failure
-            if replacement_lineage is not proposed_lineage or not self._lineages_are_available(
-                replacement_lineage, replacement_channel_lineage
-            ):
+            lineages_invalid = (
+                replacement_lineage is not proposed_lineage
+                or not self._lineages_are_available(
+                    replacement_lineage, replacement_channel_lineage
+                )
+            )
+            self._remember_connection_lineages(replacement_lineage, replacement_channel_lineage)
+            if lineages_invalid:
                 failure = self._restart_error(context, "transport-lineage")
                 self._transport = transport
                 self._engine = engine
@@ -507,7 +568,6 @@ class AppServerClient:
                     failure = self._restart_error(context, "replacement-cleanup")
                     self._failure = failure
                 raise failure
-            self._remember_connection_lineages(replacement_lineage, replacement_channel_lineage)
             self._transport = transport
             self._engine = engine
             self._coordinator = coordinator
@@ -518,15 +578,18 @@ class AppServerClient:
             try:
                 await self._initialize_engine(engine, self._identity)
             except asyncio.CancelledError as error:
-                initialization_cancelled = error
-                failure = self._restart_error(context, "initialization-cancelled")
-                self._state = "failed"
-                self._failure = failure
-                coordinator.retire(failure)
-                try:
-                    await self._retain_retirement(engine, coordinator, failure)
-                except Exception:
-                    cancellation_cleanup_failed = True
+                if _current_task_is_cancelling():
+                    initialization_cancelled = error
+                    failure = self._restart_error(context, "initialization-cancelled")
+                    self._state = "failed"
+                    self._failure = failure
+                    coordinator.retire(failure)
+                    try:
+                        await self._retain_retirement(engine, coordinator, failure)
+                    except Exception:
+                        cancellation_cleanup_failed = True
+                else:
+                    initialization_failed = True
             except Exception:
                 initialization_failed = True
             if initialization_cancelled is not None:
@@ -572,6 +635,10 @@ class AppServerClient:
         hook_failed = False
         try:
             delay = backoff(context)
+        except asyncio.CancelledError:
+            _consume_current_cancellation()
+            hook_failed = True
+            delay = 0.0
         except Exception:
             hook_failed = True
             delay = 0.0
@@ -657,6 +724,10 @@ class AppServerClient:
         async with self._state_lock:
             if session is not None:
                 session._ensure_current()
+            if self._state == "cleanup-failed":
+                if self._failure is not None:
+                    raise self._failure
+                raise TransportCleanupError("client cleanup remains unproven")
             async with self._close_lock:
                 if self._close_task is None:
                     self._state = "closing"

@@ -38,6 +38,11 @@ _INT64_MIN = -(2**63)
 _INT64_MAX = 2**63 - 1
 
 
+def _current_task_is_cancelling() -> bool:
+    task = asyncio.current_task()
+    return task is not None and bool(task.cancelling())
+
+
 class ByteChannel(Protocol):
     """One asynchronous JSON-lines byte channel supplied by a transport."""
 
@@ -531,7 +536,10 @@ class _RpcEngine:
                 try:
                     line = await self._channel.read_line(max_bytes=self._limits.max_message_bytes)
                 except asyncio.CancelledError:
-                    raise
+                    if _current_task_is_cancelling():
+                        raise
+                    self._begin_failure(DisconnectedError("byte-channel read failed"))
+                    return
                 except Exception as error:
                     failure = self._io_failure("byte-channel read failed", error)
                     self._begin_failure(failure)
@@ -716,6 +724,8 @@ class _RpcEngine:
     async def _run_channel_close(self) -> None:
         try:
             await self._channel.close()
+        except asyncio.CancelledError:
+            self._cleanup_failure = TransportCleanupError("byte-channel cleanup failed")
         except TransportCleanupError as error:
             self._cleanup_failure = error
         except Exception:

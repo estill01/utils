@@ -15,6 +15,16 @@ another replacement, and close. It returns the one initialized
 closed client rejects replacement with `RestartError`, and concurrent callers
 cannot claim two replacement transports.
 
+Replacement accepts only an exact package-owned `StdioTransport`,
+`UnixSocketTransport`, or cleanup-proven owned `InjectedTransport`. Arbitrary
+structural transports are valid initial connection inputs but cannot prove that
+a fresh wrapper is a fresh underlying wire, so they are rejected before claim
+on replacement. Borrowed injected transports are also rejected for replacement.
+An owned injected replacement is available only when the client's lifetime
+began on package-owned, cleanup-proven transport construction; a client that
+began on a structural or borrowed injected transport may recover only through a
+fresh package-owned stdio process or Unix-socket connection.
+
 When supplied, the synchronous `BackoffHook` is called exactly once with an
 immutable `RestartContext(failed_generation, replacement_generation, cause)`.
 Its numeric delay must be finite, non-negative, and no greater than
@@ -31,18 +41,16 @@ callback handles, and joins retained request and callback writes. Publication
 checks occur before an event, callback, or typed response crosses the public
 session boundary.
 
-The client also retains connection-lineage identity for its lifetime. A later
-`InjectedTransport` cannot reuse any caller-supplied `ByteChannel` object
-already claimed by that client, including a borrowed channel left open for its
-caller owner. Rejection occurs before the proposed transport is claimed or a
-replacement reader can consume late responses, notifications, or callbacks.
-For any other structurally accepted `ClientTransport`, the actual opened
-`ByteChannel` object is checked and closed before reader publication when its
-lineage has already appeared in that client. Structural replacement transports
-must declare a stable private lineage token; that declaration supplements and
-must remain stable across the independent actual-channel check. Unprovable or
-non-weak-referenceable tokens and channels fail closed. The client retains only
-weak identity references, prunes dead lineages, and bounds simultaneously live
+The client also retains connection-lineage identity for its lifetime. An owned
+`InjectedTransport` cannot reuse a caller-supplied `ByteChannel` object already
+claimed by that client. Rejection occurs before the proposed transport is
+claimed or a replacement reader can consume late responses, notifications, or
+callbacks. The declared package lineage and actual opened `ByteChannel` are
+checked independently. Unprovable or non-weak-referenceable identities fail
+closed. Once a transport has opened a channel, both identities are recorded
+before either acceptance or cleanup, so a rejected post-open attempt cannot
+make that channel eligible for a later generation. The client retains only weak
+identity references, prunes dead lineages, and bounds simultaneously live
 history with a fixed private package capacity. Distinct client owners remain
 independent; this is not an ambient channel registry, public retry budget, or
 process singleton.
@@ -53,6 +61,16 @@ the current generation. Cancellation, timeout, late response, and cleanup state
 remain owned by the engine on which they began. A failed or cancelled
 replacement attempt is cleaned before a later attempt advances to another
 generation.
+
+Cancellation is attributed by the current task's outstanding cancel count.
+Caller cancellation remains cancellation and is re-raised after retained
+cleanup. A synchronous hook, lineage provider, channel operation, or transport
+start that raises `CancelledError` without an outstanding caller cancellation
+is a component failure; it is normalized to a content-free typed failure and
+cannot strand an unproven process or channel owner. Caller cancellation during
+transport start is terminal for that client because the claimed transport may
+already have created a resource; later replacement and close fail without
+claiming another owner or implying that cleanup was proved.
 
 ## Stop boundary
 

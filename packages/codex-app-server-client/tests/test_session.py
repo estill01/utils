@@ -4,6 +4,7 @@ import asyncio
 import gc
 import inspect
 import json
+import sys
 import unittest
 import weakref
 from dataclasses import FrozenInstanceError, replace
@@ -44,6 +45,7 @@ from codex_app_server_client import (
     TransportCapability,
     TransportCleanupError,
     TransportOwnership,
+    UnixSocketTransport,
     UnsupportedFeatureError,
     UserInputCallback,
     inspect_compatibility,
@@ -459,6 +461,27 @@ class TypedSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(peer.close_count, 1)
         with self.assertRaises(SessionStateError):
             await client.initialize(ClientIdentity("fixture", "1.0"))
+
+    async def test_child_cancelled_initialized_write_is_typed_and_content_free(self) -> None:
+        class CancelledInitializedPeer(ScriptedSessionPeer):
+            async def write_line(self, data: bytes) -> None:
+                value = json.loads(data)
+                if value.get("method") == "initialized":
+                    raise asyncio.CancelledError("private-initialized-cancellation")
+                await super().write_line(data)
+
+        peer = CancelledInitializedPeer()
+        client = await self.connect(peer)
+        initialization = asyncio.create_task(client.initialize(ClientIdentity("fixture", "1.0")))
+        with self.assertRaises(InitializationError) as raised:
+            await initialization
+        self.assertFalse(initialization.cancelled())
+        self.assertEqual(initialization.cancelling(), 0)
+        self.assertIsNone(raised.exception.__cause__)
+        self.assertIsNone(raised.exception.__context__)
+        self.assertNotIn("private", repr(vars(raised.exception)))
+        self.assertEqual(client._state, "failed")
+        self.assertEqual(peer.close_count, 1)
 
     async def test_method_gate_rejects_before_write(self) -> None:
         peer = ScriptedSessionPeer()
@@ -1751,6 +1774,67 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(close_peer.close_count, 1)
         self.assertEqual(close_client._state, "closed")
 
+    async def test_structural_channel_cancellation_is_normalized_at_rpc_boundary(
+        self,
+    ) -> None:
+        class StructuralTransport:
+            capability = TransportCapability.INJECTED_BYTE_CHANNEL
+
+            def __init__(self, channel: ScriptedSessionPeer) -> None:
+                self.channel = channel
+
+            async def _open_channel(self) -> ScriptedSessionPeer:
+                return self.channel
+
+        def package_replacement(channel: ScriptedSessionPeer) -> UnixSocketTransport:
+            transport = UnixSocketTransport("/tmp/codex-app-server-client-test.sock")
+
+            async def open_channel() -> ScriptedSessionPeer:
+                transport._claim()
+                return channel
+
+            transport._open_channel = open_channel  # type: ignore[method-assign]
+            return transport
+
+        read_peer = ScriptedSessionPeer()
+        read_client = await AppServerClient.connect(
+            StructuralTransport(read_peer),  # type: ignore[arg-type]
+            self.compatibility,
+        )
+        await read_client.initialize(ClientIdentity("fixture", "1.0"))
+        read_peer.incoming.put_nowait(asyncio.CancelledError("private-raw-reader-cancellation"))
+        await asyncio.wait_for(read_client._engine.wait_closed(), 1.0)
+        self.assertIsInstance(read_client._engine.failure, DisconnectedError)
+        self.assertFalse(read_client._engine._reader_task.cancelled())
+        self.assertEqual(read_client._engine._reader_task.cancelling(), 0)
+        replacement_peer = ScriptedSessionPeer()
+        replacement = await read_client.replace(package_replacement(replacement_peer))
+        self.assertEqual(replacement.generation, 2)
+        await replacement.close()
+
+        close_peer = ScriptedSessionPeer()
+        close_peer.close_error = asyncio.CancelledError("private-raw-close-cancellation")
+        close_client = await AppServerClient.connect(
+            StructuralTransport(close_peer),  # type: ignore[arg-type]
+            self.compatibility,
+        )
+        await close_client.initialize(ClientIdentity("fixture", "1.0"))
+        close_peer.disconnect()
+        await asyncio.wait_for(close_client._engine.wait_closed(), 1.0)
+        self.assertIsInstance(close_client._engine._cleanup_failure, TransportCleanupError)
+        rejected_peer = ScriptedSessionPeer()
+        rejected = package_replacement(rejected_peer)
+        attempt = asyncio.create_task(close_client.replace(rejected))
+        with self.assertRaises(RestartError) as raised:
+            await attempt
+        self.assertEqual(raised.exception.phase, "old-generation-cleanup")
+        self.assertFalse(attempt.cancelled())
+        self.assertEqual(attempt.cancelling(), 0)
+        self.assertIsNone(raised.exception.__cause__)
+        self.assertIsNone(raised.exception.__context__)
+        self.assertNotIn("private", repr(vars(raised.exception)))
+        self.assertFalse(rejected._claimed)
+
     def test_restart_contract_is_frozen_and_content_free(self) -> None:
         import codex_app_server_client as client_api
 
@@ -1841,6 +1925,20 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(context.replacement_generation == 2 for context in contexts))
         self.assertTrue(all(isinstance(context.cause, DisconnectedError) for context in contexts))
 
+        def cancelled_hook(_context: RestartContext) -> float:
+            raise asyncio.CancelledError("private-backoff-cancellation")
+
+        with self.assertRaises(RestartError) as cancelled_hook_error:
+            await client.replace(transport, backoff=cancelled_hook)
+        self.assertEqual(cancelled_hook_error.exception.phase, "backoff-hook")
+        self.assertIsNone(cancelled_hook_error.exception.__cause__)
+        self.assertIsNone(cancelled_hook_error.exception.__context__)
+        self.assertNotIn("private", repr(vars(cancelled_hook_error.exception)))
+        task = asyncio.current_task()
+        assert task is not None
+        self.assertEqual(task.cancelling(), 0)
+        self.assertFalse(transport._claimed)
+
         async def async_hook(_context: RestartContext) -> float:
             return 0.0
 
@@ -1865,6 +1963,33 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 str(raised.exception), "max_backoff_seconds must be positive and finite"
             )
+
+    async def test_client_limits_reject_unrepresentable_request_history_before_claim(
+        self,
+    ) -> None:
+        self.assertEqual(
+            ClientLimits(max_pending_calls=sys.maxsize // 2).max_pending_calls,
+            sys.maxsize // 2,
+        )
+        for label, value in (
+            ("boundary-plus-one", sys.maxsize // 2 + 1),
+            ("astronomical", 10**10000),
+        ):
+            with self.subTest(value=label):
+                peer = ScriptedSessionPeer()
+                transport = InjectedTransport(peer, ownership=TransportOwnership.OWNED)
+                with self.assertRaises(ValueError) as raised:
+                    await AppServerClient.connect(
+                        transport,
+                        self.compatibility,
+                        limits=ClientLimits(max_pending_calls=value),
+                    )
+                self.assertEqual(
+                    str(raised.exception),
+                    "max_pending_calls exceeds the safe request-history bound",
+                )
+                self.assertFalse(transport._claimed)
+                self.assertEqual(peer.close_count, 0)
 
     async def test_replace_discards_old_event_callback_and_close_effects(self) -> None:
         import codex_app_server_client as client_api
@@ -1914,11 +2039,27 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(replacement_peer.closed)
         await replacement.close()
 
-    async def test_replace_rejects_reused_injected_channel_lineage(self) -> None:
+    async def test_replace_rejects_borrowed_injected_wrappers_before_claim(self) -> None:
         import codex_app_server_client as client_api
 
+        class DelegatingChannel:
+            def __init__(self, peer: ScriptedSessionPeer) -> None:
+                self.peer = peer
+
+            async def read_line(self, *, max_bytes: int) -> bytes:
+                return await self.peer.read_line(max_bytes=max_bytes)
+
+            async def write_line(self, data: bytes) -> None:
+                await self.peer.write_line(data)
+
+            async def close(self) -> None:
+                await self.peer.close()
+
         peer = ScriptedSessionPeer()
-        original_transport = InjectedTransport(peer, ownership=TransportOwnership.BORROWED)
+        original_transport = InjectedTransport(
+            DelegatingChannel(peer),  # type: ignore[arg-type]
+            ownership=TransportOwnership.BORROWED,
+        )
         client = await AppServerClient.connect(
             original_transport, self.compatibility, limits=ClientLimits()
         )
@@ -1950,7 +2091,10 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
             callback_params,
         )
         writes_before_reuse = list(peer.writes)
-        reused = InjectedTransport(peer, ownership=TransportOwnership.BORROWED)
+        reused = InjectedTransport(
+            DelegatingChannel(peer),  # type: ignore[arg-type]
+            ownership=TransportOwnership.BORROWED,
+        )
         with self.assertRaises(RestartError) as raised:
             await client.replace(reused)
         self.assertEqual(raised.exception.phase, "transport-lineage")
@@ -1960,16 +2104,16 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(peer.close_count, 0)
 
         fresh_peer = ScriptedSessionPeer()
-        replacement = await client.replace(
-            InjectedTransport(fresh_peer, ownership=TransportOwnership.BORROWED)
-        )
-        result = await replacement.read_thread(client_api.ThreadReadParams(threadId="current"))
-        self.assertNotEqual(result.thread.id, "stale-old-generation")
+        fresh_borrowed = InjectedTransport(fresh_peer, ownership=TransportOwnership.BORROWED)
+        with self.assertRaises(RestartError) as fresh_error:
+            await client.replace(fresh_borrowed)
+        self.assertEqual(fresh_error.exception.phase, "transport-lineage")
+        self.assertFalse(fresh_borrowed._claimed)
         self.assertEqual(peer.incoming.qsize(), 3)
-        await replacement.close()
+        await client.close()
         self.assertEqual(fresh_peer.close_count, 0)
 
-    async def test_structural_transport_cannot_rewrap_one_channel_lineage(self) -> None:
+    async def test_structural_replacement_cannot_claim_or_rewrap_one_wire(self) -> None:
         import codex_app_server_client as client_api
 
         class ReusablePeer(ScriptedSessionPeer):
@@ -1989,20 +2133,33 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                 self.claimed = True
                 return self.channel
 
-        class DeclaredStructuralTransport(StructuralTransport):
-            def _connection_lineage(self) -> object:
-                return self.channel
-
         class LineageToken:
             pass
 
-        class DistinctTokenTransport(StructuralTransport):
+        class DelegatingChannel:
+            def __init__(self, channel: ReusablePeer) -> None:
+                self.channel = channel
+
+            async def read_line(self, *, max_bytes: int) -> bytes:
+                return await self.channel.read_line(max_bytes=max_bytes)
+
+            async def write_line(self, data: bytes) -> None:
+                await self.channel.write_line(data)
+
+            async def close(self) -> None:
+                await self.channel.close()
+
+        class FreshWrapperTransport(StructuralTransport):
             def __init__(self, channel: ReusablePeer) -> None:
                 super().__init__(channel)
                 self.token = LineageToken()
 
             def _connection_lineage(self) -> object:
                 return self.token
+
+            async def _open_channel(self) -> DelegatingChannel:
+                self.claimed = True
+                return DelegatingChannel(self.channel)
 
         class GetterFailureTransport(StructuralTransport):
             @property
@@ -2012,6 +2169,15 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         class CallableFailureTransport(StructuralTransport):
             def _connection_lineage(self) -> object:
                 raise RuntimeError("private-lineage-call-content")
+
+        class CancelledGetterTransport(StructuralTransport):
+            @property
+            def _connection_lineage(self) -> object:
+                raise asyncio.CancelledError("private-lineage-getter-cancellation")
+
+        class CancelledCallableTransport(StructuralTransport):
+            def _connection_lineage(self) -> object:
+                raise asyncio.CancelledError("private-lineage-call-cancellation")
 
         class NoneLineageTransport(StructuralTransport):
             def _connection_lineage(self) -> object:
@@ -2055,50 +2221,48 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
             callback_params,
         )
         writes_before_reuse = list(peer.writes)
-        reused = StructuralTransport(peer)
+        reused = FreshWrapperTransport(peer)
         with self.assertRaises(RestartError) as raised:
             await client.replace(reused)  # type: ignore[arg-type]
         self.assertEqual(raised.exception.phase, "transport-lineage")
         self.assertFalse(reused.claimed)
-        declared_reuse = DeclaredStructuralTransport(peer)
-        with self.assertRaises(RestartError) as declared_error:
-            await client.replace(declared_reuse)  # type: ignore[arg-type]
-        self.assertEqual(declared_error.exception.phase, "transport-lineage")
-        self.assertFalse(declared_reuse.claimed)
+        self.assertEqual(peer.writes, writes_before_reuse)
+        self.assertEqual(peer.incoming.qsize(), 3)
+
         for invalid_type in (
             GetterFailureTransport,
             CallableFailureTransport,
+            CancelledGetterTransport,
+            CancelledCallableTransport,
             NoneLineageTransport,
             AsyncLineageTransport,
         ):
             invalid = invalid_type(peer)
             with (
                 self.subTest(invalid_type=invalid_type.__name__),
-                self.assertRaises(RestartError) as invalid_error,
+                self.assertRaises(TypeError) as invalid_error,
             ):
-                await client.replace(invalid)  # type: ignore[arg-type]
-            self.assertEqual(invalid_error.exception.phase, "transport-lineage")
+                await AppServerClient.connect(  # type: ignore[arg-type]
+                    invalid,
+                    self.compatibility,
+                    limits=ClientLimits(),
+                )
             self.assertIsNone(invalid_error.exception.__cause__)
             self.assertIsNone(invalid_error.exception.__context__)
-            self.assertNotIn("private", repr(vars(invalid_error.exception)))
+            self.assertNotIn("private", str(invalid_error.exception))
             self.assertFalse(invalid.claimed)
-        distinct_reuse = DistinctTokenTransport(peer)
-        with self.assertRaises(RestartError) as distinct_error:
-            await client.replace(distinct_reuse)  # type: ignore[arg-type]
-        self.assertEqual(distinct_error.exception.phase, "transport-lineage")
-        self.assertTrue(distinct_reuse.claimed)
-        self.assertEqual(peer.writes, writes_before_reuse)
-        self.assertEqual(peer.incoming.qsize(), 3)
+            task = asyncio.current_task()
+            assert task is not None
+            self.assertEqual(task.cancelling(), 0)
 
         fresh_peer = ScriptedSessionPeer()
-        replacement = await client.replace(
-            InjectedTransport(fresh_peer, ownership=TransportOwnership.OWNED)
-        )
-        self.assertEqual(replacement.generation, 3)
-        result = await replacement.read_thread(client_api.ThreadReadParams(threadId="current"))
-        self.assertNotEqual(result.thread.id, "stale-structural-lineage")
+        injected = InjectedTransport(fresh_peer, ownership=TransportOwnership.OWNED)
+        with self.assertRaises(RestartError) as injected_error:
+            await client.replace(injected)
+        self.assertEqual(injected_error.exception.phase, "transport-lineage")
+        self.assertFalse(injected._claimed)
         self.assertEqual(peer.incoming.qsize(), 3)
-        await replacement.close()
+        await client.close()
 
     async def test_lineage_history_is_weak_bounded_and_nonweak_fails_closed(
         self,
@@ -2117,12 +2281,12 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(client._engine.wait_closed(), 1.0)
         second_peer = ScriptedSessionPeer()
         second_session = await client.replace(
-            InjectedTransport(second_peer, ownership=TransportOwnership.BORROWED)
+            InjectedTransport(second_peer, ownership=TransportOwnership.OWNED)
         )
         second_peer.disconnect()
         await asyncio.wait_for(client._engine.wait_closed(), 1.0)
         capacity_peer = ScriptedSessionPeer()
-        capacity_transport = InjectedTransport(capacity_peer, ownership=TransportOwnership.BORROWED)
+        capacity_transport = InjectedTransport(capacity_peer, ownership=TransportOwnership.OWNED)
         with self.assertRaises(RestartError) as capacity_error:
             await client.replace(capacity_transport)
         self.assertEqual(capacity_error.exception.phase, "transport-lineage")
@@ -2136,7 +2300,7 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(first_reference())
         replacement_peer = ScriptedSessionPeer()
         replacement = await client.replace(
-            InjectedTransport(replacement_peer, ownership=TransportOwnership.BORROWED)
+            InjectedTransport(replacement_peer, ownership=TransportOwnership.OWNED)
         )
         self.assertEqual(replacement.generation, 3)
         self.assertLessEqual(len(client._connection_lineages), 4)
@@ -2163,7 +2327,7 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         nonweak_client = await AppServerClient.connect(
             InjectedTransport(
                 nonweak_channel,  # type: ignore[arg-type]
-                ownership=TransportOwnership.BORROWED,
+                ownership=TransportOwnership.OWNED,
             ),
             self.compatibility,
         )
@@ -2172,7 +2336,7 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(nonweak_client._engine.wait_closed(), 1.0)
         nonweak_replacement = InjectedTransport(
             nonweak_channel,  # type: ignore[arg-type]
-            ownership=TransportOwnership.BORROWED,
+            ownership=TransportOwnership.OWNED,
         )
         with self.assertRaises(RestartError) as nonweak_error:
             await nonweak_client.replace(nonweak_replacement)
@@ -2185,21 +2349,11 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         class Token:
             pass
 
-        class UnstableStructuralTransport:
-            capability = TransportCapability.INJECTED_BYTE_CHANNEL
-
-            def __init__(self, channel: ScriptedSessionPeer) -> None:
-                self.channel = channel
-                self.tokens = [Token(), Token()]
-                self.calls = 0
-
-            def _connection_lineage(self) -> object:
-                token = self.tokens[self.calls]
-                self.calls += 1
-                return token
-
-            async def _open_channel(self) -> ScriptedSessionPeer:
-                return self.channel
+        def unstable_transport(channel: ScriptedSessionPeer) -> InjectedTransport:
+            transport = InjectedTransport(channel, ownership=TransportOwnership.OWNED)
+            tokens = iter((Token(), Token()))
+            transport._connection_lineage = lambda: next(tokens)  # type: ignore[method-assign]
+            return transport
 
         for cancellation_count in (1, 2):
             with self.subTest(cancellation_count=cancellation_count):
@@ -2209,11 +2363,8 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.wait_for(client._engine.wait_closed(), 1.0)
                 replacement_peer = ScriptedSessionPeer()
                 replacement_peer.close_gate = asyncio.Event()
-                replacement = asyncio.create_task(
-                    client.replace(  # type: ignore[arg-type]
-                        UnstableStructuralTransport(replacement_peer)
-                    )
-                )
+                transport = unstable_transport(replacement_peer)
+                replacement = asyncio.create_task(client.replace(transport))
                 await replacement_peer.close_started.wait()
                 for _ in range(cancellation_count):
                     replacement.cancel()
@@ -2233,76 +2384,69 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         class Token:
             pass
 
-        class UnstableStructuralTransport:
-            capability = TransportCapability.INJECTED_BYTE_CHANNEL
-
-            def __init__(self, channel: ScriptedSessionPeer) -> None:
-                self.channel = channel
-                self.tokens = [Token(), Token()]
-                self.calls = 0
-
-            def _connection_lineage(self) -> object:
-                token = self.tokens[self.calls]
-                self.calls += 1
-                return token
-
-            async def _open_channel(self) -> ScriptedSessionPeer:
-                return self.channel
-
-        peer = ScriptedSessionPeer()
-        client, _ = await self.initialize(peer)
-        peer.disconnect()
-        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
-        failed_peer = ScriptedSessionPeer()
-        failed_peer.close_error = RuntimeError("private-live-owner-content")
-        failed_transport = UnstableStructuralTransport(failed_peer)
-        with self.assertRaises(RestartError) as raised:
-            await client.replace(failed_transport)  # type: ignore[arg-type]
-        self.assertEqual(raised.exception.phase, "replacement-cleanup")
-        self.assertIs(client._transport, failed_transport)
-        self.assertEqual(client._engine._generation, 2)
-        self.assertEqual(client._coordinator._generation, 2)
-        self.assertEqual(client._state, "failed")
-        fresh_peer = ScriptedSessionPeer()
-        fresh_transport = InjectedTransport(fresh_peer, ownership=TransportOwnership.OWNED)
-        with self.assertRaises(RestartError) as retry_error:
-            await client.replace(fresh_transport)
-        self.assertEqual(retry_error.exception.phase, "old-generation-cleanup")
-        self.assertEqual(fresh_peer.writes, [])
-        self.assertFalse(fresh_transport._claimed)
+        for close_error in (
+            RuntimeError("private-live-owner-content"),
+            asyncio.CancelledError("private-live-owner-cancellation"),
+        ):
+            with self.subTest(close_error=type(close_error).__name__):
+                peer = ScriptedSessionPeer()
+                client, _ = await self.initialize(peer)
+                peer.disconnect()
+                await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+                failed_peer = ScriptedSessionPeer()
+                failed_peer.close_error = close_error
+                failed_transport = InjectedTransport(
+                    failed_peer, ownership=TransportOwnership.OWNED
+                )
+                tokens = iter((Token(), Token()))
+                failed_transport._connection_lineage = (  # type: ignore[method-assign]
+                    lambda tokens=tokens: next(tokens)
+                )
+                replacement = asyncio.create_task(client.replace(failed_transport))
+                with self.assertRaises(RestartError) as raised:
+                    await replacement
+                self.assertFalse(replacement.cancelled())
+                self.assertEqual(replacement.cancelling(), 0)
+                self.assertEqual(raised.exception.phase, "replacement-cleanup")
+                self.assertIsNone(raised.exception.__cause__)
+                self.assertIsNone(raised.exception.__context__)
+                self.assertNotIn("private", repr(vars(raised.exception)))
+                self.assertIs(client._transport, failed_transport)
+                self.assertEqual(client._engine._generation, 2)
+                self.assertEqual(client._coordinator._generation, 2)
+                self.assertEqual(client._state, "failed")
+                fresh_peer = ScriptedSessionPeer()
+                fresh_transport = InjectedTransport(fresh_peer, ownership=TransportOwnership.OWNED)
+                with self.assertRaises(RestartError) as retry_error:
+                    await client.replace(fresh_transport)
+                self.assertEqual(retry_error.exception.phase, "old-generation-cleanup")
+                self.assertEqual(fresh_peer.writes, [])
+                self.assertFalse(fresh_transport._claimed)
 
     async def test_unproven_transport_start_cleanup_blocks_another_owner(
         self,
     ) -> None:
-        class Token:
-            pass
+        def failing_start_transport(failure: BaseException) -> InjectedTransport:
+            transport = InjectedTransport(ScriptedSessionPeer(), ownership=TransportOwnership.OWNED)
 
-        class FailingStartTransport:
-            capability = TransportCapability.INJECTED_BYTE_CHANNEL
+            async def fail_start() -> ScriptedSessionPeer:
+                transport._claim()
+                raise failure
 
-            def __init__(self, failure: BaseException) -> None:
-                self.failure = failure
-                self.token = Token()
-                self.claimed = False
-
-            def _connection_lineage(self) -> object:
-                return self.token
-
-            async def _open_channel(self) -> ScriptedSessionPeer:
-                self.claimed = True
-                raise self.failure
+            transport._open_channel = fail_start  # type: ignore[method-assign]
+            return transport
 
         peer = ScriptedSessionPeer()
         client, _ = await self.initialize(peer)
         peer.disconnect()
         await asyncio.wait_for(client._engine.wait_closed(), 1.0)
-        cleanup_failure = FailingStartTransport(
+        cleanup_failure = failing_start_transport(
             TransportCleanupError("private-unproven-live-resource")
         )
         with self.assertRaises(RestartError) as raised:
-            await client.replace(cleanup_failure)  # type: ignore[arg-type]
+            await client.replace(cleanup_failure)
         self.assertEqual(raised.exception.phase, "transport-start-cleanup")
-        self.assertTrue(cleanup_failure.claimed)
+        self.assertTrue(cleanup_failure._claimed)
         self.assertEqual(client._state, "cleanup-failed")
         self.assertEqual(client._generation, 2)
         fresh_peer = ScriptedSessionPeer()
@@ -2311,14 +2455,30 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
             await client.replace(fresh_transport)
         self.assertEqual(retry_error.exception.phase, "precondition")
         self.assertFalse(fresh_transport._claimed)
+        await client._state_lock.acquire()
+        cancelled_close = asyncio.create_task(client.close())
+        concurrent_close = asyncio.create_task(client.close())
+        await asyncio.sleep(0)
+        cancelled_close.cancel()
+        client._state_lock.release()
+        with self.assertRaises(asyncio.CancelledError):
+            await cancelled_close
+        with self.assertRaises(RestartError) as close_error:
+            await concurrent_close
+        self.assertEqual(close_error.exception.phase, "transport-start-cleanup")
+        self.assertEqual(client._state, "cleanup-failed")
+        with self.assertRaises(RestartError) as repeated_close:
+            await client.close()
+        self.assertEqual(repeated_close.exception.phase, "transport-start-cleanup")
+        self.assertEqual(client._state, "cleanup-failed")
 
         ordinary_peer = ScriptedSessionPeer()
         ordinary_client, _ = await self.initialize(ordinary_peer)
         ordinary_peer.disconnect()
         await asyncio.wait_for(ordinary_client._engine.wait_closed(), 1.0)
-        ordinary_failure = FailingStartTransport(RuntimeError("private-proven-start-failure"))
+        ordinary_failure = failing_start_transport(RuntimeError("private-proven-start-failure"))
         with self.assertRaises(RestartError) as ordinary_error:
-            await ordinary_client.replace(ordinary_failure)  # type: ignore[arg-type]
+            await ordinary_client.replace(ordinary_failure)
         self.assertEqual(ordinary_error.exception.phase, "transport-start")
         self.assertEqual(ordinary_client._state, "failed")
         ordinary_replacement_peer = ScriptedSessionPeer()
@@ -2327,6 +2487,80 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(ordinary_replacement.generation, 3)
         await ordinary_replacement.close()
+
+    async def test_transport_start_distinguishes_child_and_owner_cancellation(self) -> None:
+        child_peer = ScriptedSessionPeer()
+        child_client, _ = await self.initialize(child_peer)
+        child_peer.disconnect()
+        await asyncio.wait_for(child_client._engine.wait_closed(), 1.0)
+        child_transport = InjectedTransport(
+            ScriptedSessionPeer(), ownership=TransportOwnership.OWNED
+        )
+
+        async def child_cancelled_start() -> ScriptedSessionPeer:
+            child_transport._claim()
+            raise asyncio.CancelledError("private-transport-start-cancellation")
+
+        child_transport._open_channel = (  # type: ignore[method-assign]
+            child_cancelled_start
+        )
+        child_attempt = asyncio.create_task(child_client.replace(child_transport))
+        with self.assertRaises(RestartError) as child_error:
+            await child_attempt
+        self.assertEqual(child_error.exception.phase, "transport-start-cleanup")
+        self.assertFalse(child_attempt.cancelled())
+        self.assertEqual(child_attempt.cancelling(), 0)
+        self.assertIsNone(child_error.exception.__cause__)
+        self.assertIsNone(child_error.exception.__context__)
+        self.assertNotIn("private", repr(vars(child_error.exception)))
+        self.assertTrue(child_transport._claimed)
+        self.assertEqual(child_client._state, "cleanup-failed")
+        self.assertEqual(child_client._generation, 2)
+
+        for cancellation_count in (1, 2):
+            with self.subTest(cancellation_count=cancellation_count):
+                peer = ScriptedSessionPeer()
+                client, _ = await self.initialize(peer)
+                peer.disconnect()
+                await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+                transport = InjectedTransport(
+                    ScriptedSessionPeer(), ownership=TransportOwnership.OWNED
+                )
+                start_entered = asyncio.Event()
+                start_gate = asyncio.Event()
+
+                async def gated_start(
+                    transport: InjectedTransport = transport,
+                    start_entered: asyncio.Event = start_entered,
+                    start_gate: asyncio.Event = start_gate,
+                ) -> ScriptedSessionPeer:
+                    transport._claim()
+                    start_entered.set()
+                    await start_gate.wait()
+                    raise AssertionError("cancelled start continued")
+
+                transport._open_channel = gated_start  # type: ignore[method-assign]
+                attempt = asyncio.create_task(client.replace(transport))
+                await start_entered.wait()
+                for _ in range(cancellation_count):
+                    attempt.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await attempt
+                self.assertTrue(attempt.cancelled())
+                self.assertEqual(attempt.cancelling(), cancellation_count)
+                self.assertTrue(transport._claimed)
+                self.assertEqual(client._state, "cleanup-failed")
+                self.assertEqual(client._generation, 2)
+                successor_peer = ScriptedSessionPeer()
+                successor = InjectedTransport(successor_peer, ownership=TransportOwnership.OWNED)
+                with self.assertRaises(RestartError) as successor_error:
+                    await client.replace(successor)
+                self.assertEqual(successor_error.exception.phase, "precondition")
+                self.assertFalse(successor._claimed)
+                with self.assertRaises(RestartError) as close_error:
+                    await client.close()
+                self.assertEqual(close_error.exception.phase, "transport-start-cancelled")
+                self.assertEqual(client._state, "cleanup-failed")
 
     async def test_selected_old_response_cannot_publish_after_replacement(self) -> None:
         import codex_app_server_client as client_api
@@ -2560,6 +2794,8 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         cancelled.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await cancelled
+        self.assertTrue(cancelled.cancelled())
+        self.assertEqual(cancelled.cancelling(), 1)
         self.assertEqual(client._generation, 2)
         self.assertEqual(cancelled_peer.close_count, 1)
         self.assertEqual(client._state, "failed")
@@ -2582,6 +2818,40 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(final.generation, 4)
         await final.close()
+
+    async def test_child_cancelled_replacement_initialization_is_typed(self) -> None:
+        class CancelledInitializedPeer(ScriptedSessionPeer):
+            async def write_line(self, data: bytes) -> None:
+                value = json.loads(data)
+                if value.get("method") == "initialized":
+                    raise asyncio.CancelledError("private-initialized-cancellation")
+                await super().write_line(data)
+
+        peer = ScriptedSessionPeer()
+        client, _ = await self.initialize(peer)
+        peer.disconnect()
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        replacement_peer = CancelledInitializedPeer()
+        transport = InjectedTransport(replacement_peer, ownership=TransportOwnership.OWNED)
+        attempt = asyncio.create_task(client.replace(transport))
+        with self.assertRaises(RestartError) as raised:
+            await attempt
+        self.assertEqual(raised.exception.phase, "initialization")
+        self.assertFalse(attempt.cancelled())
+        self.assertEqual(attempt.cancelling(), 0)
+        self.assertIsNone(raised.exception.__cause__)
+        self.assertIsNone(raised.exception.__context__)
+        self.assertNotIn("private", repr(vars(raised.exception)))
+        self.assertTrue(transport._claimed)
+        self.assertEqual(replacement_peer.close_count, 1)
+        self.assertEqual(client._state, "failed")
+        self.assertEqual(client._generation, 2)
+        fresh_peer = ScriptedSessionPeer()
+        replacement = await client.replace(
+            InjectedTransport(fresh_peer, ownership=TransportOwnership.OWNED)
+        )
+        self.assertEqual(replacement.generation, 3)
+        await replacement.close()
 
     async def test_repeated_cancellation_rejoins_replacement_cleanup_before_retry(
         self,
@@ -2607,6 +2877,8 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         cancelled_peer.close_gate.set()
         with self.assertRaises(asyncio.CancelledError):
             await replacement
+        self.assertTrue(replacement.cancelled())
+        self.assertEqual(replacement.cancelling(), 2)
         self.assertEqual(cancelled_peer.close_count, 1)
         successor_peer = ScriptedSessionPeer()
         successor = await client.replace(
