@@ -300,7 +300,7 @@ govern execution.
 | 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `completed` |
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `completed` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `completed` |
-| 3 | Implement exact binary/version resolution and schema compatibility | 2 | `in-progress` |
+| 3 | Implement exact binary/version resolution and schema compatibility | 2 | `completed` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `not-started` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `not-started` |
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `not-started` |
@@ -740,7 +740,7 @@ Stop before implementing compatibility or client code.
 
 ## Block 3 — Implement app-server version and schema compatibility
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -808,7 +808,71 @@ behavior, and no process/transport side effects.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed commit
+  `076053bc0a7187d15881774e96aab353439add18`, tree
+  `4adb67e91771ab3275a953ac4fa0e75c421ceb0a`; `origin/main` matched the
+  independently reviewed candidate.
+- Distribution/version and public root: `codex-app-server-client==0.1.0` at
+  `packages/codex-app-server-client`, import root `codex_app_server_client`.
+  Block 3 exports the exact compatibility subset frozen by Block 2:
+  `ProtocolTarget`, `BinaryIdentity`, `CompatibilityResult`, `FeatureSet`, four
+  closed capability enums, resolver/inspection functions, and discriminating
+  compatibility errors.
+- Compatibility inputs and roots: official Codex `0.147.0`, source commit
+  `be6e8eac029b183056b7e4402879f15d2c85f61b`, retained byte root
+  `eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa`,
+  canonical semantic root
+  `4e5c64213673b670d2575d7b7670d2089d49f92a92c56f2d16618e4a8857813e`,
+  and selected-surface root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`.
+  The complete schema/protocol inputs are wheel-retained package data.
+- Binary identity proof: explicit path syntax and all `PathLike` inputs resolve
+  exactly; only bare string names search `PATH`, which rejects zero or multiple
+  distinct resolutions. File bytes plus device/inode/size/mtime/ctime are
+  stable before and after `--version`; deletion or replacement fails typed and
+  the returned SHA-256 binds the bytes actually probed.
+- Schema/error-order proof: public compatibility inspection rehashes actual
+  selected-surface content, validates required files/unions/selected methods
+  before whole-tree comparison, and then verifies byte/semantic/file-count
+  roots. Missing selected files raise `SchemaMissingError`, absent selected
+  methods raise `UnsupportedFeatureError`, malformed JSON raises
+  `SchemaMalformedError`, and other semantic drift raises
+  `SchemaRootMismatchError`.
+- Focused and negative validation: 18 compatibility tests cover exact and
+  ambiguous resolution, `./codex`/`Path` intent, malformed/stale probes,
+  self-replacement/deletion, retained no-process inspection, target/surface
+  drift, missing/malformed schemas, public missing-feature behavior, exact
+  non-experimental generation argv, and zero transport side effects. Five
+  frozen-contract mutation tests also pass.
+- Artifact proof: isolated installed-wheel tests passed on Python 3.11 and 3.14
+  with identical wheel SHA-256
+  `ff513518b9d20ee7e6b49770690328c59b2c3c93af9441a00a80d5ed26db4b2e`.
+- Official currentness proof: one bounded explicit official-CLI regeneration
+  reported wrapper SHA-256
+  `134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477`,
+  version `0.147.0`, semantic root above, and the exact 8 request/15
+  notification/3 callback/3 transport feature projection.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for the exact pushed source after one remediation cycle,
+  independently reproduced all four corrected boundary failures, reran the 18
+  tests, both isolated wheels, full quality, official currentness, and scope
+  audit, and found no material issue.
+- Product-capability review: compared version-only checking, the selected
+  version plus semantic/schema/feature owner, and eager transport/session
+  startup. The middle path was selected because it supplies exact fail-closed
+  compatibility without runtime lifecycle effects. Protected protocol fidelity
+  and downstream replaceability are preserved; PATH ambiguity, mixed binary
+  identity, recorded-but-unhashed surface metadata, and root-first masked
+  errors were rejected.
+- Currentness and qualification posture: current and accepted for the Block 3
+  compatibility layer; later client layers and final package qualification
+  remain pending.
+- Downstream and Stop audit: retained inspection starts no subprocess, socket,
+  transport, request state, or session. Only explicit version probing and the
+  bounded non-experimental generator invoke the official CLI. No consumer
+  repository/API/type was opened, executed, imported, changed, copied, or
+  tested.
+- License/release posture: `no-license-selected/unpublished`.
 
 ### Stop
 
