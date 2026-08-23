@@ -172,6 +172,20 @@ class LookupProcess(RefusingProcess):
         raise ProcessLookupError
 
 
+class WaitFailureAfterSignalProcess(RefusingProcess):
+    def __init__(self) -> None:
+        super().__init__()
+        self.released = asyncio.Event()
+
+    async def wait(self) -> int:
+        await self.released.wait()
+        raise RuntimeError("private-process-wait-content")
+
+    def terminate(self) -> None:
+        self.terminate_count += 1
+        self.released.set()
+
+
 class InjectedTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_owned_channel_serializes_writes_and_closes_once(self) -> None:
         underlying = MemoryChannel()
@@ -481,6 +495,35 @@ class StreamChannelTests(unittest.IsolatedAsyncioTestCase):
             await channel.close()
         self.assertEqual(process.terminate_count, 1)
         self.assertEqual(process.kill_count, 1)
+
+    async def test_process_wait_failure_after_timeout_has_no_background_exception(self) -> None:
+        process = WaitFailureAfterSignalProcess()
+        channel = _ProcessByteChannel(
+            asyncio.StreamReader(),
+            FakeWriter(),
+            process,  # type: ignore[arg-type]
+        )
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        unexpected_contexts: list[dict[str, object]] = []
+        loop.set_exception_handler(lambda _loop, context: unexpected_contexts.append(context))
+        try:
+            with (
+                mock.patch("codex_app_server_client.transport._PROCESS_EOF_GRACE_SECONDS", 0.001),
+                mock.patch("codex_app_server_client.transport._PROCESS_TERMINATE_SECONDS", 0.01),
+                mock.patch("codex_app_server_client.transport._PROCESS_KILL_SECONDS", 0.01),
+                self.assertRaises(TransportCleanupError) as raised,
+            ):
+                await channel.close()
+            await asyncio.sleep(0)
+            self.assertIsNone(raised.exception.__cause__)
+            self.assertIsNone(raised.exception.__context__)
+            self.assertNotIn("private-process-wait-content", repr(raised.exception))
+            self.assertEqual(unexpected_contexts, [])
+            self.assertEqual(process.terminate_count, 1)
+            self.assertEqual(process.kill_count, 1)
+        finally:
+            loop.set_exception_handler(previous_handler)
 
     async def test_process_lookup_still_requires_bounded_reap_proof(self) -> None:
         process = LookupProcess()

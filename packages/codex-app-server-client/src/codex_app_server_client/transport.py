@@ -218,8 +218,13 @@ class _OwnedProcess:
     ) -> None:
         self._process = process
         self._owns_process_group = owns_process_group
+        self._wait_done = asyncio.Event()
         self._wait_task = asyncio.create_task(process.wait())
-        self._wait_task.add_done_callback(_consume_task_exception)
+        self._wait_task.add_done_callback(self._finish_wait)
+
+    def _finish_wait(self, task: asyncio.Task[int]) -> None:
+        _consume_task_exception(task)
+        self._wait_done.set()
 
     async def close(self) -> bool:
         if await self._wait_for_exit(_PROCESS_EOF_GRACE_SECONDS):
@@ -245,9 +250,13 @@ class _OwnedProcess:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         try:
-            await asyncio.wait_for(asyncio.shield(self._wait_task), timeout)
+            await asyncio.wait_for(self._wait_done.wait(), timeout)
         except TimeoutError:
             return False
+        if self._wait_task.cancelled():
+            return False
+        try:
+            self._wait_task.result()
         except Exception:
             return False
         if self._process.returncode is None:
