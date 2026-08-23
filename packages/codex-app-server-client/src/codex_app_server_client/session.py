@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import math
+import weakref
 from collections.abc import AsyncIterator
 from contextlib import aclosing, suppress
 from dataclasses import dataclass
@@ -53,16 +54,24 @@ from .models import (
 from .restart import BackoffHook, RestartContext
 from .rpc import _EnvelopeValidator, _RpcEngine, _RpcLimits
 from .surface import FeatureSet, NotificationCapability, RequestCapability, TransportCapability
-from .transport import ClientTransport, InjectedTransport
+from .transport import ClientTransport
 
 _ModelT = TypeVar("_ModelT")
 
 
-def _is_finite_number(value: int | float) -> bool:
+def _is_finite_number(value: object) -> bool:
+    if type(value) not in (int, float):
+        return False
     try:
-        return math.isfinite(value)
+        return math.isfinite(value)  # type: ignore[arg-type]
     except OverflowError:
         return False
+
+
+def _consume_current_cancellation() -> None:
+    task = asyncio.current_task()
+    while task is not None and task.cancelling():
+        task.uncancel()
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,18 +82,24 @@ class ClientLimits:
     max_pending_calls: int = 256
     max_events: int = 1024
     max_callbacks: int = 64
+    max_connection_lineages: int = 256
     max_backoff_seconds: float = 30.0
 
     def __post_init__(self) -> None:
-        for name in ("max_message_bytes", "max_pending_calls", "max_events", "max_callbacks"):
+        for name in (
+            "max_message_bytes",
+            "max_pending_calls",
+            "max_events",
+            "max_callbacks",
+            "max_connection_lineages",
+        ):
             value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            if type(value) is not int or value < 1:
                 raise ValueError(f"{name} must be a positive integer")
         if self.max_message_bytes < 2:
             raise ValueError("max_message_bytes must accommodate content and a newline")
         if (
-            isinstance(self.max_backoff_seconds, bool)
-            or not isinstance(self.max_backoff_seconds, (int, float))
+            type(self.max_backoff_seconds) not in (int, float)
             or not _is_finite_number(self.max_backoff_seconds)
             or self.max_backoff_seconds <= 0
         ):
@@ -144,6 +159,7 @@ class AppServerClient:
         limits: ClientLimits,
         engine: _RpcEngine,
         coordinator: _AsyncCoordinator,
+        connection_lineage: object,
     ) -> None:
         if token is not self._CONSTRUCTION_TOKEN:
             raise TypeError("use AppServerClient.connect")
@@ -161,7 +177,10 @@ class AppServerClient:
         self._identity: ClientIdentity | None = None
         self._generation = 1
         self._failure: AppServerClientError | None = None
-        self._connection_lineages = [self._transport_lineage(transport)]
+        self._connection_lineages: list[weakref.ReferenceType[object]] = []
+        initial_reference = self._lineage_reference(connection_lineage)
+        if initial_reference is not None:
+            self._connection_lineages.append(initial_reference)
 
     @classmethod
     async def connect(
@@ -177,7 +196,7 @@ class AppServerClient:
             raise TypeError("limits must be ClientLimits")
         _EnvelopeValidator(compatibility)
         cls._validate_transport(transport, compatibility)
-        engine, coordinator = await cls._open_connection(
+        engine, coordinator, connection_lineage = await cls._open_connection(
             transport, compatibility, limits, generation=1
         )
         return cls(
@@ -187,6 +206,7 @@ class AppServerClient:
             limits,
             engine,
             coordinator,
+            connection_lineage,
         )
 
     @staticmethod
@@ -205,10 +225,50 @@ class AppServerClient:
         return capability
 
     @staticmethod
-    def _transport_lineage(transport: ClientTransport) -> object:
-        if isinstance(transport, InjectedTransport):
-            return transport._channel
-        return transport
+    def _proposed_transport_lineage(transport: ClientTransport) -> object | None:
+        provider = getattr(transport, "_connection_lineage", None)
+        if not callable(provider):
+            return None
+        try:
+            lineage = provider()
+        except Exception:
+            raise TypeError("transport connection lineage is unavailable") from None
+        if lineage is None:
+            raise TypeError("transport connection lineage is unavailable")
+        return lineage
+
+    @staticmethod
+    def _lineage_reference(
+        lineage: object,
+    ) -> weakref.ReferenceType[object] | None:
+        try:
+            return weakref.ref(lineage)
+        except TypeError:
+            return None
+
+    def _lineage_is_available(self, lineage: object) -> bool:
+        retained: list[weakref.ReferenceType[object]] = []
+        duplicate = False
+        for reference in self._connection_lineages:
+            accepted = reference()
+            if accepted is None:
+                continue
+            retained.append(reference)
+            if accepted is lineage:
+                duplicate = True
+        self._connection_lineages = retained
+        return (
+            not duplicate
+            and self._lineage_reference(lineage) is not None
+            and len(retained) < self._limits.max_connection_lineages
+        )
+
+    def _remember_connection_lineage(self, lineage: object) -> bool:
+        reference = self._lineage_reference(lineage)
+        if reference is None:
+            return False
+        self._connection_lineages.append(reference)
+        return True
 
     @classmethod
     async def _open_connection(
@@ -218,8 +278,10 @@ class AppServerClient:
         limits: ClientLimits,
         *,
         generation: int,
-    ) -> tuple[_RpcEngine, _AsyncCoordinator]:
+    ) -> tuple[_RpcEngine, _AsyncCoordinator, object]:
+        proposed_lineage = cls._proposed_transport_lineage(transport)
         channel = await transport._open_channel()
+        connection_lineage = proposed_lineage if proposed_lineage is not None else channel
         try:
             engine = _RpcEngine(
                 channel,
@@ -246,7 +308,7 @@ class AppServerClient:
                     "failed connection construction did not close"
                 ) from None
             raise
-        return engine, coordinator
+        return engine, coordinator, connection_lineage
 
     async def initialize(self, identity: ClientIdentity) -> AppServerSession:
         if not isinstance(identity, ClientIdentity):
@@ -342,8 +404,15 @@ class AppServerClient:
                 cause=self._engine_failure(),
             )
             delay = self._backoff_delay(backoff, context)
-            replacement_lineage = self._transport_lineage(transport)
-            if any(replacement_lineage is accepted for accepted in self._connection_lineages):
+            lineage_failed = False
+            try:
+                proposed_lineage = self._proposed_transport_lineage(transport)
+            except TypeError:
+                lineage_failed = True
+                proposed_lineage = None
+            if lineage_failed or proposed_lineage is None:
+                raise self._restart_error(context, "transport-lineage")
+            if not self._lineage_is_available(proposed_lineage):
                 raise self._restart_error(context, "transport-lineage")
             stale = StaleGenerationError(
                 generation=failed_generation,
@@ -374,12 +443,11 @@ class AppServerClient:
                 except asyncio.CancelledError:
                     self._state = "failed"
                     raise
-            self._connection_lineages.append(replacement_lineage)
             self._generation = replacement_generation
             self._session = None
             transport_start_failed = False
             try:
-                engine, coordinator = await self._open_connection(
+                engine, coordinator, replacement_lineage = await self._open_connection(
                     transport,
                     self._compatibility,
                     self._limits,
@@ -396,6 +464,24 @@ class AppServerClient:
                 self._state = "failed"
                 self._failure = self._restart_error(context, "transport-start")
                 raise self._failure
+            if replacement_lineage is not proposed_lineage or not self._lineage_is_available(
+                replacement_lineage
+            ):
+                failure = self._restart_error(context, "transport-lineage")
+                self._state = "failed"
+                self._failure = failure
+                coordinator.retire(failure)
+                cleanup_failed = False
+                try:
+                    await self._retain_retirement(engine, coordinator, failure)
+                except Exception:
+                    cleanup_failed = True
+                if cleanup_failed:
+                    failure = self._restart_error(context, "replacement-cleanup")
+                    self._failure = failure
+                raise failure
+            if not self._remember_connection_lineage(replacement_lineage):
+                raise AssertionError("validated connection lineage became unavailable")
             self._transport = transport
             self._engine = engine
             self._coordinator = coordinator
@@ -419,24 +505,27 @@ class AppServerClient:
                 initialization_failed = True
             if initialization_cancelled is not None:
                 if cancellation_cleanup_failed:
+                    _consume_current_cancellation()
                     failure = self._restart_error(context, "replacement-cleanup")
                     self._failure = failure
                     raise failure
                 raise initialization_cancelled
             if initialization_failed:
                 replacement_failure = self._restart_error(context, "initialization")
+                self._state = "failed"
+                self._failure = replacement_failure
                 coordinator.retire(replacement_failure)
                 cleanup_failed = False
                 try:
-                    await self._retire_connection(engine, coordinator, replacement_failure)
+                    await self._retain_retirement(engine, coordinator, replacement_failure)
                 except Exception:
                     cleanup_failed = True
+                _consume_current_cancellation()
                 failure = (
                     self._restart_error(context, "replacement-cleanup")
                     if cleanup_failed
                     else replacement_failure
                 )
-                self._state = "failed"
                 self._failure = failure
                 raise failure
             self._session = AppServerSession(
@@ -466,8 +555,7 @@ class AppServerClient:
             delay.close()
             raise self._restart_error(context, "backoff-bound")
         if (
-            isinstance(delay, bool)
-            or not isinstance(delay, (int, float))
+            type(delay) not in (int, float)
             or not _is_finite_number(delay)
             or delay < 0
             or delay > self._limits.max_backoff_seconds

@@ -397,6 +397,9 @@ class _SingleUseTransport:
             raise TransportOwnershipError("transport already has a connection owner")
         self._claimed = True
 
+    def _connection_lineage(self) -> object:
+        return self
+
 
 class StdioTransport(_SingleUseTransport):
     """Own one exact Codex app-server process using JSON lines on stdio."""
@@ -519,6 +522,9 @@ class InjectedTransport(_SingleUseTransport):
     async def _open_channel(self) -> ByteChannel:
         self._claim()
         return _InjectedByteChannel(self._channel, self._ownership)
+
+    def _connection_lineage(self) -> object:
+        return self._channel
 
 
 def _verify_binary(binary: BinaryIdentity) -> bool:

@@ -36,8 +36,14 @@ The client also retains connection-lineage identity for its lifetime. A later
 already claimed by that client, including a borrowed channel left open for its
 caller owner. Rejection occurs before the proposed transport is claimed or a
 replacement reader can consume late responses, notifications, or callbacks.
-Distinct client owners remain independent; this is not an ambient channel
-registry or process singleton.
+For any other structurally accepted `ClientTransport`, the actual opened
+`ByteChannel` object is checked and closed before reader publication when its
+lineage has already appeared in that client. Structural replacement transports
+must declare a stable private lineage token; unprovable or non-weak-referenceable
+tokens fail before transport claim. The client retains only weak identity
+references, prunes dead lineages, and bounds simultaneously live history with
+`ClientLimits.max_connection_lineages`. Distinct client owners remain
+independent; this is not an ambient channel registry or process singleton.
 
 After retirement, an old session, callback, selected response, or close attempt
 raises `StaleGenerationError` and cannot read, write, publish, cancel, or close

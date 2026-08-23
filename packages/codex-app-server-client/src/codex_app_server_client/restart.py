@@ -18,17 +18,9 @@ class RestartContext:
     cause: AppServerClientError
 
     def __post_init__(self) -> None:
-        if (
-            isinstance(self.failed_generation, bool)
-            or not isinstance(self.failed_generation, int)
-            or self.failed_generation < 1
-        ):
+        if type(self.failed_generation) is not int or self.failed_generation < 1:
             raise ValueError("failed_generation must be a positive integer")
-        if (
-            isinstance(self.replacement_generation, bool)
-            or not isinstance(self.replacement_generation, int)
-            or self.replacement_generation < 1
-        ):
+        if type(self.replacement_generation) is not int or self.replacement_generation < 1:
             raise ValueError("replacement_generation must be a positive integer")
         if self.replacement_generation != self.failed_generation + 1:
             raise ValueError("replacement_generation must immediately follow failed_generation")
