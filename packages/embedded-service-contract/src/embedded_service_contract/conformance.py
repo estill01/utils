@@ -68,6 +68,25 @@ def _require(condition: bool, message: str) -> None:
         raise ConformanceError(message)
 
 
+def _require_snapshot(
+    host: LifecycleHost,
+    ref: RunRef,
+    status: RunStatus,
+    outcome: object,
+    events: tuple[EventRecord, ...],
+    message: str,
+) -> None:
+    try:
+        unchanged = (
+            host.status(ref) == status
+            and host.outcome(ref) == outcome
+            and host.events(ref) == events
+        )
+    except Exception as error:
+        raise ConformanceError(message) from error
+    _require(unchanged, message)
+
+
 def _events_are_structural(host: LifecycleHost, ref: RunRef, expected_state: RunState) -> int:
     events = host.events(ref)
     _require(type(events) is tuple, "events must be returned as an immutable tuple")
@@ -141,10 +160,12 @@ def assert_lifecycle_conformance(
         and not successful_cancel.changed,
         "cancel changed an already successful run",
     )
-    _require(
-        host.status(successful) == successful_status
-        and host.outcome(successful) == successful_outcome
-        and host.events(successful) == successful_events,
+    _require_snapshot(
+        host,
+        successful,
+        successful_status,
+        successful_outcome,
+        successful_events,
         "cancel mutated an already successful run",
     )
 
@@ -164,10 +185,12 @@ def assert_lifecycle_conformance(
         and not failed_cancel.changed,
         "cancel changed an already failed run",
     )
-    _require(
-        host.status(failed) == failed_status
-        and host.outcome(failed) == failed_outcome
-        and host.events(failed) == failed_events,
+    _require_snapshot(
+        host,
+        failed,
+        failed_status,
+        failed_outcome,
+        failed_events,
         "cancel mutated an already failed run",
     )
 
@@ -183,37 +206,66 @@ def assert_lifecycle_conformance(
     _require(active_status.state is RunState.RUNNING, "cancellable run is not active")
     _require(host.outcome(cancellable) is None, "active run published a terminal outcome")
     first_cancel = host.cancel(cancellable)
-    second_cancel = host.cancel(cancellable)
-    _require(
-        type(first_cancel) is CancelResult and type(second_cancel) is CancelResult,
-        "cancel must use exact CancelResult values",
-    )
-    _require(
-        first_cancel.ref == cancellable and second_cancel.ref == cancellable,
-        "cancel result changed its run ref",
-    )
+    _require(type(first_cancel) is CancelResult, "cancel must use exact CancelResult")
+    _require(first_cancel.ref == cancellable, "cancel result changed its run ref")
     _require(first_cancel.changed, "first cancellation did not change active state")
-    _require(not second_cancel.changed, "repeated cancellation was not idempotent")
     _require(
-        first_cancel.state is RunState.CANCELLED and second_cancel.state is RunState.CANCELLED,
-        "cancellation did not retain terminal state",
+        first_cancel.state is RunState.CANCELLED,
+        "cancellation did not reach terminal state",
     )
     cancelled_outcome = host.outcome(cancellable)
     _require(type(cancelled_outcome) is Cancelled, "cancel outcome is not structural")
     _require(cancelled_outcome.ref == cancellable, "cancel outcome changed its run ref")
     observed += _events_are_structural(host, cancellable, RunState.CANCELLED)
+    cancelled_status = host.status(cancellable)
+    cancelled_events = host.events(cancellable)
 
+    second_cancel = host.cancel(cancellable)
+    _require(type(second_cancel) is CancelResult, "cancel must use exact CancelResult")
+    _require(second_cancel.ref == cancellable, "cancel result changed its run ref")
+    _require(not second_cancel.changed, "repeated cancellation was not idempotent")
     _require(
-        host.status(successful).state is RunState.SUCCEEDED
-        and host.outcome(successful) == successful_outcome
-        and host.events(successful) == successful_events,
+        second_cancel.state is RunState.CANCELLED,
+        "repeated cancellation did not retain terminal state",
+    )
+    _require_snapshot(
+        host,
+        cancellable,
+        cancelled_status,
+        cancelled_outcome,
+        cancelled_events,
+        "repeated cancellation mutated the cancelled run",
+    )
+
+    probe = host.start(fixture.successful_request)
+    _require(type(probe) is RunRef, "probe start must return the exact RunRef value")
+    _require(
+        probe not in (successful, failed, cancellable),
+        "a later start reused a prior run reference",
+    )
+    _require_snapshot(
+        host,
+        successful,
+        successful_status,
+        successful_outcome,
+        successful_events,
         "a later start changed the prior successful run",
     )
-    _require(
-        host.status(failed).state is RunState.FAILED
-        and host.outcome(failed) == failed_outcome
-        and host.events(failed) == failed_events,
+    _require_snapshot(
+        host,
+        failed,
+        failed_status,
+        failed_outcome,
+        failed_events,
         "a later start changed the prior failed run",
+    )
+    _require_snapshot(
+        host,
+        cancellable,
+        cancelled_status,
+        cancelled_outcome,
+        cancelled_events,
+        "a later start changed the prior cancelled run",
     )
 
     try:
@@ -229,7 +281,7 @@ def assert_lifecycle_conformance(
     _require(fresh is not host, "host factory reused one runtime instance")
     _require(type(fresh.contract) is HostContract, "fresh host contract is not exact")
     _expect_unknown(fresh)
-    prior_refs = (successful, failed, cancellable)
+    prior_refs = (successful, failed, cancellable, probe)
     fresh_ref = fresh.start(fixture.successful_request)
     _require(type(fresh_ref) is RunRef, "fresh host start did not return exact RunRef")
     _require(fresh_ref not in prior_refs, "fresh host reused another instance's run ref")

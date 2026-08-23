@@ -101,6 +101,41 @@ class _FailedCancelEventMutationHost(EmbeddedReferenceHost):
         return super().cancel(ref)
 
 
+class _RepeatedCancelEventMutationHost(EmbeddedReferenceHost):
+    def cancel(self, ref: RunRef) -> CancelResult:
+        run = self._run(ref)
+        if run.state is RunState.CANCELLED:
+            self._append(run, ref, "unexpected-repeat-cancel-event")
+            return CancelResult(ref, RunState.CANCELLED, False)
+        return super().cancel(ref)
+
+
+class _RepeatedCancelStateMutationHost(EmbeddedReferenceHost):
+    def cancel(self, ref: RunRef) -> CancelResult:
+        run = self._run(ref)
+        if run.state is RunState.CANCELLED:
+            run.state = RunState.FAILED
+            return CancelResult(ref, RunState.CANCELLED, False)
+        return super().cancel(ref)
+
+
+class _RepeatedCancelOutcomeMutationHost(EmbeddedReferenceHost):
+    def cancel(self, ref: RunRef) -> CancelResult:
+        run = self._run(ref)
+        if run.state is RunState.CANCELLED:
+            run.outcome = Succeeded(ref, "unexpected-repeat-cancel-outcome")
+            return CancelResult(ref, RunState.CANCELLED, False)
+        return super().cancel(ref)
+
+
+class _CancelledRetentionLossHost(EmbeddedReferenceHost):
+    def start(self, request):
+        for ref, run in tuple(self._runs.items()):
+            if run.state is RunState.CANCELLED:
+                del self._runs[ref]
+        return super().start(request)
+
+
 class _SingleSlotReferenceHost(EmbeddedReferenceHost):
     def start(self, request):
         self._next_id = 1
@@ -249,6 +284,10 @@ class ReferenceConformanceTests(unittest.TestCase):
             _StalePostCancelStatusHost,
             _FailedCancelMutationHost,
             _FailedCancelEventMutationHost,
+            _RepeatedCancelEventMutationHost,
+            _RepeatedCancelStateMutationHost,
+            _RepeatedCancelOutcomeMutationHost,
+            _CancelledRetentionLossHost,
             _SingleSlotReferenceHost,
             _SharedStateReferenceHost,
         ):
