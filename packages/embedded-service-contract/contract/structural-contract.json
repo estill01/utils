@@ -34,7 +34,7 @@
     "Succeeded": "(ref: 'RunRef', value: 'ResultT') -> None",
     "Failed": "(ref: 'RunRef', error: 'FailureT') -> None",
     "Cancelled": "(ref: 'RunRef') -> None",
-    "ConformanceFixture": "(host_factory: 'Callable[[], LifecycleHost[RequestT, EventT, ResultT, FailureT]]', successful_request: 'RequestT', failing_request: 'RequestT', cancellable_request: 'RequestT') -> None",
+    "ConformanceFixture": "(host_factory: 'Callable[[str], LifecycleHost[RequestT, EventT, ResultT, FailureT]]', successful_request: 'RequestT', failing_request: 'RequestT', cancellable_request: 'RequestT') -> None",
     "ConformanceReport": "(shape: 'HostShape', scenarios: 'int', observed_events: 'int') -> None",
     "assert_lifecycle_conformance": "(fixture: 'ConformanceFixture[RequestT, EventT, ResultT, FailureT]') -> 'ConformanceReport'"
   },
@@ -60,12 +60,12 @@
     "service_fixture"
   ],
   "testing_signatures": {
-    "EmbeddedReferenceHost": "() -> 'None'",
+    "EmbeddedReferenceHost": "(lineage: 'str') -> 'None'",
     "ReferenceEvent": "(name: 'str') -> None",
     "ReferenceFailure": "(code: 'str') -> None",
     "ReferenceRequest": "(action: 'ReferenceAction') -> None",
     "ReferenceResult": "(value: 'str') -> None",
-    "ServiceReferenceHost": "() -> 'None'",
+    "ServiceReferenceHost": "(lineage: 'str') -> 'None'",
     "embedded_fixture": "() -> 'ReferenceFixture'",
     "missing_operation_fixture": "() -> 'ReferenceFixture'",
     "out_of_order_fixture": "() -> 'ReferenceFixture'",

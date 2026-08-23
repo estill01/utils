@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from itertools import count
 from typing import Final
 
 from .conformance import ConformanceFixture
@@ -63,8 +62,13 @@ ReferenceFixture = ConformanceFixture[
     ReferenceFailure,
 ]
 
-_EMBEDDED_INSTANCE_IDS = count(1)
-_SERVICE_INSTANCE_IDS = count(1)
+
+def _validate_lineage(lineage: str) -> str:
+    if type(lineage) is not str:
+        raise TypeError("lineage must be a string")
+    if not lineage or len(lineage) > 128 or any(ord(char) < 32 for char in lineage):
+        raise ValueError("lineage must be a bounded non-empty text value")
+    return lineage
 
 
 @dataclass(slots=True)
@@ -79,8 +83,8 @@ class EmbeddedReferenceHost:
 
     contract: Final = HostContract(HostShape.EMBEDDED, process_owner_count=0)
 
-    def __init__(self) -> None:
-        self._instance_id = next(_EMBEDDED_INSTANCE_IDS)
+    def __init__(self, lineage: str) -> None:
+        self._lineage = _validate_lineage(lineage)
         self._next_id = 1
         self._runs: dict[RunRef, _EmbeddedRun] = {}
 
@@ -97,7 +101,7 @@ class EmbeddedReferenceHost:
     def start(self, request: ReferenceRequest) -> RunRef:
         if not isinstance(request, ReferenceRequest):
             raise TypeError("request must be ReferenceRequest")
-        ref = RunRef(f"embedded-{self._instance_id}-{self._next_id}")
+        ref = RunRef(f"embedded-{len(self._lineage)}-{self._lineage}-{self._next_id}")
         self._next_id += 1
         run = _EmbeddedRun(RunState.RUNNING, [], None)
         self._runs[ref] = run
@@ -143,8 +147,8 @@ class ServiceReferenceHost:
 
     contract: Final = HostContract(HostShape.SERVICE, process_owner_count=1)
 
-    def __init__(self) -> None:
-        self._instance_id = next(_SERVICE_INSTANCE_IDS)
+    def __init__(self, lineage: str) -> None:
+        self._lineage = _validate_lineage(lineage)
         self._sequence = 0
         self._records: dict[str, dict[str, object]] = {}
 
@@ -164,7 +168,7 @@ class ServiceReferenceHost:
         if not isinstance(request, ReferenceRequest):
             raise TypeError("request must be ReferenceRequest")
         self._sequence += 1
-        ref = RunRef(f"service-{self._instance_id}-{self._sequence}")
+        ref = RunRef(f"service-{len(self._lineage)}-{self._lineage}-{self._sequence}")
         row: dict[str, object] = {
             "state": RunState.RUNNING.value,
             "events": [],
@@ -238,8 +242,8 @@ class _OutOfOrderReferenceHost(EmbeddedReferenceHost):
 class _MissingOutcomeReferenceHost:
     contract = HostContract(HostShape.EMBEDDED, process_owner_count=0)
 
-    def __init__(self) -> None:
-        self._delegate = EmbeddedReferenceHost()
+    def __init__(self, lineage: str) -> None:
+        self._delegate = EmbeddedReferenceHost(lineage)
 
     def start(self, request: ReferenceRequest) -> RunRef:
         return self._delegate.start(request)

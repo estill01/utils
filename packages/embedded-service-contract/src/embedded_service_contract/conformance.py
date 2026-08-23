@@ -36,7 +36,7 @@ class ConformanceError(AssertionError):
 class ConformanceFixture(Generic[RequestT, EventT, ResultT, FailureT]):
     """Caller-supplied requests for three structure-only lifecycle paths."""
 
-    host_factory: Callable[[], LifecycleHost[RequestT, EventT, ResultT, FailureT]]
+    host_factory: Callable[[str], LifecycleHost[RequestT, EventT, ResultT, FailureT]]
     successful_request: RequestT
     failing_request: RequestT
     cancellable_request: RequestT
@@ -118,7 +118,7 @@ def assert_lifecycle_conformance(
 
     if type(fixture) is not ConformanceFixture:
         raise TypeError("fixture must be ConformanceFixture")
-    host = fixture.host_factory()
+    host = fixture.host_factory("primary")
     if not isinstance(host, LifecycleHost):
         raise ConformanceError("host does not implement the lifecycle protocol")
     if type(host.contract) is not HostContract:
@@ -130,6 +130,9 @@ def assert_lifecycle_conformance(
     successful_outcome = host.outcome(successful)
     _require(type(successful_outcome) is Succeeded, "success outcome is not structural")
     _require(successful_outcome.ref == successful, "success outcome changed its run ref")
+    observed = _events_are_structural(host, successful, RunState.SUCCEEDED)
+    successful_status = host.status(successful)
+    successful_events = host.events(successful)
     successful_cancel = host.cancel(successful)
     _require(type(successful_cancel) is CancelResult, "cancel must use exact CancelResult")
     _require(
@@ -138,8 +141,12 @@ def assert_lifecycle_conformance(
         and not successful_cancel.changed,
         "cancel changed an already successful run",
     )
-    observed = _events_are_structural(host, successful, RunState.SUCCEEDED)
-    successful_events = host.events(successful)
+    _require(
+        host.status(successful) == successful_status
+        and host.outcome(successful) == successful_outcome
+        and host.events(successful) == successful_events,
+        "cancel mutated an already successful run",
+    )
 
     failed = host.start(fixture.failing_request)
     _require(type(failed) is RunRef, "start must return the exact RunRef value")
@@ -147,7 +154,22 @@ def assert_lifecycle_conformance(
     _require(type(failed_outcome) is Failed, "failure outcome is not structural")
     _require(failed_outcome.ref == failed, "failure outcome changed its run ref")
     observed += _events_are_structural(host, failed, RunState.FAILED)
+    failed_status = host.status(failed)
     failed_events = host.events(failed)
+    failed_cancel = host.cancel(failed)
+    _require(type(failed_cancel) is CancelResult, "cancel must use exact CancelResult")
+    _require(
+        failed_cancel.ref == failed
+        and failed_cancel.state is RunState.FAILED
+        and not failed_cancel.changed,
+        "cancel changed an already failed run",
+    )
+    _require(
+        host.status(failed) == failed_status
+        and host.outcome(failed) == failed_outcome
+        and host.events(failed) == failed_events,
+        "cancel mutated an already failed run",
+    )
 
     cancellable = host.start(fixture.cancellable_request)
     _require(type(cancellable) is RunRef, "start must return the exact RunRef value")
@@ -203,7 +225,7 @@ def assert_lifecycle_conformance(
     else:
         raise ConformanceError("negative cursor did not fail")
 
-    fresh = fixture.host_factory()
+    fresh = fixture.host_factory("fresh")
     _require(fresh is not host, "host factory reused one runtime instance")
     _require(type(fresh.contract) is HostContract, "fresh host contract is not exact")
     _expect_unknown(fresh)

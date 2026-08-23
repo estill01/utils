@@ -81,6 +81,26 @@ class _StalePostCancelStatusHost(EmbeddedReferenceHost):
         return status
 
 
+class _FailedCancelMutationHost(EmbeddedReferenceHost):
+    def cancel(self, ref: RunRef) -> CancelResult:
+        run = self._run(ref)
+        if run.state is RunState.FAILED:
+            run.state = RunState.CANCELLED
+            run.outcome = Cancelled(ref)
+            self._append(run, ref, "cancelled-after-failure")
+            return CancelResult(ref, RunState.CANCELLED, True)
+        return super().cancel(ref)
+
+
+class _FailedCancelEventMutationHost(EmbeddedReferenceHost):
+    def cancel(self, ref: RunRef) -> CancelResult:
+        run = self._run(ref)
+        if run.state is RunState.FAILED:
+            self._append(run, ref, "unexpected-terminal-cancel-event")
+            return CancelResult(ref, RunState.FAILED, False)
+        return super().cancel(ref)
+
+
 class _SingleSlotReferenceHost(EmbeddedReferenceHost):
     def start(self, request):
         self._next_id = 1
@@ -91,8 +111,8 @@ class _SingleSlotReferenceHost(EmbeddedReferenceHost):
 class _SharedStateReferenceHost(EmbeddedReferenceHost):
     _shared_runs = {}
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, lineage: str) -> None:
+        super().__init__(lineage)
         self._runs = self._shared_runs
 
 
@@ -150,8 +170,8 @@ class StructuralValueTests(unittest.TestCase):
                 Cancelled(invalid_ref)  # type: ignore[arg-type]
 
     def test_protocol_is_structural_and_has_exact_operations(self) -> None:
-        self.assertIsInstance(EmbeddedReferenceHost(), LifecycleHost)
-        self.assertIsInstance(ServiceReferenceHost(), LifecycleHost)
+        self.assertIsInstance(EmbeddedReferenceHost("protocol-embedded"), LifecycleHost)
+        self.assertIsInstance(ServiceReferenceHost("protocol-service"), LifecycleHost)
         operations = {
             name
             for name, value in inspect.getmembers(LifecycleHost)
@@ -167,25 +187,25 @@ class ReferenceConformanceTests(unittest.TestCase):
         self.assertEqual((embedded.shape, service.shape), (HostShape.EMBEDDED, HostShape.SERVICE))
         self.assertEqual(embedded.scenarios, service.scenarios)
         self.assertEqual(embedded.observed_events, service.observed_events)
-        self.assertIs(type(EmbeddedReferenceHost()).__base__, object)
-        self.assertIs(type(ServiceReferenceHost()).__base__, object)
+        self.assertIs(type(EmbeddedReferenceHost("shape-embedded")).__base__, object)
+        self.assertIs(type(ServiceReferenceHost("shape-service")).__base__, object)
 
     def test_reference_hosts_do_not_share_state(self) -> None:
-        embedded = EmbeddedReferenceHost()
-        service = ServiceReferenceHost()
+        embedded = EmbeddedReferenceHost("state-embedded")
+        service = ServiceReferenceHost("state-service")
         ref = embedded.start(embedded_fixture().successful_request)
         with self.assertRaises(UnknownRunError):
             service.status(ref)
         with self.assertRaises(UnknownRunError):
-            EmbeddedReferenceHost().status(ref)
+            EmbeddedReferenceHost("state-fresh").status(ref)
 
     def test_same_shape_instances_keep_refs_unambiguous_after_both_start(self) -> None:
         for host_type, fixture_factory in (
             (EmbeddedReferenceHost, embedded_fixture),
             (ServiceReferenceHost, service_fixture),
         ):
-            first = host_type()
-            second = host_type()
+            first = host_type("first")
+            second = host_type("second")
             fixture = fixture_factory()
             first_ref = first.start(fixture.successful_request)
             second_ref = second.start(fixture.failing_request)
@@ -195,6 +215,25 @@ class ReferenceConformanceTests(unittest.TestCase):
                     first.status(second_ref)
                 with self.assertRaises(UnknownRunError):
                     second.status(first_ref)
+
+    def test_explicit_lineage_is_order_independent_without_ambient_state(self) -> None:
+        for host_type, fixture_factory in (
+            (EmbeddedReferenceHost, embedded_fixture),
+            (ServiceReferenceHost, service_fixture),
+        ):
+            fixture = fixture_factory()
+            before = host_type("stable").start(fixture.successful_request)
+            host_type("unrelated").start(fixture.failing_request)
+            after = host_type("stable").start(fixture.successful_request)
+            with self.subTest(host_type=host_type):
+                self.assertEqual(before, after)
+                self.assertNotEqual(
+                    before,
+                    host_type("other").start(fixture.successful_request),
+                )
+        source = inspect.getsource(contract_testing)
+        self.assertNotIn("itertools", source)
+        self.assertNotIn("_INSTANCE_IDS", source)
 
     def test_failure_fixtures_are_deterministically_rejected(self) -> None:
         for fixture in (out_of_order_fixture(), missing_operation_fixture()):
@@ -208,6 +247,8 @@ class ReferenceConformanceTests(unittest.TestCase):
             _WrongCancelRefHost,
             _WrongOutcomeRefHost,
             _StalePostCancelStatusHost,
+            _FailedCancelMutationHost,
+            _FailedCancelEventMutationHost,
             _SingleSlotReferenceHost,
             _SharedStateReferenceHost,
         ):

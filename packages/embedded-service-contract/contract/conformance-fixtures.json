@@ -35,6 +35,8 @@
     "mismatched-cancel-ref",
     "mismatched-outcome-ref",
     "stale-post-cancel-status",
+    "failed-terminal-cancel-mutation",
+    "failed-terminal-cancel-event-mutation",
     "single-slot-ref-reuse",
     "cross-instance-shared-state",
     "cross-instance-ref-collision",
