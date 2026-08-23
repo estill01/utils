@@ -24,6 +24,12 @@ class RestartContext:
             or self.failed_generation < 1
         ):
             raise ValueError("failed_generation must be a positive integer")
+        if (
+            isinstance(self.replacement_generation, bool)
+            or not isinstance(self.replacement_generation, int)
+            or self.replacement_generation < 1
+        ):
+            raise ValueError("replacement_generation must be a positive integer")
         if self.replacement_generation != self.failed_generation + 1:
             raise ValueError("replacement_generation must immediately follow failed_generation")
         if not isinstance(self.cause, AppServerClientError):

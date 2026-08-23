@@ -31,6 +31,14 @@ callback handles, and joins retained request and callback writes. Publication
 checks occur before an event, callback, or typed response crosses the public
 session boundary.
 
+The client also retains connection-lineage identity for its lifetime. A later
+`InjectedTransport` cannot reuse any caller-supplied `ByteChannel` object
+already claimed by that client, including a borrowed channel left open for its
+caller owner. Rejection occurs before the proposed transport is claimed or a
+replacement reader can consume late responses, notifications, or callbacks.
+Distinct client owners remain independent; this is not an ambient channel
+registry or process singleton.
+
 After retirement, an old session, callback, selected response, or close attempt
 raises `StaleGenerationError` and cannot read, write, publish, cancel, or close
 the current generation. Cancellation, timeout, late response, and cleanup state

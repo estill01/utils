@@ -53,9 +53,16 @@ from .models import (
 from .restart import BackoffHook, RestartContext
 from .rpc import _EnvelopeValidator, _RpcEngine, _RpcLimits
 from .surface import FeatureSet, NotificationCapability, RequestCapability, TransportCapability
-from .transport import ClientTransport
+from .transport import ClientTransport, InjectedTransport
 
 _ModelT = TypeVar("_ModelT")
+
+
+def _is_finite_number(value: int | float) -> bool:
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +85,7 @@ class ClientLimits:
         if (
             isinstance(self.max_backoff_seconds, bool)
             or not isinstance(self.max_backoff_seconds, (int, float))
-            or not math.isfinite(self.max_backoff_seconds)
+            or not _is_finite_number(self.max_backoff_seconds)
             or self.max_backoff_seconds <= 0
         ):
             raise ValueError("max_backoff_seconds must be positive and finite")
@@ -154,6 +161,7 @@ class AppServerClient:
         self._identity: ClientIdentity | None = None
         self._generation = 1
         self._failure: AppServerClientError | None = None
+        self._connection_lineages = [self._transport_lineage(transport)]
 
     @classmethod
     async def connect(
@@ -195,6 +203,12 @@ class AppServerClient:
                 f"transport capability is unavailable: {capability.value}"
             )
         return capability
+
+    @staticmethod
+    def _transport_lineage(transport: ClientTransport) -> object:
+        if isinstance(transport, InjectedTransport):
+            return transport._channel
+        return transport
 
     @classmethod
     async def _open_connection(
@@ -328,6 +342,9 @@ class AppServerClient:
                 cause=self._engine_failure(),
             )
             delay = self._backoff_delay(backoff, context)
+            replacement_lineage = self._transport_lineage(transport)
+            if any(replacement_lineage is accepted for accepted in self._connection_lineages):
+                raise self._restart_error(context, "transport-lineage")
             stale = StaleGenerationError(
                 generation=failed_generation,
                 current_generation=replacement_generation,
@@ -357,6 +374,7 @@ class AppServerClient:
                 except asyncio.CancelledError:
                     self._state = "failed"
                     raise
+            self._connection_lineages.append(replacement_lineage)
             self._generation = replacement_generation
             self._session = None
             transport_start_failed = False
@@ -383,17 +401,28 @@ class AppServerClient:
             self._coordinator = coordinator
             self._state = "initializing"
             initialization_failed = False
+            initialization_cancelled: asyncio.CancelledError | None = None
+            cancellation_cleanup_failed = False
             try:
                 await self._initialize_engine(engine, self._identity)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as error:
+                initialization_cancelled = error
                 failure = self._restart_error(context, "initialization-cancelled")
-                coordinator.retire(failure)
-                await self._retire_connection(engine, coordinator, failure)
                 self._state = "failed"
                 self._failure = failure
-                raise
+                coordinator.retire(failure)
+                try:
+                    await self._retain_retirement(engine, coordinator, failure)
+                except Exception:
+                    cancellation_cleanup_failed = True
             except Exception:
                 initialization_failed = True
+            if initialization_cancelled is not None:
+                if cancellation_cleanup_failed:
+                    failure = self._restart_error(context, "replacement-cleanup")
+                    self._failure = failure
+                    raise failure
+                raise initialization_cancelled
             if initialization_failed:
                 replacement_failure = self._restart_error(context, "initialization")
                 coordinator.retire(replacement_failure)
@@ -439,7 +468,7 @@ class AppServerClient:
         if (
             isinstance(delay, bool)
             or not isinstance(delay, (int, float))
-            or not math.isfinite(delay)
+            or not _is_finite_number(delay)
             or delay < 0
             or delay > self._limits.max_backoff_seconds
         ):
@@ -477,6 +506,21 @@ class AppServerClient:
         await coordinator.wait_quiescent()
         if cleanup_failure is not None:
             raise cleanup_failure
+
+    @classmethod
+    async def _retain_retirement(
+        cls,
+        engine: _RpcEngine,
+        coordinator: _AsyncCoordinator,
+        failure: AppServerClientError,
+    ) -> None:
+        retirement = asyncio.create_task(cls._retire_connection(engine, coordinator, failure))
+        while not retirement.done():
+            try:
+                await asyncio.shield(retirement)
+            except asyncio.CancelledError:
+                continue
+        retirement.result()
 
     async def close(self) -> None:
         close_task = await self._select_close(None)

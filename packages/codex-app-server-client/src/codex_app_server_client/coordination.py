@@ -346,15 +346,25 @@ class _AsyncCoordinator:
         state.response_task = asyncio.create_task(self._run_callback_response(state, line))
         self._response_tasks.add(state.response_task)
         state.response_task.add_done_callback(self._finish_response_task)
+        selected_failure: AppServerClientError | None = None
         try:
             await asyncio.shield(state.response_task)
         except asyncio.CancelledError:
-            if state.response_task.done():
-                _consume_current_cancellation()
-                state.response_task.result()
-                return
             _consume_current_cancellation()
-            raise CallCancelledError("callback response waiter was cancelled") from None
+            if not state.response_task.done():
+                if self._retired_failure is not None:
+                    raise self._retired_failure from None
+                raise CallCancelledError("callback response waiter was cancelled") from None
+            try:
+                state.response_task.result()
+            except AppServerClientError as error:
+                selected_failure = error
+        except AppServerClientError as error:
+            selected_failure = error
+        if self._retired_failure is not None:
+            raise self._retired_failure
+        if selected_failure is not None:
+            raise selected_failure
 
     def _finish_response_task(self, task: asyncio.Task[None]) -> None:
         self._response_tasks.discard(task)
