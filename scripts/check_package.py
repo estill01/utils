@@ -15,6 +15,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MATRIX_PATH = REPOSITORY_ROOT / "tools" / "package_matrix.json"
+TOOLCHAIN_PATH = REPOSITORY_ROOT / "tools" / "toolchain.json"
 
 
 def run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -30,6 +31,21 @@ def run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def load_matrix() -> dict[str, object]:
     return json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
+
+
+def require_uv() -> str:
+    uv = shutil.which("uv")
+    if uv is None:
+        raise RuntimeError("uv is required for the maintained package smoke envelope")
+    toolchain = json.loads(TOOLCHAIN_PATH.read_text(encoding="utf-8"))
+    actual = run([uv, "--version"], cwd=REPOSITORY_ROOT).stdout.strip()
+    fields = actual.split(maxsplit=2)
+    expected = str(toolchain["uv"])
+    if len(fields) < 2 or fields[0] != "uv" or fields[1] != expected:
+        raise RuntimeError(
+            f"uv version mismatch: expected semantic version {expected!r}, got {actual!r}"
+        )
+    return uv
 
 
 def environment_python(environment: Path) -> Path:
@@ -107,9 +123,7 @@ def main() -> int:
     parser.add_argument("--python", default=sys.executable, dest="python_spec")
     args = parser.parse_args()
 
-    uv = shutil.which("uv")
-    if uv is None:
-        raise RuntimeError("uv is required for the maintained package smoke envelope")
+    uv = require_uv()
     matrix = load_matrix()
     packages = matrix["packages"]
     assert isinstance(packages, dict)

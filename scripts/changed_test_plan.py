@@ -21,7 +21,7 @@ def main() -> int:
 
     selected: set[str] = set()
     for path in args.paths:
-        normalized = path.lstrip("./")
+        normalized = path.removeprefix("./")
         if any(
             normalized == prefix.rstrip("/") or normalized.startswith(prefix)
             for prefix in mapping["global_paths"]

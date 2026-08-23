@@ -5,16 +5,16 @@
 The repository-owned checks are:
 
 ```bash
-python3 scripts/check_repo.py
+python3 scripts/check_quality.py
 python3 scripts/check_package.py --all --python 3.11
-ruff check .
-ruff format --check .
 ```
 
 `scripts/check_package.py` resolves the repository root from its own location,
 uses the configured `uv` executable, builds exactly one wheel at a time into a
 temporary directory, creates a clean temporary environment, installs only that
 wheel without dependencies, and imports it from outside the checkout.
+`scripts/check_quality.py` runs the repository contract plus the exact uv/Ruff
+versions pinned in `tools/toolchain.json`; CI invokes the same envelope.
 
 ## Version policy
 
