@@ -307,7 +307,7 @@ govern execution.
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `completed` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `completed` |
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `completed` |
-| 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `not-started` |
+| 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `in-progress` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `not-started` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `not-started` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `not-started` |
@@ -1730,7 +1730,7 @@ Stop before implementing other package behavior or cross-package composition.
 
 ## Block 10 — Implement the embedded/service structural contract
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
