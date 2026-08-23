@@ -14,7 +14,8 @@ scheduler, provider, or product lifecycle.
 Two deliberately separate in-memory reference hosts and reusable negative
 fixtures live in `embedded_service_contract.testing`. They prove the same
 structure using direct typed state and service-shaped mapping records without
-sharing an execution runtime.
+sharing an execution runtime. Every reference carries deterministic
+per-instance lineage so one host cannot mistake another host's run for its own.
 
 ```python executable
 from embedded_service_contract import assert_lifecycle_conformance

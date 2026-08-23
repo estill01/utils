@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import count
 from typing import Final
 
 from .conformance import ConformanceFixture
@@ -62,6 +63,9 @@ ReferenceFixture = ConformanceFixture[
     ReferenceFailure,
 ]
 
+_EMBEDDED_INSTANCE_IDS = count(1)
+_SERVICE_INSTANCE_IDS = count(1)
+
 
 @dataclass(slots=True)
 class _EmbeddedRun:
@@ -76,6 +80,7 @@ class EmbeddedReferenceHost:
     contract: Final = HostContract(HostShape.EMBEDDED, process_owner_count=0)
 
     def __init__(self) -> None:
+        self._instance_id = next(_EMBEDDED_INSTANCE_IDS)
         self._next_id = 1
         self._runs: dict[RunRef, _EmbeddedRun] = {}
 
@@ -92,7 +97,7 @@ class EmbeddedReferenceHost:
     def start(self, request: ReferenceRequest) -> RunRef:
         if not isinstance(request, ReferenceRequest):
             raise TypeError("request must be ReferenceRequest")
-        ref = RunRef(f"embedded-{self._next_id}")
+        ref = RunRef(f"embedded-{self._instance_id}-{self._next_id}")
         self._next_id += 1
         run = _EmbeddedRun(RunState.RUNNING, [], None)
         self._runs[ref] = run
@@ -139,6 +144,7 @@ class ServiceReferenceHost:
     contract: Final = HostContract(HostShape.SERVICE, process_owner_count=1)
 
     def __init__(self) -> None:
+        self._instance_id = next(_SERVICE_INSTANCE_IDS)
         self._sequence = 0
         self._records: dict[str, dict[str, object]] = {}
 
@@ -158,7 +164,7 @@ class ServiceReferenceHost:
         if not isinstance(request, ReferenceRequest):
             raise TypeError("request must be ReferenceRequest")
         self._sequence += 1
-        ref = RunRef(f"service-{self._sequence}")
+        ref = RunRef(f"service-{self._instance_id}-{self._sequence}")
         row: dict[str, object] = {
             "state": RunState.RUNNING.value,
             "events": [],

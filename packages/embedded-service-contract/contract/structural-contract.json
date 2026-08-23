@@ -2,6 +2,7 @@
   "schema_version": 1,
   "distribution": "embedded-service-contract",
   "version": "0.1.0",
+  "package_version": "0.1.0",
   "import_root": "embedded_service_contract",
   "root_exports": [
     "CancelResult",
@@ -24,6 +25,75 @@
     "__version__",
     "assert_lifecycle_conformance"
   ],
+  "public_signatures": {
+    "HostContract": "(shape: 'HostShape', process_owner_count: 'int', schema_version: 'int' = 1) -> None",
+    "RunRef": "(value: 'str') -> None",
+    "RunStatus": "(ref: 'RunRef', state: 'RunState', last_event_sequence: 'int') -> None",
+    "EventRecord": "(ref: 'RunRef', sequence: 'int', value: 'EventT') -> None",
+    "CancelResult": "(ref: 'RunRef', state: 'RunState', changed: 'bool') -> None",
+    "Succeeded": "(ref: 'RunRef', value: 'ResultT') -> None",
+    "Failed": "(ref: 'RunRef', error: 'FailureT') -> None",
+    "Cancelled": "(ref: 'RunRef') -> None",
+    "ConformanceFixture": "(host_factory: 'Callable[[], LifecycleHost[RequestT, EventT, ResultT, FailureT]]', successful_request: 'RequestT', failing_request: 'RequestT', cancellable_request: 'RequestT') -> None",
+    "ConformanceReport": "(shape: 'HostShape', scenarios: 'int', observed_events: 'int') -> None",
+    "assert_lifecycle_conformance": "(fixture: 'ConformanceFixture[RequestT, EventT, ResultT, FailureT]') -> 'ConformanceReport'"
+  },
+  "protocol_signatures": {
+    "contract.getter": "(self) -> 'HostContract'",
+    "start": "(self, request: 'RequestT') -> 'RunRef'",
+    "status": "(self, ref: 'RunRef') -> 'RunStatus'",
+    "events": "(self, ref: 'RunRef', *, after_sequence: 'int' = 0) -> 'tuple[EventRecord[EventT], ...]'",
+    "cancel": "(self, ref: 'RunRef') -> 'CancelResult'",
+    "outcome": "(self, ref: 'RunRef') -> 'RunOutcome[ResultT, FailureT] | None'"
+  },
+  "testing_exports": [
+    "EmbeddedReferenceHost",
+    "ReferenceAction",
+    "ReferenceEvent",
+    "ReferenceFailure",
+    "ReferenceRequest",
+    "ReferenceResult",
+    "ServiceReferenceHost",
+    "embedded_fixture",
+    "missing_operation_fixture",
+    "out_of_order_fixture",
+    "service_fixture"
+  ],
+  "testing_signatures": {
+    "EmbeddedReferenceHost": "() -> 'None'",
+    "ReferenceEvent": "(name: 'str') -> None",
+    "ReferenceFailure": "(code: 'str') -> None",
+    "ReferenceRequest": "(action: 'ReferenceAction') -> None",
+    "ReferenceResult": "(value: 'str') -> None",
+    "ServiceReferenceHost": "() -> 'None'",
+    "embedded_fixture": "() -> 'ReferenceFixture'",
+    "missing_operation_fixture": "() -> 'ReferenceFixture'",
+    "out_of_order_fixture": "() -> 'ReferenceFixture'",
+    "service_fixture": "() -> 'ReferenceFixture'"
+  },
+  "error_hierarchy": {
+    "LifecycleContractError": "Exception",
+    "UnknownRunError": "LifecycleContractError",
+    "InvalidCursorError": "LifecycleContractError",
+    "ConformanceError": "AssertionError"
+  },
+  "enum_values": {
+    "HostShape": {
+      "EMBEDDED": "embedded",
+      "SERVICE": "service"
+    },
+    "RunState": {
+      "RUNNING": "running",
+      "SUCCEEDED": "succeeded",
+      "FAILED": "failed",
+      "CANCELLED": "cancelled"
+    },
+    "ReferenceAction": {
+      "SUCCEED": "succeed",
+      "FAIL": "fail",
+      "WAIT": "wait"
+    }
+  },
   "host_shapes": {
     "embedded": {
       "process_owner_count": 0
@@ -31,13 +101,6 @@
     "service": {
       "process_owner_count": 1
     }
-  },
-  "operations": {
-    "start": "request -> RunRef",
-    "status": "RunRef -> RunStatus",
-    "events": "RunRef, after_sequence -> tuple[EventRecord, ...]",
-    "cancel": "RunRef -> CancelResult",
-    "outcome": "RunRef -> Succeeded | Failed | Cancelled | None"
   },
   "run_states": [
     "running",

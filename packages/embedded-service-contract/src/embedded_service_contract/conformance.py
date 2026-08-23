@@ -8,12 +8,16 @@ from typing import Generic, TypeVar
 
 from .contract import (
     Cancelled,
+    CancelResult,
+    EventRecord,
     Failed,
+    HostContract,
     HostShape,
     InvalidCursorError,
     LifecycleHost,
     RunRef,
     RunState,
+    RunStatus,
     Succeeded,
     UnknownRunError,
 )
@@ -37,6 +41,10 @@ class ConformanceFixture(Generic[RequestT, EventT, ResultT, FailureT]):
     failing_request: RequestT
     cancellable_request: RequestT
 
+    def __post_init__(self) -> None:
+        if not callable(self.host_factory):
+            raise TypeError("host_factory must be callable")
+
 
 @dataclass(frozen=True, slots=True)
 class ConformanceReport:
@@ -46,16 +54,28 @@ class ConformanceReport:
     scenarios: int
     observed_events: int
 
+    def __post_init__(self) -> None:
+        if type(self.shape) is not HostShape:
+            raise TypeError("shape must be HostShape")
+        if type(self.scenarios) is not int or self.scenarios < 0:
+            raise ValueError("scenarios must be a non-negative integer")
+        if type(self.observed_events) is not int or self.observed_events < 0:
+            raise ValueError("observed_events must be a non-negative integer")
+
 
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ConformanceError(message)
 
 
-def _events_are_structural(host: LifecycleHost, ref: RunRef) -> int:
+def _events_are_structural(host: LifecycleHost, ref: RunRef, expected_state: RunState) -> int:
     events = host.events(ref)
     _require(type(events) is tuple, "events must be returned as an immutable tuple")
     _require(bool(events), "each reference scenario must publish an event")
+    _require(
+        all(type(event) is EventRecord for event in events),
+        "events must use exact EventRecord envelopes",
+    )
     _require(
         [event.sequence for event in events] == list(range(1, len(events) + 1)),
         "event sequences must be contiguous and one-based",
@@ -64,12 +84,14 @@ def _events_are_structural(host: LifecycleHost, ref: RunRef) -> int:
     suffix = host.events(ref, after_sequence=1)
     _require(suffix == events[1:], "event cursor must return the exact suffix")
     status = host.status(ref)
+    _require(type(status) is RunStatus, "status must use the exact RunStatus value")
+    _require(status.ref == ref, "status must retain its requested run ref")
+    _require(status.state is expected_state, "status changed outside its structural transition")
     _require(status.last_event_sequence == len(events), "status cursor must match event history")
     return len(events)
 
 
-def _expect_unknown(host: LifecycleHost) -> None:
-    missing = RunRef("conformance-missing-run")
+def _expect_unknown_ref(host: LifecycleHost, missing: RunRef) -> None:
     for operation in (
         lambda: host.status(missing),
         lambda: host.events(missing),
@@ -85,43 +107,92 @@ def _expect_unknown(host: LifecycleHost) -> None:
         raise ConformanceError("unknown run did not raise UnknownRunError")
 
 
+def _expect_unknown(host: LifecycleHost) -> None:
+    _expect_unknown_ref(host, RunRef("conformance-missing-run"))
+
+
 def assert_lifecycle_conformance(
     fixture: ConformanceFixture[RequestT, EventT, ResultT, FailureT],
 ) -> ConformanceReport:
     """Assert equivalent structure without interpreting caller-owned values."""
 
-    if not isinstance(fixture, ConformanceFixture):
+    if type(fixture) is not ConformanceFixture:
         raise TypeError("fixture must be ConformanceFixture")
     host = fixture.host_factory()
     if not isinstance(host, LifecycleHost):
         raise ConformanceError("host does not implement the lifecycle protocol")
-    if host.contract.schema_version != 1:
-        raise ConformanceError("host contract uses an unsupported schema version")
+    if type(host.contract) is not HostContract:
+        raise ConformanceError("host must expose the exact validated HostContract value")
     _expect_unknown(host)
 
     successful = host.start(fixture.successful_request)
-    _require(host.status(successful).state is RunState.SUCCEEDED, "success did not terminate")
-    _require(isinstance(host.outcome(successful), Succeeded), "success outcome is not structural")
-    observed = _events_are_structural(host, successful)
+    _require(type(successful) is RunRef, "start must return the exact RunRef value")
+    successful_outcome = host.outcome(successful)
+    _require(type(successful_outcome) is Succeeded, "success outcome is not structural")
+    _require(successful_outcome.ref == successful, "success outcome changed its run ref")
+    successful_cancel = host.cancel(successful)
+    _require(type(successful_cancel) is CancelResult, "cancel must use exact CancelResult")
+    _require(
+        successful_cancel.ref == successful
+        and successful_cancel.state is RunState.SUCCEEDED
+        and not successful_cancel.changed,
+        "cancel changed an already successful run",
+    )
+    observed = _events_are_structural(host, successful, RunState.SUCCEEDED)
+    successful_events = host.events(successful)
 
     failed = host.start(fixture.failing_request)
-    _require(host.status(failed).state is RunState.FAILED, "failure did not terminate")
-    _require(isinstance(host.outcome(failed), Failed), "failure outcome is not structural")
-    observed += _events_are_structural(host, failed)
+    _require(type(failed) is RunRef, "start must return the exact RunRef value")
+    failed_outcome = host.outcome(failed)
+    _require(type(failed_outcome) is Failed, "failure outcome is not structural")
+    _require(failed_outcome.ref == failed, "failure outcome changed its run ref")
+    observed += _events_are_structural(host, failed, RunState.FAILED)
+    failed_events = host.events(failed)
 
     cancellable = host.start(fixture.cancellable_request)
-    _require(host.status(cancellable).state is RunState.RUNNING, "cancellable run is not active")
+    _require(type(cancellable) is RunRef, "start must return the exact RunRef value")
+    _require(
+        len({successful, failed, cancellable}) == 3,
+        "one host instance reused a run reference",
+    )
+    active_status = host.status(cancellable)
+    _require(type(active_status) is RunStatus, "status must use the exact RunStatus value")
+    _require(active_status.ref == cancellable, "active status changed its run ref")
+    _require(active_status.state is RunState.RUNNING, "cancellable run is not active")
     _require(host.outcome(cancellable) is None, "active run published a terminal outcome")
     first_cancel = host.cancel(cancellable)
     second_cancel = host.cancel(cancellable)
+    _require(
+        type(first_cancel) is CancelResult and type(second_cancel) is CancelResult,
+        "cancel must use exact CancelResult values",
+    )
+    _require(
+        first_cancel.ref == cancellable and second_cancel.ref == cancellable,
+        "cancel result changed its run ref",
+    )
     _require(first_cancel.changed, "first cancellation did not change active state")
     _require(not second_cancel.changed, "repeated cancellation was not idempotent")
     _require(
         first_cancel.state is RunState.CANCELLED and second_cancel.state is RunState.CANCELLED,
         "cancellation did not retain terminal state",
     )
-    _require(isinstance(host.outcome(cancellable), Cancelled), "cancel outcome is not structural")
-    observed += _events_are_structural(host, cancellable)
+    cancelled_outcome = host.outcome(cancellable)
+    _require(type(cancelled_outcome) is Cancelled, "cancel outcome is not structural")
+    _require(cancelled_outcome.ref == cancellable, "cancel outcome changed its run ref")
+    observed += _events_are_structural(host, cancellable, RunState.CANCELLED)
+
+    _require(
+        host.status(successful).state is RunState.SUCCEEDED
+        and host.outcome(successful) == successful_outcome
+        and host.events(successful) == successful_events,
+        "a later start changed the prior successful run",
+    )
+    _require(
+        host.status(failed).state is RunState.FAILED
+        and host.outcome(failed) == failed_outcome
+        and host.events(failed) == failed_events,
+        "a later start changed the prior failed run",
+    )
 
     try:
         host.events(cancellable, after_sequence=-1)
@@ -134,7 +205,15 @@ def assert_lifecycle_conformance(
 
     fresh = fixture.host_factory()
     _require(fresh is not host, "host factory reused one runtime instance")
+    _require(type(fresh.contract) is HostContract, "fresh host contract is not exact")
     _expect_unknown(fresh)
+    prior_refs = (successful, failed, cancellable)
+    fresh_ref = fresh.start(fixture.successful_request)
+    _require(type(fresh_ref) is RunRef, "fresh host start did not return exact RunRef")
+    _require(fresh_ref not in prior_refs, "fresh host reused another instance's run ref")
+    for prior_ref in prior_refs:
+        _expect_unknown_ref(fresh, prior_ref)
+    _expect_unknown_ref(host, fresh_ref)
     _require(fresh.contract == host.contract, "fresh host changed its structural contract")
     return ConformanceReport(
         shape=host.contract.shape,

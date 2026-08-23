@@ -49,7 +49,7 @@ class HostContract:
     schema_version: int = 1
 
     def __post_init__(self) -> None:
-        if not isinstance(self.shape, HostShape):
+        if type(self.shape) is not HostShape:
             raise TypeError("shape must be HostShape")
         if type(self.process_owner_count) is not int:
             raise TypeError("process_owner_count must be an integer")
@@ -58,6 +58,8 @@ class HostContract:
         expected = 0 if self.shape is HostShape.EMBEDDED else 1
         if self.process_owner_count != expected:
             raise ValueError("host shape and process ownership disagree")
+        if type(self.schema_version) is not int:
+            raise TypeError("schema_version must be an integer")
         if self.schema_version != 1:
             raise ValueError("unsupported host-contract schema version")
 
@@ -69,7 +71,7 @@ class RunRef:
     value: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.value, str):
+        if type(self.value) is not str:
             raise TypeError("run reference must be a string")
         if not self.value or len(self.value) > 256 or any(ord(char) < 32 for char in self.value):
             raise ValueError("run reference must be a bounded non-empty text value")
@@ -84,7 +86,7 @@ class RunStatus:
     last_event_sequence: int
 
     def __post_init__(self) -> None:
-        if not isinstance(self.ref, RunRef) or not isinstance(self.state, RunState):
+        if type(self.ref) is not RunRef or type(self.state) is not RunState:
             raise TypeError("status requires exact structural values")
         if type(self.last_event_sequence) is not int or self.last_event_sequence < 0:
             raise ValueError("last_event_sequence must be a non-negative integer")
@@ -99,7 +101,7 @@ class EventRecord(Generic[EventT]):
     value: EventT
 
     def __post_init__(self) -> None:
-        if not isinstance(self.ref, RunRef):
+        if type(self.ref) is not RunRef:
             raise TypeError("event ref must be RunRef")
         if type(self.sequence) is not int or self.sequence < 1:
             raise ValueError("event sequence must be a positive integer")
@@ -114,7 +116,7 @@ class CancelResult:
     changed: bool
 
     def __post_init__(self) -> None:
-        if not isinstance(self.ref, RunRef) or not isinstance(self.state, RunState):
+        if type(self.ref) is not RunRef or type(self.state) is not RunState:
             raise TypeError("cancel result requires exact structural values")
         if type(self.changed) is not bool:
             raise TypeError("changed must be boolean")
@@ -129,6 +131,10 @@ class Succeeded(Generic[ResultT]):
     ref: RunRef
     value: ResultT
 
+    def __post_init__(self) -> None:
+        if type(self.ref) is not RunRef:
+            raise TypeError("success ref must be RunRef")
+
 
 @dataclass(frozen=True, slots=True)
 class Failed(Generic[FailureT]):
@@ -137,12 +143,20 @@ class Failed(Generic[FailureT]):
     ref: RunRef
     error: FailureT
 
+    def __post_init__(self) -> None:
+        if type(self.ref) is not RunRef:
+            raise TypeError("failure ref must be RunRef")
+
 
 @dataclass(frozen=True, slots=True)
 class Cancelled:
     """Structural cancelled outcome with no product meaning."""
 
     ref: RunRef
+
+    def __post_init__(self) -> None:
+        if type(self.ref) is not RunRef:
+            raise TypeError("cancelled ref must be RunRef")
 
 
 RunOutcome: TypeAlias = Succeeded[ResultT] | Failed[FailureT] | Cancelled

@@ -31,6 +31,13 @@
     "missing-outcome-operation",
     "multiple-process-owners",
     "shape-owner-mismatch",
+    "mismatched-status-ref",
+    "mismatched-cancel-ref",
+    "mismatched-outcome-ref",
+    "stale-post-cancel-status",
+    "single-slot-ref-reuse",
+    "cross-instance-shared-state",
+    "cross-instance-ref-collision",
     "unknown-run",
     "negative-event-cursor"
   ]
