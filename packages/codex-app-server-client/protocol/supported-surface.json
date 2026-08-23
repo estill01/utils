@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "protocol": {
+    "codex_version": "0.147.0",
+    "family": "app-server",
+    "experimental_api": false
+  },
+  "transports": {
+    "supported": [
+      "owned-stdio",
+      "unix-socket",
+      "injected-byte-channel"
+    ],
+    "excluded": [
+      "websocket",
+      "public-network-listener",
+      "remote-proxy"
+    ]
+  },
+  "client_requests": {
+    "internal": [
+      "initialize"
+    ],
+    "public_typed": [
+      "thread/start",
+      "thread/resume",
+      "thread/read",
+      "thread/list",
+      "turn/start",
+      "turn/steer",
+      "turn/interrupt",
+      "review/start"
+    ]
+  },
+  "client_notifications": {
+    "internal": [
+      "initialized"
+    ]
+  },
+  "server_notifications": {
+    "public_typed": [
+      "error",
+      "warning",
+      "deprecationNotice",
+      "configWarning",
+      "thread/started",
+      "thread/status/changed",
+      "thread/closed",
+      "turn/started",
+      "turn/completed",
+      "turn/diff/updated",
+      "turn/plan/updated",
+      "item/started",
+      "item/completed",
+      "item/agentMessage/delta",
+      "item/plan/delta",
+      "item/reasoning/summaryTextDelta"
+    ]
+  },
+  "server_requests": {
+    "public_policy_neutral": [
+      "item/commandExecution/requestApproval",
+      "item/fileChange/requestApproval",
+      "item/tool/requestUserInput"
+    ]
+  },
+  "capability_probe": {
+    "input": "closed enums for the selected methods, notifications, callbacks, and transports",
+    "available_when": "the exact member exists in the accepted schema tree and its owning compatibility and session preconditions hold",
+    "raw_string_probe": false
+  },
+  "excluded_surface_classes": [
+    "raw-arbitrary-rpc",
+    "experimental-api",
+    "account-and-authentication",
+    "configuration-mutation",
+    "filesystem-mutation",
+    "marketplace-and-plugin-management",
+    "mcp-management-and-tool-calls",
+    "realtime-media",
+    "remote-control",
+    "shell-and-command-execution-requests",
+    "deprecated-callbacks",
+    "consumer-and-product-types"
+  ]
+}

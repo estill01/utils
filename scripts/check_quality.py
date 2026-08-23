@@ -36,6 +36,7 @@ def main() -> int:
         )
 
     run([sys.executable, "scripts/check_repo.py"])
+    run([sys.executable, "scripts/check_protocol_contract.py"])
     ruff = f"ruff=={TOOLCHAIN['ruff']}"
     run([uv, "tool", "run", "--from", ruff, "ruff", "check", "."])
     run([uv, "tool", "run", "--from", ruff, "ruff", "format", "--check", "."])
