@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 
 from .model import (
+    MAX_CAPABILITIES,
+    MAX_DEPENDENCIES,
+    MAX_FEATURES_PER_PROTOCOL,
+    MAX_PROTOCOLS,
     Capability,
     Component,
     ManifestDecodeError,
@@ -101,9 +105,11 @@ def _exact_object(value: object, keys: set[str], field: str) -> dict[str, object
     return value
 
 
-def _exact_array(value: object, field: str) -> list[object]:
+def _exact_array(value: object, field: str, *, maximum: int) -> list[object]:
     if type(value) is not list:
         raise ManifestDecodeError(f"{field} must be an array")
+    if len(value) > maximum:
+        raise ManifestDecodeError(f"{field} exceeds the {maximum}-item limit")
     return value
 
 
@@ -130,6 +136,8 @@ def parse_manifest(document: str | bytes) -> RuntimeManifest:
         except UnicodeDecodeError as error:
             raise ManifestDecodeError("manifest bytes must be UTF-8") from error
     elif type(document) is str:
+        if len(document) > MAX_DOCUMENT_UTF8_BYTES:
+            raise ManifestDecodeError("manifest exceeds the UTF-8 byte limit")
         try:
             encoded = document.encode("utf-8")
         except UnicodeEncodeError as error:
@@ -151,20 +159,30 @@ def parse_manifest(document: str | bytes) -> RuntimeManifest:
         raise
     except (json.JSONDecodeError, RecursionError, TypeError, ValueError) as error:
         raise ManifestDecodeError("manifest is not strict JSON") from error
+    if type(decoded) is not dict:
+        raise ManifestDecodeError("manifest must be an object")
+    if "schema_version" not in decoded:
+        raise ManifestDecodeError("manifest is missing schema_version")
+    if type(decoded["schema_version"]) is not int:
+        raise ManifestDecodeError("schema_version must be an integer")
+    if decoded["schema_version"] != 1:
+        raise UnsupportedSchemaError("unsupported runtime-manifest schema version")
     root = _exact_object(
         decoded,
         {"schema_version", "component", "protocols", "capabilities", "dependencies"},
         "manifest",
     )
-    if type(root["schema_version"]) is not int:
-        raise ManifestDecodeError("schema_version must be an integer")
-    if root["schema_version"] != 1:
-        raise UnsupportedSchemaError("unsupported runtime-manifest schema version")
     protocols = []
-    for index, value in enumerate(_exact_array(root["protocols"], "protocols")):
+    for index, value in enumerate(
+        _exact_array(root["protocols"], "protocols", maximum=MAX_PROTOCOLS)
+    ):
         field = f"protocols[{index}]"
         row = _exact_object(value, {"name", "version", "schema_root", "features"}, field)
-        features = _exact_array(row["features"], f"{field}.features")
+        features = _exact_array(
+            row["features"],
+            f"{field}.features",
+            maximum=MAX_FEATURES_PER_PROTOCOL,
+        )
         try:
             protocols.append(
                 ProtocolRecord(
@@ -177,7 +195,9 @@ def parse_manifest(document: str | bytes) -> RuntimeManifest:
         except ManifestError as error:
             raise ManifestDecodeError(f"{field} is invalid") from error
     capabilities = []
-    for index, value in enumerate(_exact_array(root["capabilities"], "capabilities")):
+    for index, value in enumerate(
+        _exact_array(root["capabilities"], "capabilities", maximum=MAX_CAPABILITIES)
+    ):
         field = f"capabilities[{index}]"
         row = _exact_object(value, {"name", "version"}, field)
         try:
@@ -186,7 +206,9 @@ def parse_manifest(document: str | bytes) -> RuntimeManifest:
             raise ManifestDecodeError(f"{field} is invalid") from error
     dependencies = tuple(
         _component_from_dict(value, f"dependencies[{index}]")
-        for index, value in enumerate(_exact_array(root["dependencies"], "dependencies"))
+        for index, value in enumerate(
+            _exact_array(root["dependencies"], "dependencies", maximum=MAX_DEPENDENCIES)
+        )
     )
     try:
         return RuntimeManifest(

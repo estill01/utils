@@ -22,7 +22,6 @@ from runtime_manifest import (
     RuntimeManifest,
     Sha256Root,
     UnavailableKind,
-    UnavailableReason,
     UnsupportedSchemaError,
     canonical_json,
     compare_manifests,
@@ -103,38 +102,32 @@ class ImmutableModelTests(unittest.TestCase):
         limits = contract_json("public-api.json")["resource_limits"]
         with self.assertRaises(ManifestValidationError):
             Capability("feature", "\ud800")
-        with self.assertRaises(ManifestValidationError):
+        with self.assertRaisesRegex(ManifestValidationError, "32-item limit"):
             Protocol(
                 "wire",
                 "1",
                 Sha256Root(A),
-                tuple(f"f{index:02d}" for index in range(limits["features_per_protocol"] + 1)),
+                (object(),) * (limits["features_per_protocol"] + 1),  # type: ignore[arg-type]
             )
         component = Component("engine", "1", Sha256Root(A))
         bounded_collections = (
-            (
-                "protocols",
-                tuple(
-                    Protocol(f"p{index:02d}", "1", Sha256Root(B))
-                    for index in range(limits["protocols"] + 1)
-                ),
-            ),
+            ("protocols", (object(),) * (limits["protocols"] + 1), limits["protocols"]),
             (
                 "capabilities",
-                tuple(
-                    Capability(f"c{index:02d}", "1") for index in range(limits["capabilities"] + 1)
-                ),
+                (object(),) * (limits["capabilities"] + 1),
+                limits["capabilities"],
             ),
             (
                 "dependencies",
-                tuple(
-                    Component(f"d{index:02d}", "1", Sha256Root(C))
-                    for index in range(limits["dependencies"] + 1)
-                ),
+                (object(),) * (limits["dependencies"] + 1),
+                limits["dependencies"],
             ),
         )
-        for field, values in bounded_collections:
-            with self.subTest(field=field), self.assertRaises(ManifestValidationError):
+        for field, values, maximum in bounded_collections:
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(ManifestValidationError, f"{maximum}-item limit"),
+            ):
                 RuntimeManifest(component, **{field: values})
 
 
@@ -183,11 +176,21 @@ class CanonicalSerializationTests(unittest.TestCase):
         value["schema_version"] = True
         with self.assertRaises(ManifestDecodeError):
             parse_manifest(json.dumps(value))
+        value["schema_version"] = 1.0
+        with self.assertRaises(ManifestDecodeError):
+            parse_manifest(json.dumps(value))
+        for future in (
+            {"schema_version": 2, "future_field": True},
+            {"schema_version": 2},
+        ):
+            with self.subTest(future=future), self.assertRaises(UnsupportedSchemaError):
+                parse_manifest(json.dumps(future))
 
     def test_surrogates_oversized_documents_and_recursion_fail_as_decode_errors(self) -> None:
         invalid_scalar = canonical_json(neutral_expected()).replace('"1.0"', '"\\ud800"', 1)
         limits = contract_json("public-api.json")["resource_limits"]
         oversized = canonical_json(neutral_expected()) + " " * limits["document_utf8_bytes"]
+        hostile_oversized_text = "\ud800" + "x" * limits["document_utf8_bytes"]
         nested = "[" * 1000 + "]" * 1000
         oversized_integer = "9" * 5000
         for value in (
@@ -205,6 +208,31 @@ class CanonicalSerializationTests(unittest.TestCase):
                 self.assertRaises(ManifestDecodeError),
             ):
                 parse_manifest(value)
+        with self.assertRaisesRegex(ManifestDecodeError, "exceeds the UTF-8 byte limit"):
+            parse_manifest(hostile_oversized_text)
+
+        base = json.loads(canonical_json(neutral_expected()))
+        for field, maximum in (
+            ("protocols", limits["protocols"]),
+            ("capabilities", limits["capabilities"]),
+            ("dependencies", limits["dependencies"]),
+        ):
+            candidate = json.loads(json.dumps(base))
+            candidate[field] = [None] * (maximum + 1)
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(ManifestDecodeError, f"{maximum}-item limit"),
+            ):
+                parse_manifest(json.dumps(candidate))
+        feature_overflow = json.loads(json.dumps(base))
+        feature_overflow["protocols"][0]["features"] = [None] * (
+            limits["features_per_protocol"] + 1
+        )
+        with self.assertRaisesRegex(
+            ManifestDecodeError,
+            f"{limits['features_per_protocol']}-item limit",
+        ):
+            parse_manifest(json.dumps(feature_overflow))
 
     def test_maximum_valid_manifest_fits_the_document_limit_and_round_trips(self) -> None:
         limits = contract_json("public-api.json")["resource_limits"]
@@ -387,11 +415,23 @@ class FrozenPackageContractTests(unittest.TestCase):
             schema["$defs"]["protocol"]["properties"]["features"]["maxItems"],
             limits["features_per_protocol"],
         )
-        self.assertEqual(len(schema["x-runtime-semantic-invariants"]), 5)
+        self.assertEqual(len(schema["x-runtime-semantic-invariants"]), 6)
+        self.assertIn(
+            (
+                "schema_version uses the JSON integer representation 1 rather than a "
+                "numerically equal non-integer form"
+            ),
+            schema["x-runtime-semantic-invariants"],
+        )
         self.assertIn(
             "all text contains Unicode scalar values only",
             schema["x-runtime-semantic-invariants"],
         )
+        text_pattern = re.compile(schema["$defs"]["text"]["pattern"])
+        self.assertIsNotNone(text_pattern.search("valid\u2028text"))
+        self.assertIsNone(text_pattern.search("a\u2028b\u0001"))
+        self.assertIsNone(text_pattern.search("a\u2029b\u0001"))
+        self.assertIsNone(text_pattern.search("terminal-newline\n"))
         for fixture in fixtures["fixtures"].values():
             expected = getattr(manifest_testing, fixture["expected_factory"])()
             observed = getattr(manifest_testing, fixture["observed_factory"])()
@@ -423,12 +463,8 @@ class FrozenPackageContractTests(unittest.TestCase):
     def test_report_limit_record_is_consistent_with_exact_values(self) -> None:
         limits = contract_json("public-api.json")["resource_limits"]
         maximum = limits["unavailable_reasons"]
-        reasons = tuple(
-            UnavailableReason(UnavailableKind.CAPABILITY_MISSING, f"c{index}", "1", None)
-            for index in range(maximum + 1)
-        )
-        with self.assertRaises(ManifestValidationError):
-            CompatibilityReport(reasons)
+        with self.assertRaisesRegex(ManifestValidationError, f"{maximum}-item limit"):
+            CompatibilityReport((object(),) * (maximum + 1))  # type: ignore[arg-type]
 
     def test_readme_example_executes_through_public_imports(self) -> None:
         readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")

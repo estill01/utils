@@ -45,6 +45,7 @@
   },
   "x-document-max-utf8-bytes": 524288,
   "x-runtime-semantic-invariants": [
+    "schema_version uses the JSON integer representation 1 rather than a numerically equal non-integer form",
     "protocol names are unique even when the remaining record fields differ",
     "capability names are unique even when versions differ",
     "dependency names are unique even when versions or roots differ",
@@ -61,7 +62,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "pattern": "^(?!.*[\\u0000-\\u001f])"
+      "pattern": "^[^\\u0000-\\u001f]*(?![\\s\\S])"
     },
     "root": {
       "type": "string",

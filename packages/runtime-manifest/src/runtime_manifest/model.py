@@ -37,6 +37,8 @@ class UnsupportedSchemaError(ManifestDecodeError):
 def _require_name(value: str, field: str) -> None:
     if type(value) is not str:
         raise ManifestValidationError(f"{field} must be a string")
+    if len(value) > 128:
+        raise ManifestValidationError(f"{field} must be a bounded lowercase token")
     if _NAME_PATTERN.fullmatch(value) is None:
         raise ManifestValidationError(f"{field} must be a bounded lowercase token")
 
@@ -59,7 +61,11 @@ class Sha256Root:
     value: str
 
     def __post_init__(self) -> None:
-        if type(self.value) is not str or _SHA256_PATTERN.fullmatch(self.value) is None:
+        if (
+            type(self.value) is not str
+            or len(self.value) != 64
+            or _SHA256_PATTERN.fullmatch(self.value) is None
+        ):
             raise ManifestValidationError("SHA-256 root must be 64 lowercase hexadecimal digits")
 
 
@@ -94,12 +100,12 @@ class Protocol:
             raise ManifestValidationError("protocol schema_root must be Sha256Root")
         if type(self.features) is not tuple:
             raise ManifestValidationError("protocol features must be an immutable tuple")
-        for feature in self.features:
-            _require_name(feature, "protocol feature")
         if len(self.features) > MAX_FEATURES_PER_PROTOCOL:
             raise ManifestValidationError(
                 f"protocol features exceed the {MAX_FEATURES_PER_PROTOCOL}-item limit"
             )
+        for feature in self.features:
+            _require_name(feature, "protocol feature")
         if len(set(self.features)) != len(self.features):
             raise ManifestValidationError("protocol features must be unique")
         object.__setattr__(self, "features", tuple(sorted(self.features)))
@@ -223,16 +229,16 @@ class CompatibilityReport:
     unavailable_reasons: tuple[UnavailableReason, ...]
 
     def __post_init__(self) -> None:
-        if type(self.unavailable_reasons) is not tuple or any(
-            type(reason) is not UnavailableReason for reason in self.unavailable_reasons
-        ):
+        if type(self.unavailable_reasons) is not tuple:
             raise ManifestValidationError("unavailable_reasons must be an exact tuple")
-        if len(set(self.unavailable_reasons)) != len(self.unavailable_reasons):
-            raise ManifestValidationError("unavailable reasons must be unique")
         if len(self.unavailable_reasons) > MAX_UNAVAILABLE_REASONS:
             raise ManifestValidationError(
                 f"unavailable reasons exceed the {MAX_UNAVAILABLE_REASONS}-item limit"
             )
+        if any(type(reason) is not UnavailableReason for reason in self.unavailable_reasons):
+            raise ManifestValidationError("unavailable_reasons must be an exact tuple")
+        if len(set(self.unavailable_reasons)) != len(self.unavailable_reasons):
+            raise ManifestValidationError("unavailable reasons must be unique")
         object.__setattr__(
             self,
             "unavailable_reasons",
