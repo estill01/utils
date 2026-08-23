@@ -304,7 +304,7 @@ govern execution.
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `completed` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `completed` |
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `completed` |
-| 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `in-progress` |
+| 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `completed` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `not-started` |
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `not-started` |
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `not-started` |
@@ -1299,7 +1299,7 @@ Stop before notifications, server callbacks, cancellation, or restart behavior.
 
 ## Block 7 — Implement asynchronous events, callbacks, and call termination
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -1369,7 +1369,61 @@ timeout/cancellation races, callback neutrality, and content-free diagnostics.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed repository commit
+  `5db9f582d94f1468f9cc6d4c1a2df27e11477d6d`, tree
+  `9eb3bfd28b63022c22675c637dbb2e11e1f6ebe0`, for
+  `codex-app-server-client==0.1.0`. The public surface remains exactly 88
+  exports with the frozen 8 request, 15 notification, 3 callback, and 3
+  transport capability projection.
+- Coordination behavior: one reader owns typed response, notification, and
+  callback publication; event and callback queues are bounded; callback
+  results are exact-type and exactly-once; pending calls, retained writes,
+  timeouts, cancellation, disconnect, explicit close, and cleanup each select
+  one terminal result without leaking capacity or replacing an already selected
+  response. Iterator claims release after close or cancellation, and callback
+  decisions remain entirely caller-owned.
+- Boundary and failure proof: forced interleavings cover one and repeated
+  cancellation, response-versus-write/close races, timeout and late-response
+  correlation, callback preflight and retained response writes, disconnect,
+  cleanup failure, queue/request bounds, duplicate/stale callback resolution,
+  integer limits, and reader finalization. Inbound JSON-lines now decode only
+  strict UTF-8 without a BOM; UTF-16LE/BE, UTF-32LE/BE, UTF-8 BOM, invalid
+  UTF-8, and non-scalar strings fail before any response, event, or callback is
+  published, with content-free diagnostics.
+- Focused, full-source, and artifact validation: all 61 session tests and all
+  133 client source tests passed on Python 3.11 and 3.14 with asyncio debug and
+  runtime-warning enforcement. The full maintained repository quality command
+  passed. Isolated installed-wheel tests passed on both interpreters for
+  `codex_app_server_client-0.1.0-py3-none-any.whl`, with identical wheel
+  SHA-256
+  `df563b386cab68f17db6fcfdacea110793573299731dd634b417680bfe5c3ae6`.
+- Compatibility inputs and roots: official Codex `0.147.0`, source commit
+  `be6e8eac029b183056b7e4402879f15d2c85f61b`, retained byte root
+  `eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa`,
+  canonical semantic root
+  `4e5c64213673b670d2575d7b7670d2089d49f92a92c56f2d16618e4a8857813e`,
+  and selected-surface root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`.
+  The accepted Block 6 official-binary smoke remains valid because no binary,
+  retained protocol, compatibility root, initialization, or typed-operation
+  input changed; the Block resource contract therefore avoided repeating it.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for the exact pushed source after independently reproducing
+  and closing all fourteen findings across attribution, bounds, race ordering,
+  cancellation state, strict framing, and cleanup. The reviewer reran the
+  dual-interpreter source and wheel suites, full quality, export/scope audits,
+  and found no remaining material issue.
+- Currentness and qualification posture: current and accepted for the Block 7
+  single-connection coordination layer over Blocks 3–6. Generation-bound
+  restart safety, complete client conformance, internal combined-package proof,
+  and final package-set qualification remain pending Blocks 8–9, 13, and 14.
+- Downstream and Stop audit: source, tests, fixtures, documentation, builds, and
+  review remained repository-local and domain-neutral. No downstream consumer,
+  adapter, pin, repository operation, fixture, test, cutover, or acceptance was
+  imported, invoked, changed, or claimed. No automatic restart, backoff,
+  cross-generation state replacement, product approval policy, public listener,
+  or service runtime was added.
+- License/release posture: `no-license-selected/unpublished`.
 
 ### Stop
 
