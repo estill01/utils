@@ -7,12 +7,18 @@ The repository-owned checks are:
 ```bash
 python3 scripts/check_quality.py
 python3 scripts/check_package.py --all --python 3.11 --tests
+python3 scripts/check_package.py --all --python 3.14 --tests
 ```
 
 `scripts/check_package.py` resolves the repository root from its own location,
-uses the configured `uv` executable, builds exactly one wheel at a time into a
-temporary directory, creates a clean temporary environment, installs only that
-wheel without dependencies, and imports it from outside the checkout.
+uses the configured `uv` executable, copies each distribution into an isolated
+package-only snapshot, and builds each wheel independently. It audits wheel
+metadata and Python imports against the admitted dependency graph, rejects
+unadmitted, circular, reverse, or undeclared dependencies, creates a clean
+temporary environment, installs only that wheel without dependencies, imports
+it from outside the checkout, and runs the copied package-local test contract.
+The `--all` jobs execute in parallel but never share an environment or install
+another distribution.
 `scripts/check_quality.py` runs the repository contract plus the exact uv/Ruff
 versions pinned in `tools/toolchain.json`; CI invokes the same envelope.
 
