@@ -299,7 +299,7 @@ govern execution.
 |---:|---|---:|---|
 | 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `completed` |
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `completed` |
-| 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `in-progress` |
+| 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `completed` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `not-started` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `not-started` |
@@ -588,7 +588,7 @@ Stop before generating protocol schemas or implementing package behavior.
 
 ## Block 2 — Freeze the official app-server protocol and client contract
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -657,7 +657,80 @@ transport selection, and absence of product semantics.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed commit
+  `b9d8a3e87bd1c45e60a8e27307e0f22e94a69cdb`, tree
+  `2e2d993d7d6b4caee6e9156897ab5cdcd623f67b`; `origin/main` matched the
+  independently reviewed candidate.
+- Official upstream identity: `@openai/codex`/`codex-cli` `0.147.0`, official
+  source tag `rust-v0.147.0`, tag object
+  `3ed6f04f6bf8b7c46299d1cb1ff99c74ce21a51d`, and peeled source commit
+  `be6e8eac029b183056b7e4402879f15d2c85f61b`. Exact remote tag currentness was
+  reconfirmed at candidate freeze.
+- Artifact/root: the one non-experimental disposable generation produced 285
+  JSON files totaling 2,925,973 bytes. The retained tree root is
+  `eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa`;
+  manifest SHA-256 is
+  `83ae559e659f2cfd6d7f66bd6c98208287e75200aa61d958e60f0b32baad6a3a`.
+  Observed wrapper and `aarch64-apple-darwin` native executable SHA-256 values
+  are pinned in that manifest and the maintained checker.
+- Public contract: selected-surface root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`
+  freezes eight typed request methods, fifteen typed notifications, three
+  policy-neutral callbacks, and owned-stdio, Unix-socket, and injected-channel
+  transports. Exact public API SHA-256
+  `11e02c9c460821ebd5dd08f80b6544eb45b2217a53b90918ca472c26d14e1a21`
+  freezes every root export, function/method signature, timeout/event/callback
+  surface, schema-model reference, capability-enum value, ownership type,
+  configuration model, generation rule, and concrete error subclass.
+- Capability necessity: `supported-surface.json` records one neutral rationale
+  for every selected request, notification, callback, and transport. The
+  reviewer-requested `configWarning` export was removed because configuration
+  is outside package ownership; raw RPC, experimental APIs, WebSocket, public
+  listeners/proxies, account/auth, configuration/filesystem mutation,
+  plugin/marketplace/MCP management, realtime media, remote control, deprecated
+  callbacks, product types, and consumer behavior remain excluded.
+- Compatibility/update proof: `scripts/schema_tree.py` defines the exact sorted
+  tree-root algorithm and update record. CI replays it with the full frozen
+  argument set. `scripts/check_protocol_contract.py` independently pins and
+  cross-validates every provenance value, all schema/model references, the
+  surface/API roots, capability enums, necessity maps, and exact exports.
+- Focused and negative validation: repository quality and full tracker checks
+  passed. Five mutations covering upstream version, experimental generation,
+  surface widening, missing necessity evidence, and raw API widening failed
+  closed. The unchanged skeleton wheel built/imported on Python 3.11 and 3.14
+  with identical SHA-256
+  `c927e81b942d6b854b862e3beda9c895cf70270f5a4f4a46f00d6cd4c38ca0d2`.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for the exact pushed source above after one remediation
+  cycle and independently confirmed official currentness, complete provenance
+  pinning, API unambiguity, per-member minimality, retained-tree
+  proportionality, proof-map ownership, and every Stop/non-interaction
+  boundary.
+- Product-capability review:
+  - Trigger: consequential Block 2 posture.
+  - Paths compared: no reusable client; a raw/general bridge over the complete
+    official protocol; the selected closed lifecycle surface; and a fully
+    exported generated protocol client.
+  - Selected level and owner: the closed lifecycle surface owned by Blocks
+    3–9, the smallest option providing typed create/resume/read/list,
+    turn/steer/interrupt/review, bounded events, neutral callbacks, and local
+    transport replacement without raw access.
+  - Protected-capability result: exact upstream fidelity, one explicit process
+    owner, downstream adapter freedom, additive-upstream non-widening, and
+    product-policy separation are preserved.
+  - Rejected alternatives: no client loses admitted shared mechanics; a raw
+    bridge or full generated export widens unstable/product-adjacent surface;
+    `configWarning` was unnecessary under the no-configuration boundary.
+  - Tradeoff and uncertainty: a complete 2.9 MB provenance snapshot is retained
+    for exact currentness while only the closed selected surface can become
+    public; future upstream changes require a reviewed compatibility update.
+- Currentness and qualification posture: current and accepted as the Block 2
+  design/provenance input only; no compatibility or client behavior is yet
+  implemented and this is not a consumer-ready package handoff.
+- Source-adaptation and downstream audit: only official CLI/schema/package/tag
+  inputs were inspected. No prior client or consumer repository/API/type was
+  inspected, copied, opened, executed, imported, changed, or tested.
+- License/release posture: `no-license-selected/unpublished`.
 
 ### Stop
 
