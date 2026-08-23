@@ -299,7 +299,7 @@ govern execution.
 |---:|---|---:|---|
 | 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `completed` |
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `completed` |
-| 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `not-started` |
+| 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `in-progress` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `not-started` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `not-started` |
@@ -588,7 +588,7 @@ Stop before generating protocol schemas or implementing package behavior.
 
 ## Block 2 — Freeze the official app-server protocol and client contract
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
