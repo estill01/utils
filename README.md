@@ -4,7 +4,7 @@ This repository contains narrow, domain-neutral enabling packages shared by
 multiple estill01 products. It is an organizational monorepo, not one
 grab-bag `utils` package.
 
-Planned initial distributions:
+Initial distributions:
 
 - `codex-app-server-client`: typed Python process/transport/client support for
   Codex app-server;
@@ -19,6 +19,8 @@ patent content, QA policy, improvement semantics, persistence schemas, or
 product-specific adapters.
 
 The canonical implementation program is [docs/tracker.md](docs/tracker.md).
+Package-local READMEs describe the independently buildable skeletons. Runtime
+behavior is added only by the owning tracker Block.
 
 ## Current posture
 

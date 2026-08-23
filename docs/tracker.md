@@ -298,7 +298,7 @@ govern execution.
 | Block | Scope | Depends on | Status |
 |---:|---|---:|---|
 | 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `completed` |
-| 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `not-started` |
+| 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `in-progress` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `not-started` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `not-started` |
@@ -468,7 +468,7 @@ Stop before creating package skeletons, build metadata, or CI.
 
 ## Block 1 — Establish independent packaging and CI baseline
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 

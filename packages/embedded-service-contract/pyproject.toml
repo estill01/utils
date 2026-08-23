@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "embedded-service-contract"
+version = "0.1.0"
+description = "Neutral structural lifecycle protocols and conformance helpers"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/embedded_service_contract"]

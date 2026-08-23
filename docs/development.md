@@ -1,0 +1,48 @@
+# Development and compatibility policy
+
+## Maintained invocation envelope
+
+The repository-owned checks are:
+
+```bash
+python3 scripts/check_repo.py
+python3 scripts/check_package.py --all --python 3.11
+ruff check .
+ruff format --check .
+```
+
+`scripts/check_package.py` resolves the repository root from its own location,
+uses the configured `uv` executable, builds exactly one wheel at a time into a
+temporary directory, creates a clean temporary environment, installs only that
+wheel without dependencies, and imports it from outside the checkout.
+
+## Version policy
+
+- Every distribution starts at `0.1.0` and versions independently.
+- While a distribution is `0.y`, a minor release may change its public API only
+  with an explicit compatibility note; patch releases remain backward
+  compatible within the supported upstream/schema contract.
+- After `1.0.0`, incompatible public API changes require a major version.
+- Version changes occur only in the owning package metadata and import root.
+- This repository has no root distribution and no aggregate version.
+
+## Python and compatibility baseline
+
+- Supported Python: CPython 3.11 or newer.
+- CI exercises the lower bound and a current interpreter.
+- App-server protocol/schema compatibility is frozen by Blocks 2–3.
+- Structural-contract and manifest-schema compatibility are owned by Blocks 10
+  and 11 respectively.
+
+## Changed-test mapping
+
+`tools/changed_tests.json` and `scripts/changed_test_plan.py` map package-local
+changes to one package job and shared tooling/documentation changes to all
+package jobs. The mapping selects repository-owned checks only; it never opens
+or runs a downstream consumer suite.
+
+## Release posture
+
+Builds are internal qualification artifacts. No license has been selected, the
+distributions are unpublished, and the CI workflow contains no publication or
+release credentials/effects.

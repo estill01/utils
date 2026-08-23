@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "runtime-manifest"
+version = "0.1.0"
+description = "Deterministic non-authoritative runtime compatibility metadata"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/runtime_manifest"]

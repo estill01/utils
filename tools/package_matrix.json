@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "python_requires": ">=3.11",
+  "packages": {
+    "codex-app-server-client": {
+      "path": "packages/codex-app-server-client",
+      "import": "codex_app_server_client",
+      "version": "0.1.0"
+    },
+    "embedded-service-contract": {
+      "path": "packages/embedded-service-contract",
+      "import": "embedded_service_contract",
+      "version": "0.1.0"
+    },
+    "runtime-manifest": {
+      "path": "packages/runtime-manifest",
+      "import": "runtime_manifest",
+      "version": "0.1.0"
+    }
+  }
+}

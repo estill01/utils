@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codex-app-server-client"
+version = "0.1.0"
+description = "Typed local process, transport, and protocol support for Codex app-server"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/codex_app_server_client"]

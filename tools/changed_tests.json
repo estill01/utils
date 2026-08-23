@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "global_paths": [
+    ".github/",
+    "AGENTS.md",
+    "README.md",
+    "docs/",
+    "pyproject.toml",
+    "scripts/",
+    "tools/"
+  ],
+  "package_paths": {
+    "packages/codex-app-server-client/": ["codex-app-server-client"],
+    "packages/embedded-service-contract/": ["embedded-service-contract"],
+    "packages/runtime-manifest/": ["runtime-manifest"]
+  }
+}
