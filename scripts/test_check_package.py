@@ -220,6 +220,27 @@ class PackageIsolationAuditTests(unittest.TestCase):
                 ):
                     check_package.validated_wheel_member_names(archive)
 
+    def test_unsafe_wheel_directory_entries_are_rejected_before_audit(self) -> None:
+        for directory in ("../../escape/", "other/", "neutral//nested/"):
+            with self.subTest(directory=directory):
+                buffer = io.BytesIO()
+                with zipfile.ZipFile(buffer, "w") as archive:
+                    archive.writestr(directory, b"")
+                buffer.seek(0)
+                with zipfile.ZipFile(buffer) as archive:
+                    if directory == "other/":
+                        names = check_package.validated_wheel_member_names(archive)
+                        with self.assertRaisesRegex(RuntimeError, "unexpected top-level member"):
+                            check_package.audit_wheel_layout(
+                                names,
+                                distribution="neutral",
+                                import_root="neutral",
+                                version="1",
+                            )
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "unsafe member path"):
+                            check_package.validated_wheel_member_names(archive)
+
     def test_wheel_metadata_singleton_headers_are_exact(self) -> None:
         for field, conflicting in (
             ("Name", "other"),
@@ -346,13 +367,99 @@ class PackageIsolationAuditTests(unittest.TestCase):
                     ),
                     import_root="neutral",
                 )
-            retained_root, retained_count = check_package.audit_forced_package_data(
-                package_root,
-                archive_with({"neutral/_contract/schema.json": b'{"schema":1}\n'}),
-                import_root="neutral",
+            retained_root, retained_count, retained_members = (
+                check_package.audit_forced_package_data(
+                    package_root,
+                    archive_with({"neutral/_contract/schema.json": b'{"schema":1}\n'}),
+                    import_root="neutral",
+                )
             )
+            self.assertEqual(retained_members, frozenset({"neutral/_contract/schema.json"}))
             self.assertEqual(retained_count, 1)
             self.assertRegex(retained_root, r"^[0-9a-f]{64}$")
+
+    def test_build_snapshot_mutation_cannot_rewrite_acceptance_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pristine = root / "pristine"
+            build = root / "build"
+            (pristine / "tests").mkdir(parents=True)
+            (pristine / "tests" / "test_contract.py").write_text(
+                "# substantive contract\n", encoding="utf-8"
+            )
+            (pristine / "contract.json").write_text('{"value":1}\n', encoding="utf-8")
+            check_package.copy_package_snapshot(pristine, build)
+            expected = check_package.package_snapshot_record(pristine)
+
+            check_package.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "from pathlib import Path; root=Path.cwd(); "
+                        "(root/'tests/test_contract.py').write_text('# trivialized\\n'); "
+                        "(root/'contract.json').write_text('{\\\"value\\\":2}\\n')"
+                    ),
+                ],
+                cwd=build,
+            )
+
+            check_package.verify_snapshot_unchanged(
+                pristine,
+                expected,
+                label="pristine acceptance",
+            )
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "build package snapshot changed.*contract.json.*tests/test_contract.py",
+            ):
+                check_package.verify_snapshot_unchanged(build, expected, label="build")
+
+    def test_source_package_files_must_match_pristine_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package_root = Path(temporary)
+            source_root = package_root / "src" / "neutral"
+            source_root.mkdir(parents=True)
+            (source_root / "__init__.py").write_bytes(b"VALUE = 1\n")
+
+            def archive_with(files: dict[str, bytes]) -> zipfile.ZipFile:
+                buffer = io.BytesIO()
+                with zipfile.ZipFile(buffer, "w") as writer:
+                    for name, content in files.items():
+                        writer.writestr(name, content)
+                buffer.seek(0)
+                archive = zipfile.ZipFile(buffer)
+                self.addCleanup(buffer.close)
+                self.addCleanup(archive.close)
+                return archive
+
+            with self.assertRaisesRegex(RuntimeError, "source bytes differ"):
+                check_package.audit_source_package_files(
+                    package_root,
+                    archive_with({"neutral/__init__.py": b"VALUE = 2\n"}),
+                    import_root="neutral",
+                    retained_members=frozenset(),
+                )
+            with self.assertRaisesRegex(RuntimeError, "source members differ.*extra"):
+                check_package.audit_source_package_files(
+                    package_root,
+                    archive_with(
+                        {
+                            "neutral/__init__.py": b"VALUE = 1\n",
+                            "neutral/injected.py": b"INJECTED = True\n",
+                        }
+                    ),
+                    import_root="neutral",
+                    retained_members=frozenset(),
+                )
+            source_hash, source_count = check_package.audit_source_package_files(
+                package_root,
+                archive_with({"neutral/__init__.py": b"VALUE = 1\n"}),
+                import_root="neutral",
+                retained_members=frozenset(),
+            )
+            self.assertEqual(source_count, 1)
+            self.assertRegex(source_hash, r"^[0-9a-f]{64}$")
 
     def test_child_failure_includes_bounded_captured_output(self) -> None:
         with (

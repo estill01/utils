@@ -239,6 +239,48 @@ def copy_package_snapshot(package_root: Path, destination: Path) -> None:
     )
 
 
+def package_snapshot_record(
+    package_root: Path,
+) -> tuple[str, int, tuple[tuple[str, str, int], ...]]:
+    symlinks = sorted(path for path in package_root.rglob("*") if path.is_symlink())
+    if symlinks:
+        relative = ", ".join(str(path.relative_to(package_root)) for path in symlinks)
+        raise RuntimeError(f"package snapshot contains symlink(s): {relative}")
+    rows: list[tuple[str, str, int]] = []
+    for path in sorted(item for item in package_root.rglob("*") if item.is_file()):
+        data = path.read_bytes()
+        rows.append(
+            (
+                path.relative_to(package_root).as_posix(),
+                hashlib.sha256(data).hexdigest(),
+                len(data),
+            )
+        )
+    if not rows:
+        raise RuntimeError(f"package snapshot contains no files: {package_root}")
+    payload = json.dumps(rows, separators=(",", ":")).encode() + b"\n"
+    return hashlib.sha256(payload).hexdigest(), len(rows), tuple(rows)
+
+
+def verify_snapshot_unchanged(
+    package_root: Path,
+    expected: tuple[str, int, tuple[tuple[str, str, int], ...]],
+    *,
+    label: str,
+) -> None:
+    observed = package_snapshot_record(package_root)
+    if observed == expected:
+        return
+    expected_rows = {row[0]: row[1:] for row in expected[2]}
+    observed_rows = {row[0]: row[1:] for row in observed[2]}
+    changed = sorted(
+        path
+        for path in set(expected_rows) | set(observed_rows)
+        if expected_rows.get(path) != observed_rows.get(path)
+    )
+    raise RuntimeError(f"{label} package snapshot changed: {changed[:20]}")
+
+
 def wheel_metadata(archive: zipfile.ZipFile) -> tuple[str, str, str, tuple[str, ...]]:
     names = [
         name
@@ -263,21 +305,25 @@ def wheel_metadata(archive: zipfile.ZipFile) -> tuple[str, str, str, tuple[str, 
 
 
 def validated_wheel_member_names(archive: zipfile.ZipFile) -> tuple[str, ...]:
-    names = tuple(info.filename for info in archive.infolist() if not info.is_dir())
+    entries = tuple(
+        (info.filename[:-1] if info.is_dir() else info.filename, info.filename)
+        for info in archive.infolist()
+    )
+    names = tuple(normalized for normalized, _raw in entries)
     duplicates = sorted(name for name, count in collections.Counter(names).items() if count > 1)
     if duplicates:
         raise RuntimeError(f"wheel contains duplicate member name(s): {duplicates}")
     invalid: list[str] = []
-    for name in names:
+    for name, raw_name in entries:
         path = PurePosixPath(name)
         if (
             path.is_absolute()
             or not path.parts
             or ".." in path.parts
-            or "\\" in name
+            or "\\" in raw_name
             or path.as_posix() != name
         ):
-            invalid.append(name)
+            invalid.append(raw_name)
     if invalid:
         raise RuntimeError(f"wheel contains unsafe member path(s): {sorted(invalid)}")
     return names
@@ -306,7 +352,10 @@ def audit_wheel_layout(
     unexpected = sorted(
         name
         for name in member_names
-        if not name.startswith(import_prefix) and not name.startswith(metadata_prefix)
+        if name != import_root
+        and not name.startswith(import_prefix)
+        and name != dist_info
+        and not name.startswith(metadata_prefix)
     )
     if unexpected:
         raise RuntimeError(f"wheel contains unexpected top-level member(s): {unexpected}")
@@ -380,7 +429,7 @@ def audit_forced_package_data(
     archive: zipfile.ZipFile,
     *,
     import_root: str,
-) -> tuple[str, int]:
+) -> tuple[str, int, frozenset[str]]:
     document = tomllib.loads((package_root / "pyproject.toml").read_text(encoding="utf-8"))
     try:
         force_include = document["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
@@ -452,7 +501,60 @@ def audit_forced_package_data(
                 }
             )
     payload = json.dumps(retained_rows, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-    return hashlib.sha256(payload).hexdigest(), len(retained_rows)
+    return (
+        hashlib.sha256(payload).hexdigest(),
+        len(retained_rows),
+        frozenset(retained_destinations),
+    )
+
+
+def audit_source_package_files(
+    package_root: Path,
+    archive: zipfile.ZipFile,
+    *,
+    import_root: str,
+    retained_members: frozenset[str],
+) -> tuple[str, int]:
+    source_root = package_root / "src" / import_root
+    if not source_root.is_dir():
+        raise RuntimeError(f"package source import root is missing: {source_root}")
+    expected = {
+        f"{import_root}/{path.relative_to(source_root).as_posix()}": path
+        for path in sorted(item for item in source_root.rglob("*") if item.is_file())
+    }
+    if not expected:
+        raise RuntimeError(f"package source import root is empty: {source_root}")
+    overlap = set(expected) & retained_members
+    if overlap:
+        raise RuntimeError(f"source and retained wheel members overlap: {sorted(overlap)}")
+    archive_members = {
+        name
+        for name in archive.namelist()
+        if name.startswith(f"{import_root}/") and not name.endswith("/")
+    }
+    allowed = set(expected) | retained_members
+    if archive_members != allowed:
+        missing = sorted(allowed - archive_members)
+        extra = sorted(archive_members - allowed)
+        raise RuntimeError(
+            "wheel source members differ from pristine package snapshot: "
+            f"missing={missing}, extra={extra}"
+        )
+    rows: list[dict[str, str | int]] = []
+    for member, source_path in sorted(expected.items()):
+        source_data = source_path.read_bytes()
+        wheel_data = archive.read(member)
+        if source_data != wheel_data:
+            raise RuntimeError(f"wheel source bytes differ from pristine snapshot: {member}")
+        rows.append(
+            {
+                "path": member,
+                "sha256": hashlib.sha256(wheel_data).hexdigest(),
+                "size": len(wheel_data),
+            }
+        )
+    payload = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    return hashlib.sha256(payload).hexdigest(), len(rows)
 
 
 def require_test_contract(tests_root: Path) -> list[Path]:
@@ -491,10 +593,14 @@ def check_package(
     assert isinstance(expected_requirements, tuple)
     with tempfile.TemporaryDirectory(prefix=f"utils-{distribution}-") as temporary:
         temporary_root = Path(temporary)
-        snapshot = temporary_root / "package"
+        pristine_snapshot = temporary_root / "expected-package"
+        build_snapshot = temporary_root / "build-package"
         dist_dir = temporary_root / "dist"
         environment = temporary_root / "venv"
-        copy_package_snapshot(package_root, snapshot)
+        copy_package_snapshot(package_root, pristine_snapshot)
+        snapshot_record = package_snapshot_record(pristine_snapshot)
+        copy_package_snapshot(pristine_snapshot, build_snapshot)
+        verify_snapshot_unchanged(build_snapshot, snapshot_record, label="initial build")
         run(
             [
                 uv,
@@ -505,10 +611,16 @@ def check_package(
                 "--no-create-gitignore",
                 "--python",
                 python_spec,
-                str(snapshot),
+                str(build_snapshot),
             ],
             cwd=temporary_root,
         )
+        verify_snapshot_unchanged(
+            pristine_snapshot,
+            snapshot_record,
+            label="pristine acceptance",
+        )
+        verify_snapshot_unchanged(build_snapshot, snapshot_record, label="build")
         wheels = sorted(dist_dir.glob("*.whl"))
         if len(wheels) != 1:
             raise RuntimeError(f"expected one wheel for {distribution}, found {len(wheels)}")
@@ -557,10 +669,16 @@ def check_package(
                 import_root=import_root,
                 declared_import_roots=declared_import_roots,
             )
-            retained_root, retained_count = audit_forced_package_data(
-                snapshot,
+            retained_root, retained_count, retained_members = audit_forced_package_data(
+                pristine_snapshot,
                 archive,
                 import_root=import_root,
+            )
+            source_root, source_count = audit_source_package_files(
+                pristine_snapshot,
+                archive,
+                import_root=import_root,
+                retained_members=retained_members,
             )
             content_root, member_count, uncompressed_bytes = wheel_content_record(archive)
 
@@ -594,9 +712,13 @@ def check_package(
             "dependency_audit": "passed",
             "retained_package_data_files": retained_count,
             "retained_package_data_root_sha256": retained_root,
-            "test_source": "isolated-package-snapshot",
+            "source_package_files": source_count,
+            "source_package_root_sha256": source_root,
+            "acceptance_snapshot_files": snapshot_record[1],
+            "acceptance_snapshot_root_sha256": snapshot_record[0],
+            "test_source": "pristine-isolated-package-snapshot",
         }
-        tests_root = snapshot / "tests"
+        tests_root = pristine_snapshot / "tests"
         if tests:
             require_test_contract(tests_root)
             test_result = run(
