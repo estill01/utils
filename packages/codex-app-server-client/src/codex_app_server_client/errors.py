@@ -67,3 +67,19 @@ class RemoteRpcError(AppServerClientError):
         self.request_id = request_id
         self.code = code
         self.has_data = has_data
+
+
+class TransportStartError(AppServerClientError):
+    """A selected local transport could not create its one connection."""
+
+
+class TransportClosedError(AppServerClientError):
+    """A byte transport closed or failed while reading or writing."""
+
+
+class TransportOwnershipError(AppServerClientError):
+    """A transport instance was claimed by more than one connection owner."""
+
+
+class TransportCleanupError(AppServerClientError):
+    """A transport could not prove that its owned resources were closed."""

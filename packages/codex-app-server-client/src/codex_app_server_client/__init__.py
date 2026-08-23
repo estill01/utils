@@ -22,6 +22,10 @@ from .errors import (
     SchemaMalformedError,
     SchemaMissingError,
     SchemaRootMismatchError,
+    TransportCleanupError,
+    TransportClosedError,
+    TransportOwnershipError,
+    TransportStartError,
     UnsupportedFeatureError,
 )
 from .rpc import ByteChannel
@@ -31,6 +35,13 @@ from .surface import (
     NotificationCapability,
     RequestCapability,
     TransportCapability,
+)
+from .transport import (
+    ClientTransport,
+    InjectedTransport,
+    StdioTransport,
+    TransportOwnership,
+    UnixSocketTransport,
 )
 
 __version__ = "0.1.0"
@@ -47,19 +58,28 @@ __all__ = [
     "CodexVersionError",
     "CorrelationError",
     "CompatibilityResult",
+    "ClientTransport",
     "FeatureSet",
     "NotificationCapability",
     "ProtocolTarget",
     "RequestCapability",
     "JsonRpcFramingError",
     "JsonRpcValidationError",
+    "InjectedTransport",
     "MessageTooLargeError",
     "RemoteRpcError",
     "RequestLimitError",
     "SchemaMalformedError",
     "SchemaMissingError",
     "SchemaRootMismatchError",
+    "StdioTransport",
+    "TransportCleanupError",
+    "TransportClosedError",
     "TransportCapability",
+    "TransportOwnership",
+    "TransportOwnershipError",
+    "TransportStartError",
+    "UnixSocketTransport",
     "UnsupportedFeatureError",
     "inspect_compatibility",
     "resolve_codex_binary",

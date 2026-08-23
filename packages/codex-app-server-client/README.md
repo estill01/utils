@@ -15,5 +15,7 @@ root-export, signature, schema-model, capability, and error contract.
 
 Block 4's transport-independent request-state behavior and injected-channel
 contract are documented in `docs/rpc.md`.
+Block 5's explicit local transport and resource-ownership behavior is in
+`docs/transports.md`.
 
 This distribution is currently unlicensed and unpublished.
