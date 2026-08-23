@@ -297,7 +297,7 @@ govern execution.
 
 | Block | Functionality targeted | Depends on | Status |
 |---:|---|---:|---|
-| 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `in-progress` |
+| 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `accepted` |
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `not-started` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `not-started` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
@@ -325,7 +325,7 @@ Required order:
 
 ## Block 0 — Decide package admission and architecture boundaries
 
-Status: `in-progress`
+Status: `accepted`
 
 ### Objective
 
@@ -393,7 +393,63 @@ leakage, and whether any candidate is speculative.
 
 ### Completion evidence
 
-Pending.
+- Repository commit: `58b6d70665c6d7148426c4ff212552f196e09b3e`.
+- Package capability ID: not applicable; this Block admits packages but creates
+  no package implementation.
+- Distribution/version: not applicable.
+- Artifact/root: `docs/admission.md` SHA-256
+  `9081a492043cf5ab5fc20a660427be7ca5f99930b71c9a85a30f2dc7cc9363cb`;
+  `docs/architecture.md` SHA-256
+  `08463baa45aeff2badbc70491b8b5534c8599aacdcf964fd73b94fc2b7116b71`.
+- Public API root: not applicable.
+- Compatibility inputs: repository instructions SHA-256
+  `c27e6934692df8bb600dfa522b1ec4e9be431dfaaf1088a02fce780374dfa7d2`
+  and tracker frame SHA-256
+  `b30790e21ab26a17240ee434cf7a356530e8fde0b87e461c5a5db4a7cbbb3952`.
+- Package currentness proof: not applicable.
+- Package qualification posture: not applicable.
+- Official upstream revision/schema root: not applicable.
+- Inputs: `AGENTS.md`, `README.md`, the direct full-tracker request, and bounded
+  direct-user cross-project admission evidence; no consumer checkout.
+- Outputs: `docs/admission.md` and `docs/architecture.md` at the roots above.
+- Focused validation: absence checks for `packages/`, root build metadata, and
+  `LICENSE`; exact admission-row and architecture-boundary checks passed.
+- Mapped internal validation: full tracker verifier returned Blocks 0–16 with
+  zero errors and zero warnings; `git diff --check` passed.
+- Candidate freeze: commit
+  `58b6d70665c6d7148426c4ff212552f196e09b3e`, tree
+  `0be743f9f180f62ae1b7a19a48e3db0c1d6f62a5`; `origin/main` matched.
+- Remediation closure: reviewer found one naming-location contradiction at
+  `b6e0e0e`; commit `58b6d70` confines consumer identifiers to governing scope
+  documentation and the bounded admission record while keeping all package
+  implementation and artifacts consumer-neutral.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for exact commit `58b6d70665c6d7148426c4ff212552f196e09b3e`.
+- Product-capability review:
+  - Trigger: consequential Block 0 posture.
+  - Frame identity: `docs/tracker.md`, Block 0, frame SHA-256
+    `b30790e21ab26a17240ee434cf7a356530e8fde0b87e461c5a5db4a7cbbb3952`.
+  - Capability added or preserved: evidence-based package admission and one
+    narrow owner per public contract without downstream implementation scope.
+  - Paths compared: local grab-bag; bounded-general shared runtime; existing
+    three-distribution architectural owner.
+  - Selected level and owner: the existing three-distribution architecture,
+    the lowest-complexity path supplying all evidenced capability.
+  - Protected-capability result: independent versioning, downstream
+    replaceability, one process owner, exact compatibility, and zero runtime
+    consumer coupling preserved.
+  - Rejected alternatives: a grab-bag loses isolation; a shared runtime adds
+    unsupported state and authority.
+  - Tradeoffs and uncertainty: independent metadata/CI overhead accepted;
+    downstream adoption, license, and publication remain outside this program.
+  - Frozen-candidate proof: exact commit and tree above plus accepted review.
+- Retained open work: none in Block 0.
+- Downstream-interaction audit: clean; no consumer repository was opened,
+  executed, imported, changed, or tested.
+- License/release posture: `no-license-selected/unpublished`.
+- Post-block audit: `accepted`.
+- Git durability: candidate and remediation commits pushed to `origin/main`;
+  accepted status is recorded by the next scoped tracker checkpoint.
 
 ### Stop
 

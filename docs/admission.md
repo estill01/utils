@@ -85,5 +85,7 @@ There is no unresolved admission question delegated to a later Block.
 - Tradeoffs and uncertainty: three distributions add build metadata and CI
   jobs; future adoption, license selection, and publication remain external or
   separately authorized facts and do not alter this admission.
-- Frozen-candidate proof: to be bound to the accepted Block 0 commit after the
-  architecture record and exact-revision audit are complete.
+- Frozen-candidate proof: exact pushed commit
+  `58b6d70665c6d7148426c4ff212552f196e09b3e`, tree
+  `0be743f9f180f62ae1b7a19a48e3db0c1d6f62a5`, accepted by distinct read-only
+  review after the consumer-naming boundary remediation.
