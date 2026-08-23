@@ -57,6 +57,7 @@ from codex_app_server_client.models import (
     _allows_additional_properties,
     _collect_model_specs,
     _decode,
+    _decode_document,
     _ModelValidationError,
 )
 
@@ -294,6 +295,96 @@ class FrozenModelTests(unittest.TestCase):
         self.assertEqual(thread.additional_properties["future"]["nested"][0], 1)
         self.assertEqual(thread.to_dict()["future"], {"nested": [1, {"ok": True}]})
 
+        response_fixture = model_fixture("ThreadStartResponse")
+        assert isinstance(response_fixture, dict)
+        response_fixture["approvalPolicy"] = {
+            "granular": {
+                "mcp_elicitations": False,
+                "rules": False,
+                "sandbox_approval": False,
+                "futureInbound": {"nested": [1]},
+            }
+        }
+        response = models.ThreadStartResponse.from_dict(response_fixture)
+        self.assertEqual(
+            response.to_dict()["approvalPolicy"]["granular"]["futureInbound"],
+            {"nested": [1]},
+        )
+
+        notification_fixture = model_fixture("WarningNotification")
+        assert isinstance(notification_fixture, dict)
+        notification_fixture["futureInbound"] = {"nested": [1]}
+        notification = models.WarningNotification.from_dict(notification_fixture)
+        self.assertEqual(notification.to_dict()["futureInbound"], {"nested": [1]})
+
+        callback_fixture = model_fixture("ToolRequestUserInputParams")
+        assert isinstance(callback_fixture, dict)
+        callback_fixture["futureInbound"] = {"nested": [1]}
+        callback_params = models.ToolRequestUserInputParams.from_dict(callback_fixture)
+        self.assertEqual(callback_params.to_dict()["futureInbound"], {"nested": [1]})
+
+        initialization = _decode_document(
+            "v1/InitializeResponse.json",
+            {
+                "codexHome": "/tmp/codex-home",
+                "platformFamily": "unix",
+                "platformOs": "macos",
+                "userAgent": "fixture",
+                "futureInbound": {"nested": [1]},
+            },
+        )
+        self.assertEqual(initialization.to_dict()["futureInbound"], {"nested": [1]})
+
+    def test_outbound_shared_models_reject_nested_untyped_extras(self) -> None:
+        import codex_app_server_client.models as models
+
+        with self.assertRaises(_ModelValidationError):
+            models.TurnStartParams.from_dict(
+                {
+                    "threadId": "thread",
+                    "input": [
+                        {
+                            "type": "text",
+                            "text": "fixture",
+                            "futureOutbound": {"raw": 1},
+                        }
+                    ],
+                }
+            )
+        with self.assertRaises(_ModelValidationError):
+            models.CommandExecutionRequestApprovalResponse.from_dict(
+                {
+                    "decision": {
+                        "applyNetworkPolicyAmendment": {
+                            "network_policy_amendment": {
+                                "action": "allow",
+                                "host": "fixture",
+                                "futureOutbound": "raw",
+                            }
+                        }
+                    }
+                }
+            )
+        shared = models.TextUserInput(
+            type="text",
+            text="fixture",
+            additional_properties={"futureOutbound": {"raw": 1}},
+        )
+        params = models.TurnStartParams(threadId="thread", input=(shared,))
+        with self.assertRaises(_ModelValidationError):
+            params.to_dict()
+        amendment = models.NetworkPolicyAmendment(
+            action="allow",
+            host="fixture",
+            additional_properties={"futureOutbound": "raw"},
+        )
+        decision = models.ApplyNetworkPolicyAmendmentCommandExecutionApprovalDecision(
+            applyNetworkPolicyAmendment={"network_policy_amendment": amendment}
+        )
+        callback_response = models.CommandExecutionRequestApprovalResponse(decision=decision)
+        with self.assertRaises(_ModelValidationError):
+            callback_response.to_dict()
+
     def test_same_name_unequal_schema_fails_closed(self) -> None:
         first = {"title": "Conflict", "type": "object", "properties": {"a": {"type": "string"}}}
         second = {"title": "Conflict", "type": "object", "properties": {"b": {"type": "string"}}}
@@ -474,6 +565,25 @@ class TypedSessionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsInstance(response, getattr(client_api, response_name))
                 self.assertEqual(peer.writes[-1]["method"], method)
                 self.assertEqual(peer.writes[-1]["params"], params.to_dict())
+        await session.close()
+
+    async def test_nested_outbound_extra_rejects_before_operation_write(self) -> None:
+        import codex_app_server_client.models as models
+
+        peer = ScriptedSessionPeer()
+        _, session = await self.initialize(peer)
+        shared = models.TextUserInput(
+            type="text",
+            text="fixture",
+            additional_properties={"futureOutbound": {"raw": 1}},
+        )
+        params = models.TurnStartParams(threadId="thread", input=(shared,))
+        writes_before = len(peer.writes)
+        with self.assertRaises(JsonRpcValidationError):
+            await session.start_turn(params)
+        self.assertEqual(len(peer.writes), writes_before)
+        listed = await session.list_threads(models.ThreadListParams())
+        self.assertIsInstance(listed, models.ThreadListResponse)
         await session.close()
 
     async def test_invalid_initialize_result_fails_closed_and_is_content_free(self) -> None:
@@ -1639,6 +1749,39 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(client._coordinator._callback_states), 0)
                 self.assertEqual(len(peer.writes), before + 1)
                 await session.close()
+
+    async def test_nested_outbound_extra_rejects_before_callback_write(self) -> None:
+        import codex_app_server_client.models as models
+
+        peer = ScriptedSessionPeer()
+        _, session = await self.initialize(peer)
+        params = model_fixture("CommandExecutionRequestApprovalParams")
+        assert isinstance(params, dict)
+        peer.queue_callback(
+            "approval",
+            "item/commandExecution/requestApproval",
+            params,
+        )
+        callback = await asyncio.wait_for(anext(session.callbacks()), 1.0)
+        amendment = models.NetworkPolicyAmendment(
+            action="allow",
+            host="fixture",
+            additional_properties={"futureOutbound": "raw"},
+        )
+        decision = models.ApplyNetworkPolicyAmendmentCommandExecutionApprovalDecision(
+            applyNetworkPolicyAmendment={"network_policy_amendment": amendment}
+        )
+        response = models.CommandExecutionRequestApprovalResponse(decision=decision)
+        writes_before = len(peer.writes)
+        with self.assertRaises(JsonRpcValidationError):
+            await callback.respond(response)
+        self.assertEqual(len(peer.writes), writes_before)
+        self.assertEqual(callback._state.status, "pending")
+        await callback.respond(
+            models.CommandExecutionRequestApprovalResponse.from_dict({"decision": "accept"})
+        )
+        self.assertEqual(len(peer.writes), writes_before + 1)
+        await session.close()
 
     async def test_only_one_event_iterator_can_be_active(self) -> None:
         peer = ScriptedSessionPeer()

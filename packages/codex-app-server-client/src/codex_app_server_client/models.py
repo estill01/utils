@@ -6,6 +6,7 @@ import json
 import operator
 import re
 from collections.abc import Iterator, Mapping
+from contextvars import ContextVar
 from dataclasses import field, fields, make_dataclass
 from enum import StrEnum
 from typing import Any, Literal, Self
@@ -78,6 +79,7 @@ _INTEGER_FORMAT_BOUNDS = {
     "uint32": (0, 2**32 - 1),
     "uint64": (0, 2**64 - 1),
 }
+_ALLOW_OMITTED_ADDITIONAL = ContextVar("allow_omitted_additional", default=False)
 
 
 class _ModelValidationError(ValueError):
@@ -132,13 +134,23 @@ class _SchemaModel:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, object]) -> Self:
-        decoded = _decode_named(cls._schema_name, value, cls._schema_name)
+        spec = _SPECS[cls._schema_name]
+        decoded = _decode_named(
+            cls._schema_name,
+            value,
+            cls._schema_name,
+            allow_omitted_additional=_is_exclusively_inbound(spec),
+        )
         if not isinstance(decoded, cls):
             raise _ModelValidationError(f"{cls.__name__} did not decode to its frozen class")
         return decoded
 
     def to_dict(self) -> dict[str, object]:
-        return _model_to_dict(self)
+        spec = _SPECS[self._schema_name]
+        return _model_to_dict(
+            self,
+            allow_omitted_additional=_is_exclusively_inbound(spec),
+        )
 
 
 class _ModelSpec:
@@ -163,6 +175,10 @@ def _allows_additional_properties(spec: _ModelSpec) -> bool:
     if "additionalProperties" in spec.schema:
         return spec.schema["additionalProperties"] is not False
     return not spec.sources.isdisjoint(_INBOUND_SCHEMA_FILES)
+
+
+def _is_exclusively_inbound(spec: _ModelSpec) -> bool:
+    return bool(spec.sources) and spec.sources.issubset(_INBOUND_SCHEMA_FILES)
 
 
 def _collect_model_specs(
@@ -325,7 +341,13 @@ def _model_post_init(self: _SchemaModel) -> None:
         value = getattr(self, name)
         if name not in required and value is None:
             continue
-        normalized = _decode(child_schema, spec.root, value, f"{self._schema_name}.{name}")
+        normalized = _decode(
+            child_schema,
+            spec.root,
+            value,
+            f"{self._schema_name}.{name}",
+            allow_omitted_additional=_ALLOW_OMITTED_ADDITIONAL.get(),
+        )
         object.__setattr__(self, name, normalized)
     if hasattr(self, "additional_properties"):
         extras = self.additional_properties
@@ -482,14 +504,27 @@ def _runtime_type(
     return object
 
 
-def _decode_named(name: str, value: object, path: str) -> object:
+def _decode_named(
+    name: str,
+    value: object,
+    path: str,
+    *,
+    allow_omitted_additional: bool = False,
+) -> object:
     runtime_type = _RUNTIME_TYPES.get(name)
     if isinstance(runtime_type, type) and isinstance(value, runtime_type):
         return value
     spec = _SPECS.get(name)
     if spec is None:
         raise _ModelValidationError(f"{path} references an unavailable frozen model")
-    return _decode(spec.schema, spec.root, value, path, expected_name=name)
+    return _decode(
+        spec.schema,
+        spec.root,
+        value,
+        path,
+        expected_name=name,
+        allow_omitted_additional=allow_omitted_additional,
+    )
 
 
 def _decode(
@@ -499,6 +534,7 @@ def _decode(
     path: str,
     *,
     expected_name: str | None = None,
+    allow_omitted_additional: bool = False,
 ) -> object:
     if schema is True:
         return _freeze_json(value, path)
@@ -510,24 +546,54 @@ def _decode(
     if isinstance(reference, str):
         if not reference.startswith("#/definitions/"):
             raise _ModelValidationError(f"{path} uses an unsupported schema reference")
-        return _decode_named(reference.removeprefix("#/definitions/"), value, path)
+        return _decode_named(
+            reference.removeprefix("#/definitions/"),
+            value,
+            path,
+            allow_omitted_additional=allow_omitted_additional,
+        )
     title = schema.get("title")
     if expected_name is None and isinstance(title, str) and title in _SPECS:
-        return _decode_named(title, value, path)
+        return _decode_named(
+            title,
+            value,
+            path,
+            allow_omitted_additional=allow_omitted_additional,
+        )
     all_of = schema.get("allOf")
     if isinstance(all_of, list):
         if not all_of:
             raise _ModelValidationError(f"{path} has an empty allOf")
-        decoded = _decode(all_of[0], root, value, path)
+        decoded = _decode(
+            all_of[0],
+            root,
+            value,
+            path,
+            allow_omitted_additional=allow_omitted_additional,
+        )
         for item in all_of[1:]:
-            _decode(item, root, value, path)
+            _decode(
+                item,
+                root,
+                value,
+                path,
+                allow_omitted_additional=allow_omitted_additional,
+            )
         return decoded
     variants = schema.get("oneOf")
     if isinstance(variants, list):
         matches: list[object] = []
         for item in variants:
             try:
-                matches.append(_decode(item, root, value, path))
+                matches.append(
+                    _decode(
+                        item,
+                        root,
+                        value,
+                        path,
+                        allow_omitted_additional=allow_omitted_additional,
+                    )
+                )
             except _ModelValidationError:
                 continue
         if len(matches) != 1:
@@ -537,7 +603,13 @@ def _decode(
     if isinstance(variants, list):
         for item in variants:
             try:
-                return _decode(item, root, value, path)
+                return _decode(
+                    item,
+                    root,
+                    value,
+                    path,
+                    allow_omitted_additional=allow_omitted_additional,
+                )
             except _ModelValidationError:
                 pass
         raise _ModelValidationError(f"{path} does not match a closed variant")
@@ -554,7 +626,13 @@ def _decode(
     if isinstance(expected, list):
         for item in expected:
             try:
-                return _decode({**schema, "type": item}, root, value, path)
+                return _decode(
+                    {**schema, "type": item},
+                    root,
+                    value,
+                    path,
+                    allow_omitted_additional=allow_omitted_additional,
+                )
             except _ModelValidationError:
                 pass
         raise _ModelValidationError(f"{path} has the wrong closed JSON type")
@@ -589,9 +667,25 @@ def _decode(
     if expected == "array":
         if not isinstance(value, (list, tuple)):
             raise _ModelValidationError(f"{path} must be array")
-        return tuple(_decode(schema.get("items", True), root, item, f"{path}[]") for item in value)
+        return tuple(
+            _decode(
+                schema.get("items", True),
+                root,
+                item,
+                f"{path}[]",
+                allow_omitted_additional=allow_omitted_additional,
+            )
+            for item in value
+        )
     if expected == "object" or "properties" in schema:
-        return _decode_object(schema, root, value, path, expected_name=expected_name)
+        return _decode_object(
+            schema,
+            root,
+            value,
+            path,
+            expected_name=expected_name,
+            allow_omitted_additional=allow_omitted_additional,
+        )
     raise _ModelValidationError(f"{path} has an unsupported retained schema shape")
 
 
@@ -618,6 +712,7 @@ def _decode_object(
     path: str,
     *,
     expected_name: str | None,
+    allow_omitted_additional: bool,
 ) -> object:
     if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
         raise _ModelValidationError(f"{path} must be an object with string keys")
@@ -630,16 +725,18 @@ def _decode_object(
         raise _ModelValidationError(f"{path} is missing required fields")
     unknown = set(value).difference(properties)
     additional = schema.get("additionalProperties", False)
-    if (
-        "additionalProperties" not in schema
-        and expected_name is not None
-        and _allows_additional_properties(_SPECS[expected_name])
-    ):
+    if "additionalProperties" not in schema and allow_omitted_additional:
         additional = True
     if unknown and additional is False:
         raise _ModelValidationError(f"{path} contains unselected fields")
     decoded = {
-        name: _decode(child_schema, root, value[name], f"{path}.{name}")
+        name: _decode(
+            child_schema,
+            root,
+            value[name],
+            f"{path}.{name}",
+            allow_omitted_additional=allow_omitted_additional,
+        )
         for name, child_schema in properties.items()
         if name in value
     }
@@ -649,6 +746,7 @@ def _decode_object(
             root,
             value[name],
             f"{path}.{name}",
+            allow_omitted_additional=allow_omitted_additional,
         )
         for name in unknown
     }
@@ -657,11 +755,19 @@ def _decode_object(
         if isinstance(runtime_type, type) and issubclass(runtime_type, _SchemaModel):
             if additional is not False:
                 decoded["additional_properties"] = FrozenJsonObject(extras)
-            return runtime_type(**decoded)
+            token = _ALLOW_OMITTED_ADDITIONAL.set(allow_omitted_additional)
+            try:
+                return runtime_type(**decoded)
+            finally:
+                _ALLOW_OMITTED_ADDITIONAL.reset(token)
     return FrozenJsonObject({**decoded, **extras}, _path=path)
 
 
-def _model_to_dict(model: _SchemaModel) -> dict[str, object]:
+def _model_to_dict(
+    model: _SchemaModel,
+    *,
+    allow_omitted_additional: bool = False,
+) -> dict[str, object]:
     spec = _SPECS[model._schema_name]
     properties = spec.schema.get("properties", {})
     required = spec.schema.get("required", [])
@@ -672,24 +778,44 @@ def _model_to_dict(model: _SchemaModel) -> dict[str, object]:
         value = getattr(model, item.name)
         if item.name not in required and value is None:
             continue
-        result[item.name] = _to_json(value)
+        result[item.name] = _to_json(
+            value,
+            allow_omitted_additional=allow_omitted_additional,
+        )
     if hasattr(model, "additional_properties"):
+        additional = spec.schema.get("additionalProperties", False)
+        if "additionalProperties" not in spec.schema and allow_omitted_additional:
+            additional = True
+        if model.additional_properties and additional is False:
+            raise _ModelValidationError(f"{model._schema_name} contains outbound-unselected fields")
         for key, value in model.additional_properties.items():
             if key in properties:
                 raise _ModelValidationError(f"{model._schema_name} has an extra-field collision")
-            result[key] = _to_json(value)
+            result[key] = _to_json(
+                value,
+                allow_omitted_additional=allow_omitted_additional,
+            )
     return result
 
 
-def _to_json(value: object) -> object:
+def _to_json(value: object, *, allow_omitted_additional: bool = False) -> object:
     if isinstance(value, _SchemaModel):
-        return _model_to_dict(value)
+        return _model_to_dict(
+            value,
+            allow_omitted_additional=allow_omitted_additional,
+        )
     if isinstance(value, StrEnum):
         return value.value
     if isinstance(value, FrozenJsonObject):
-        return {key: _to_json(item) for key, item in value.items()}
+        return {
+            key: _to_json(
+                item,
+                allow_omitted_additional=allow_omitted_additional,
+            )
+            for key, item in value.items()
+        }
     if isinstance(value, tuple):
-        return [_to_json(item) for item in value]
+        return [_to_json(item, allow_omitted_additional=allow_omitted_additional) for item in value]
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     raise _ModelValidationError("model contains a non-JSON value")
@@ -700,7 +826,12 @@ def _decode_document(source: str, value: object) -> _SchemaModel:
     title = root.get("title")
     if not isinstance(title, str):
         raise _ModelValidationError("selected document has no model title")
-    decoded = _decode_named(title, value, title)
+    decoded = _decode_named(
+        title,
+        value,
+        title,
+        allow_omitted_additional=source in _INBOUND_SCHEMA_FILES,
+    )
     if not isinstance(decoded, _SchemaModel):
         raise _ModelValidationError(f"{title} did not decode to an immutable model")
     return decoded

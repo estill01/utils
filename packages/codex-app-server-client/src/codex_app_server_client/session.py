@@ -936,9 +936,15 @@ class AppServerSession:
         if not self._capabilities.supports(capability):
             raise UnsupportedFeatureError(f"request capability is unavailable: {capability.value}")
         try:
+            payload = params.to_dict()  # type: ignore[attr-defined]
+        except Exception:
+            raise JsonRpcValidationError(
+                f"{capability.value} params do not match its retained schema"
+            ) from None
+        try:
             result = await self._engine.call(
                 capability,
-                params.to_dict(),  # type: ignore[attr-defined]
+                payload,
                 timeout=timeout,
             )
         except TimeoutError:
