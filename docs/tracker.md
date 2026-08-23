@@ -1,6 +1,6 @@
 # Shared Domain-Neutral Utilities Implementation Tracker
 
-- Tracker status: `planning`
+- Tracker status: `implementation`
 - Tracker sequence: Blocks 0–16
 - Repository: `https://github.com/estill01/utils`
 - Governing objective: provide narrow, independently versioned enabling
@@ -295,7 +295,7 @@ govern execution.
 
 | Block | Functionality targeted | Depends on | Status |
 |---:|---|---:|---|
-| 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `not-started` |
+| 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `in-progress` |
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `not-started` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `not-started` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
@@ -323,7 +323,7 @@ Required order:
 
 ## Block 0 — Decide package admission and architecture boundaries
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
