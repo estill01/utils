@@ -307,7 +307,7 @@ govern execution.
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `completed` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `completed` |
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `completed` |
-| 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `in-progress` |
+| 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `completed` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `not-started` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `not-started` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `not-started` |
@@ -1730,7 +1730,7 @@ Stop before implementing other package behavior or cross-package composition.
 
 ## Block 10 — Implement the embedded/service structural contract
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -1804,7 +1804,77 @@ and absence of runtime or product authority.
 
 ### Completion evidence
 
-Pending.
+- Accepted exact source: pushed commit
+  `401f87a64349c636a66be2da656498e7d9cb58e3`, tree
+  `3f208324277bcd51b29dde8c394ccca3fb64a017`. Local `HEAD`, local
+  `main`, `origin/main`, and GitHub `main` independently resolved to that
+  commit with a clean worktree.
+- Package capability ID and version:
+  `embedded-service-contract-package`,
+  `embedded-service-contract==0.1.0`, package root
+  `packages/embedded-service-contract`, public import
+  `embedded_service_contract`.
+- Artifact/root: `embedded_service_contract-0.1.0-py3-none-any.whl`, identical
+  Python 3.11/3.14 SHA-256
+  `2b36d7307c08cd6d7d95bfb86d4a240b6ab2a69de5b2c61bf75a54507c7ea18d`.
+  Its content root is
+  `c53432ff83c6b80483a95384af3c9058a3cd82c56ac774126f123a93dbff7113`:
+  SHA-256 of compact sorted-key JSON plus terminal LF over all 10
+  lexicographically sorted non-directory wheel members, with each entry
+  recording path, uncompressed-byte SHA-256, and size; total uncompressed
+  bytes `36,778`.
+- Public API and compatibility inputs: exactly 19 root exports plus the frozen
+  testing exports, constructor and protocol signatures, enum values, and error
+  hierarchy; structural/public-API root
+  `c59856708a4ac80a266a83c382e6541da2afc78a920379f654dd2af20211facd`,
+  conformance-fixture root
+  `31b33341b51c48b1e552f19600238b3dffd44c197cbfed5c1dd370e08de71ed4`,
+  and supported-Python root
+  `ffd6652354d681053411ad82de6e7e8c8a687cdf873514c773fbad03ad834d73`.
+  The acceptance interpreters are CPython 3.11 and 3.14.
+- Structural behavior: the package exposes only generic start, status, ordered
+  event, idempotent cancel, terminal outcome, and structural-error shapes.
+  Embedded references declare zero process owners and service-shaped
+  references declare one; neither reference host starts a process. Explicit
+  caller-supplied lineage keeps reference ownership deterministic and
+  order-independent without a global allocator, shared state, or shared
+  implementation runtime.
+- Conformance and negative proof: both distinct neutral reference hosts pass
+  the same contract. Exact envelope/ref/state coherence, terminal
+  immutability, repeated-cancel idempotency, success/failure/cancelled history
+  retention after a successor start, fresh-instance isolation, unique
+  same-instance refs, cross-lineage isolation, unknown refs, cursor validity,
+  single-process ownership, and exact public signatures are enforced.
+  Deterministic fixtures reject duck envelopes, mismatched refs, stale state,
+  terminal or repeated-cancel mutation, session-only history, reused refs,
+  shared instance state, and out-of-order events.
+- Validation: all 13 package tests passed from source and from the isolated
+  installed wheel on CPython 3.11 and 3.14 with runtime warnings promoted.
+  Full maintained repository quality and five protocol-contract mutation
+  checks passed; the two interpreter builds produced the identical wheel hash
+  above. Package-data resources in each installed wheel exactly matched the
+  three recorded roots.
+- Independent review: distinct reviewer `/root/block0_reviewer` rejected four
+  earlier exact candidates, reproducing structural-envelope, history,
+  ownership, API-freeze, ambient-lineage, and cancellation-schedule gaps. The
+  reviewer then returned `ACCEPT` for exact commit `401f87a...` after
+  reproducing every prior adversarial case; independently rerunning both
+  source and installed-wheel interpreter suites, repository quality, artifact
+  and content-root computation, resource/API checks, remote-currentness,
+  inward-scope, license, and clean-tree audits. No material finding remains.
+- Package qualification posture:
+  `package-accepted/program-qualification-pending`. These immutable values are
+  the first eligible internal source/package handoff for structural conformance
+  consumption, but they record no consumer adapter, pin, adoption,
+  availability, production qualification, or reuse right. Internal
+  combined-package compatibility and final package-set qualification remain
+  Blocks 13 and 14.
+- Downstream, Stop, and license audit: the accepted implementation is confined
+  to this distribution and repository-owned quality checks. It imports,
+  invokes, mutates, or validates no downstream consumer, adapter, repository,
+  fixture, test, cutover, or acceptance; no Block 11+ behavior is present.
+  Posture remains `no-license-selected/unpublished`; no license, publication,
+  release, redistribution authority, or public reuse claim was added.
 
 ### Stop
 
