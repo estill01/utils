@@ -60,9 +60,11 @@ definition are generated deterministically at import from the wheel-retained
 Codex `0.147.0` schemas. Same-name unequal definitions fail closed. Object
 models are frozen and slotted; required fields have no default, optional fields
 default to `None`, arrays normalize to tuples, string enums become closed
-`StrEnum` classes, and schema unions remain closed Python unions. Unknown
-properties are rejected unless the exact schema explicitly contains
-`additionalProperties`; permitted arbitrary JSON is deep-frozen.
+`StrEnum` classes, and schema unions remain closed Python unions. Inbound
+operation results, notifications, callback parameters, and initialization
+results deep-freeze additional JSON when `additionalProperties` is omitted or
+`true`. Outbound operation parameters, callback responses, and initialization
+parameters reject unknown fields unless the schema explicitly permits them.
 
 Serialization produces only schema field names and plain JSON values. Model and
 session validation errors identify the contract location but never retain or

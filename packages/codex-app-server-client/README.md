@@ -23,5 +23,20 @@ Block 7's bounded event/callback streams and exact call-termination behavior
 are in `docs/coordination.md`.
 Block 8's generation-bound connection replacement and caller-owned bounded
 backoff hook are in `docs/restart.md`.
+Block 9's complete installed-wheel matrix, deterministic fake, and bounded
+official-binary smoke are in `docs/conformance.md`.
+
+The public configuration objects are ordinary frozen values:
+
+```python executable
+from codex_app_server_client import ClientIdentity, ClientLimits, TransportOwnership
+
+identity = ClientIdentity("host", "1.0")
+limits = ClientLimits(max_pending_calls=32, max_events=64, max_callbacks=8)
+
+assert identity.to_dict() == {"name": "host", "version": "1.0"}
+assert limits.max_pending_calls == 32
+assert TransportOwnership.OWNED.value == "owned"
+```
 
 This distribution is currently unlicensed and unpublished.

@@ -61,6 +61,12 @@ _PUBLIC_SCHEMA_FILES = (
     *_CALLBACK_SCHEMA_FILES,
 )
 _INTERNAL_SCHEMA_FILES = ("v1/InitializeParams.json", "v1/InitializeResponse.json")
+_INBOUND_SCHEMA_FILES = (
+    *(path for path in _OPERATION_SCHEMA_FILES if path.endswith("Response.json")),
+    *_NOTIFICATION_SCHEMA_FILES,
+    *(path for path in _CALLBACK_SCHEMA_FILES if path.endswith("Params.json")),
+    "v1/InitializeResponse.json",
+)
 _PUBLIC_MODEL_NAMES = tuple(
     path.removeprefix("v2/").removesuffix(".json") for path in _PUBLIC_SCHEMA_FILES
 )
@@ -136,7 +142,7 @@ class _SchemaModel:
 
 
 class _ModelSpec:
-    __slots__ = ("name", "schema", "root", "source", "canonical")
+    __slots__ = ("name", "schema", "root", "source", "sources", "canonical")
 
     def __init__(
         self,
@@ -149,7 +155,14 @@ class _ModelSpec:
         self.schema = schema
         self.root = root
         self.source = source
+        self.sources = {source}
         self.canonical = json.dumps(schema, sort_keys=True, separators=(",", ":"))
+
+
+def _allows_additional_properties(spec: _ModelSpec) -> bool:
+    if "additionalProperties" in spec.schema:
+        return spec.schema["additionalProperties"] is not False
+    return not spec.sources.isdisjoint(_INBOUND_SCHEMA_FILES)
 
 
 def _collect_model_specs(
@@ -173,6 +186,7 @@ def _collect_model_specs(
                 raise _ModelValidationError(
                     f"selected schemas define unequal models with the same name: {name}"
                 )
+            prior.sources.add(source)
             return
         specs[name] = candidate
 
@@ -324,7 +338,7 @@ def _model_post_init(self: _SchemaModel) -> None:
             raise _ModelValidationError(
                 f"{self._schema_name}.additional_properties repeats declared fields"
             )
-        additional_schema = spec.schema.get("additionalProperties")
+        additional_schema = spec.schema.get("additionalProperties", True)
         normalized = {
             key: _decode(
                 additional_schema if isinstance(additional_schema, Mapping) else True,
@@ -365,10 +379,7 @@ def _make_models() -> None:
                 if "None" not in annotation.split(" | "):
                     annotation = f"{annotation} | None"
                 model_fields.append((property_name, annotation, field(default=None)))
-        if (
-            "additionalProperties" in spec.schema
-            and spec.schema["additionalProperties"] is not False
-        ):
+        if _allows_additional_properties(spec):
             if "additional_properties" in properties:
                 raise _ModelValidationError(f"{name} conflicts with the open-object field name")
             model_fields.append(
@@ -619,6 +630,12 @@ def _decode_object(
         raise _ModelValidationError(f"{path} is missing required fields")
     unknown = set(value).difference(properties)
     additional = schema.get("additionalProperties", False)
+    if (
+        "additionalProperties" not in schema
+        and expected_name is not None
+        and _allows_additional_properties(_SPECS[expected_name])
+    ):
+        additional = True
     if unknown and additional is False:
         raise _ModelValidationError(f"{path} contains unselected fields")
     decoded = {
@@ -638,7 +655,7 @@ def _decode_object(
     if expected_name is not None:
         runtime_type = _RUNTIME_TYPES.get(expected_name)
         if isinstance(runtime_type, type) and issubclass(runtime_type, _SchemaModel):
-            if "additionalProperties" in schema and additional is not False:
+            if additional is not False:
                 decoded["additional_properties"] = FrozenJsonObject(extras)
             return runtime_type(**decoded)
     return FrozenJsonObject({**decoded, **extras}, _path=path)

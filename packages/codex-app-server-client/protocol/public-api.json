@@ -292,6 +292,6 @@
     "StaleGenerationError",
     "RestartError"
   ],
-  "model_generation_rule": "For each selected top-level schema, generate immutable typed classes for every transitively reachable definition using its exact schema title or definition key; fail on same-name unequal schemas; required properties have no default, optional properties default to None, arrays become tuples, schema unions become closed Python unions, and additional properties are accepted only where the official schema explicitly permits them.",
+  "model_generation_rule": "For each selected top-level schema, generate immutable typed classes for every transitively reachable definition using its exact schema title or definition key; fail on same-name unequal schemas; required properties have no default, optional properties default to None, arrays become tuples, and schema unions become closed Python unions. Inbound operation results, notifications, callback parameters, and initialization results preserve deep-frozen additional JSON when additionalProperties is omitted or true; outbound operation parameters, callback responses, and initialization parameters reject unknown fields unless additionalProperties explicitly permits them.",
   "root_exports_rule": "Export exactly root_exports and nothing else; export no raw request, raw notification, JSON value, method-string, or payload-dictionary API. Transitively generated nested schema models remain in codex_app_server_client.models."
 }

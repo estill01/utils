@@ -54,6 +54,7 @@ from codex_app_server_client.compatibility import _packaged_protocol_root
 from codex_app_server_client.models import (
     _PUBLIC_MODEL_NAMES,
     FrozenJsonObject,
+    _allows_additional_properties,
     _collect_model_specs,
     _decode,
     _ModelValidationError,
@@ -282,11 +283,38 @@ class FrozenModelTests(unittest.TestCase):
         with self.assertRaises(_ModelValidationError):
             models.ThreadReadParams.from_dict({"threadId": "x", "unselected": True})
 
+        thread_root = schema_document("ThreadListResponse")
+        definitions = thread_root["definitions"]
+        assert isinstance(definitions, dict)
+        thread_fixture = minimum_value(definitions["Thread"], thread_root)
+        assert isinstance(thread_fixture, dict)
+        thread_fixture["future"] = {"nested": [1, {"ok": True}]}
+        thread = models.Thread.from_dict(thread_fixture)
+        self.assertIsInstance(thread.additional_properties["future"], FrozenJsonObject)
+        self.assertEqual(thread.additional_properties["future"]["nested"][0], 1)
+        self.assertEqual(thread.to_dict()["future"], {"nested": [1, {"ok": True}]})
+
     def test_same_name_unequal_schema_fails_closed(self) -> None:
         first = {"title": "Conflict", "type": "object", "properties": {"a": {"type": "string"}}}
         second = {"title": "Conflict", "type": "object", "properties": {"b": {"type": "string"}}}
         with self.assertRaises(_ModelValidationError):
             _collect_model_specs({"first.json": first, "second.json": second})
+
+    def test_equal_shared_model_retains_every_schema_direction(self) -> None:
+        shared = {"title": "Shared", "type": "object", "properties": {}}
+        specs = _collect_model_specs(
+            {
+                "v2/ThreadStartParams.json": shared,
+                "v2/ThreadStartResponse.json": shared,
+                "v1/InitializeParams.json": {
+                    "title": "InitializeParams",
+                    "type": "object",
+                    "properties": {},
+                    "definitions": {"ClientInfo": {"type": "object", "properties": {}}},
+                },
+            }
+        )
+        self.assertTrue(_allows_additional_properties(specs["Shared"]))
 
     def test_every_retained_integer_format_enforces_its_exact_range(self) -> None:
         bounds = {
