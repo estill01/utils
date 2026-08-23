@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "distribution": "embedded-service-contract",
+  "version": "0.1.0",
+  "import_root": "embedded_service_contract",
+  "root_exports": [
+    "CancelResult",
+    "Cancelled",
+    "ConformanceError",
+    "ConformanceFixture",
+    "ConformanceReport",
+    "EventRecord",
+    "Failed",
+    "HostContract",
+    "HostShape",
+    "InvalidCursorError",
+    "LifecycleContractError",
+    "LifecycleHost",
+    "RunRef",
+    "RunState",
+    "RunStatus",
+    "Succeeded",
+    "UnknownRunError",
+    "__version__",
+    "assert_lifecycle_conformance"
+  ],
+  "host_shapes": {
+    "embedded": {
+      "process_owner_count": 0
+    },
+    "service": {
+      "process_owner_count": 1
+    }
+  },
+  "operations": {
+    "start": "request -> RunRef",
+    "status": "RunRef -> RunStatus",
+    "events": "RunRef, after_sequence -> tuple[EventRecord, ...]",
+    "cancel": "RunRef -> CancelResult",
+    "outcome": "RunRef -> Succeeded | Failed | Cancelled | None"
+  },
+  "run_states": [
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled"
+  ],
+  "authority_exclusions": [
+    "authorization",
+    "acceptance",
+    "canonical persistence",
+    "product lifecycle",
+    "semantic outcome interpretation",
+    "server or service runner",
+    "scheduler",
+    "provider selection"
+  ]
+}

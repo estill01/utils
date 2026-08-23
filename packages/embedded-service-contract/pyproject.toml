@@ -12,3 +12,6 @@ dependencies = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/embedded_service_contract"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"contract" = "embedded_service_contract/_contract"

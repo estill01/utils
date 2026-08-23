@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "reference_hosts": {
+    "embedded": {
+      "state_shape": "direct typed records",
+      "process_owner_count": 0
+    },
+    "service": {
+      "state_shape": "service-shaped mapping records",
+      "process_owner_count": 1
+    }
+  },
+  "scenarios": {
+    "success": {
+      "terminal_state": "succeeded",
+      "outcome_variant": "Succeeded"
+    },
+    "failure": {
+      "terminal_state": "failed",
+      "outcome_variant": "Failed"
+    },
+    "cancellation": {
+      "initial_state": "running",
+      "terminal_state": "cancelled",
+      "outcome_variant": "Cancelled",
+      "idempotent": true
+    }
+  },
+  "failure_fixtures": [
+    "out-of-order-events",
+    "missing-outcome-operation",
+    "multiple-process-owners",
+    "shape-owner-mismatch",
+    "unknown-run",
+    "negative-event-cursor"
+  ]
+}
