@@ -118,9 +118,11 @@ only. Authorization and acceptance are deliberately absent from its schema.
 ### External consumer boundary
 
 - Downstream systems may justify admission through read-only evidence.
-- Consumer-specific identifiers may appear only in a bounded admission record
-  when necessary to prove the admission rule; they do not appear in exported
-  APIs, schemas, fixtures, examples, or test data.
+- Consumer-specific identifiers may appear only in governing repository
+  instructions/documentation and a bounded admission record when necessary to
+  establish scope or prove the admission rule; they do not appear in package
+  source, exported APIs, schemas, fixtures, examples, test data, artifacts, or
+  package records.
 - This program creates no downstream branch, adapter, pin, migration, test run,
   handoff requirement, cutover, deletion, or acceptance claim.
 - An accepted package Block emits an inert, repository-owned package record

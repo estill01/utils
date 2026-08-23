@@ -41,12 +41,13 @@ distribution independently qualifies.
 
 ## External-consumer boundary
 
-Consumer-specific identifiers are confined to `docs/admission.md`. Production
-source, schemas, fixtures, examples, tests, build metadata, artifacts, and
-package records remain consumer-neutral. A package record can state an exact
-source revision, version, artifact root, public API root, compatibility inputs,
-currentness, and qualification posture. It cannot select a consumer revision,
-claim adoption, or grant reuse rights.
+Consumer-specific identifiers are confined to governing repository
+instructions/documentation and the bounded `docs/admission.md` record.
+Production source, schemas, fixtures, examples, tests, build metadata,
+artifacts, and package records remain consumer-neutral. A package record can
+state an exact source revision, version, artifact root, public API root,
+compatibility inputs, currentness, and qualification posture. It cannot select
+a consumer revision, claim adoption, or grant reuse rights.
 
 ## Change authority
 
