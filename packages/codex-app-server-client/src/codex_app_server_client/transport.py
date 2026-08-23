@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import signal
 from contextlib import suppress
 from enum import StrEnum
 from pathlib import Path
@@ -29,6 +30,8 @@ _PROCESS_TERMINATE_SECONDS = 1.0
 _PROCESS_KILL_SECONDS = 1.0
 _STREAM_CLOSE_SECONDS = 1.0
 _PORTABLE_UNIX_PATH_BYTES = 103
+_SIGNAL_TERMINATE = getattr(signal, "SIGTERM", 15)
+_SIGNAL_KILL = getattr(signal, "SIGKILL", 9)
 
 
 class TransportOwnership(StrEnum):
@@ -52,6 +55,12 @@ def _validate_write_line(data: bytes) -> None:
         raise JsonRpcFramingError("byte-channel write must be one newline-terminated record")
 
 
+def _consume_task_exception(task: asyncio.Task[Any]) -> None:
+    if not task.cancelled():
+        with suppress(Exception):
+            task.exception()
+
+
 class _StreamByteChannel:
     """Bounded JSON-line behavior over one asyncio reader/writer pair."""
 
@@ -64,9 +73,8 @@ class _StreamByteChannel:
         self._close_lock = asyncio.Lock()
         self._active_read: asyncio.Task[bytes] | None = None
         self._active_write: asyncio.Task[None] | None = None
-        self._closed = False
         self._failed = False
-        self._close_error: TransportCleanupError | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
 
     async def read_line(self, *, max_bytes: int) -> bytes:
         if max_bytes < 1:
@@ -128,6 +136,7 @@ class _StreamByteChannel:
                 finally:
                     self._active_write = None
             except asyncio.CancelledError:
+                self._failed = True
                 raise
             except Exception:
                 write_failed = True
@@ -137,42 +146,41 @@ class _StreamByteChannel:
 
     async def close(self) -> None:
         async with self._close_lock:
-            if self._close_error is not None:
-                raise self._close_error
-            if self._closed:
-                return
-            self._closed = True
-            self._buffer.clear()
-            active = [task for task in (self._active_read, self._active_write) if task is not None]
-            for task in active:
-                task.cancel()
-            for task in active:
-                with suppress(asyncio.CancelledError, Exception):
-                    await task
-            cleanup_failed = False
-            try:
-                self._writer.close()
-            except Exception:
-                cleanup_failed = True
-            try:
-                await asyncio.wait_for(self._writer.wait_closed(), _STREAM_CLOSE_SECONDS)
-            except (AttributeError, NotImplementedError):
-                pass
-            except Exception:
-                cleanup_failed = True
-            if not await self._close_owned_resource():
-                cleanup_failed = True
-            if cleanup_failed:
-                self._close_error = TransportCleanupError(
-                    "transport cleanup could not prove resource closure"
-                )
-                raise self._close_error
+            if self._cleanup_task is None:
+                self._cleanup_task = asyncio.create_task(self._run_cleanup())
+                self._cleanup_task.add_done_callback(_consume_task_exception)
+            cleanup_task = self._cleanup_task
+        await asyncio.shield(cleanup_task)
+
+    async def _run_cleanup(self) -> None:
+        self._buffer.clear()
+        active = [task for task in (self._active_read, self._active_write) if task is not None]
+        for task in active:
+            task.cancel()
+        for task in active:
+            with suppress(asyncio.CancelledError, Exception):
+                await task
+        cleanup_failed = False
+        try:
+            self._writer.close()
+        except Exception:
+            cleanup_failed = True
+        try:
+            await asyncio.wait_for(self._writer.wait_closed(), _STREAM_CLOSE_SECONDS)
+        except (AttributeError, NotImplementedError):
+            pass
+        except Exception:
+            cleanup_failed = True
+        if not await self._close_owned_resource():
+            cleanup_failed = True
+        if cleanup_failed:
+            raise TransportCleanupError("transport cleanup could not prove resource closure")
 
     async def _close_owned_resource(self) -> bool:
         return True
 
     def _ensure_open(self) -> None:
-        if self._closed or self._failed:
+        if self._cleanup_task is not None or self._failed:
             raise TransportClosedError("transport is closed")
 
 
@@ -182,40 +190,77 @@ class _ProcessByteChannel(_StreamByteChannel):
         reader: asyncio.StreamReader,
         writer: Any,
         process: asyncio.subprocess.Process,
+        *,
+        owns_process_group: bool = False,
     ) -> None:
         super().__init__(reader, writer)
         self._process = process
+        self._process_owner = _OwnedProcess(process, owns_process_group=owns_process_group)
 
     async def _close_owned_resource(self) -> bool:
-        if self._process.returncode is not None:
-            return True
+        return await self._process_owner.close()
+
+
+class _OwnedProcess:
+    """Bounded direct-process and POSIX process-group cleanup owner."""
+
+    def __init__(
+        self,
+        process: asyncio.subprocess.Process,
+        *,
+        owns_process_group: bool,
+    ) -> None:
+        self._process = process
+        self._owns_process_group = owns_process_group
+        self._wait_task = asyncio.create_task(process.wait())
+        self._wait_task.add_done_callback(_consume_task_exception)
+
+    async def close(self) -> bool:
         if await self._wait_for_exit(_PROCESS_EOF_GRACE_SECONDS):
             return True
-        try:
-            self._process.terminate()
-        except ProcessLookupError:
-            return True
-        except Exception:
-            pass
+        self._signal(_SIGNAL_TERMINATE)
         if await self._wait_for_exit(_PROCESS_TERMINATE_SECONDS):
             return True
-        try:
-            self._process.kill()
-        except ProcessLookupError:
-            return True
-        except Exception:
-            return False
+        self._signal(_SIGNAL_KILL)
         return await self._wait_for_exit(_PROCESS_KILL_SECONDS)
 
-    async def _wait_for_exit(self, timeout: float) -> bool:
-        wait_failed = False
+    def _signal(self, signal_number: int) -> None:
         try:
-            await asyncio.wait_for(self._process.wait(), timeout)
+            if self._owns_process_group:
+                os.killpg(self._process.pid, signal_number)
+            elif signal_number == _SIGNAL_TERMINATE:
+                self._process.terminate()
+            else:
+                self._process.kill()
+        except Exception:
+            pass
+
+    async def _wait_for_exit(self, timeout: float) -> bool:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        try:
+            await asyncio.wait_for(asyncio.shield(self._wait_task), timeout)
         except TimeoutError:
             return False
         except Exception:
-            wait_failed = True
-        return not wait_failed and self._process.returncode is not None
+            return False
+        if self._process.returncode is None:
+            return False
+        while self._owns_process_group and self._process_group_alive():
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return False
+            await asyncio.sleep(min(0.01, remaining))
+        return True
+
+    def _process_group_alive(self) -> bool:
+        try:
+            os.killpg(self._process.pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
 
 
 class _InjectedByteChannel:
@@ -229,9 +274,8 @@ class _InjectedByteChannel:
         self._close_lock = asyncio.Lock()
         self._active_read: asyncio.Task[bytes] | None = None
         self._active_write: asyncio.Task[None] | None = None
-        self._closed = False
         self._failed = False
-        self._close_error: TransportCleanupError | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
 
     async def read_line(self, *, max_bytes: int) -> bytes:
         if max_bytes < 1:
@@ -278,6 +322,10 @@ class _InjectedByteChannel:
             try:
                 await task
             except asyncio.CancelledError:
+                self._failed = True
+                task.cancel()
+                with suppress(asyncio.CancelledError, Exception):
+                    await task
                 raise
             except Exception:
                 write_failed = True
@@ -289,30 +337,31 @@ class _InjectedByteChannel:
 
     async def close(self) -> None:
         async with self._close_lock:
-            if self._close_error is not None:
-                raise self._close_error
-            if self._closed:
-                return
-            self._closed = True
-            active = [task for task in (self._active_read, self._active_write) if task is not None]
-            for task in active:
-                task.cancel()
-            for task in active:
-                with suppress(asyncio.CancelledError, Exception):
-                    await task
-            if self._ownership is TransportOwnership.BORROWED:
-                return
-            close_failed = False
-            try:
-                await self._channel.close()
-            except Exception:
-                close_failed = True
-            if close_failed:
-                self._close_error = TransportCleanupError("owned injected transport cleanup failed")
-                raise self._close_error
+            if self._cleanup_task is None:
+                self._cleanup_task = asyncio.create_task(self._run_cleanup())
+                self._cleanup_task.add_done_callback(_consume_task_exception)
+            cleanup_task = self._cleanup_task
+        await asyncio.shield(cleanup_task)
+
+    async def _run_cleanup(self) -> None:
+        active = [task for task in (self._active_read, self._active_write) if task is not None]
+        for task in active:
+            task.cancel()
+        for task in active:
+            with suppress(asyncio.CancelledError, Exception):
+                await task
+        if self._ownership is TransportOwnership.BORROWED:
+            return
+        close_failed = False
+        try:
+            await asyncio.wait_for(self._channel.close(), _STREAM_CLOSE_SECONDS)
+        except Exception:
+            close_failed = True
+        if close_failed:
+            raise TransportCleanupError("owned injected transport cleanup failed")
 
     def _ensure_open(self) -> None:
-        if self._closed or self._failed:
+        if self._cleanup_task is not None or self._failed:
             raise TransportClosedError("injected transport is closed")
 
 
@@ -366,10 +415,17 @@ class StdioTransport(_SingleUseTransport):
             spawn_failed = True
             process = None
         if spawn_failed or process is None or process.stdin is None or process.stdout is None:
-            if process is not None and not await _dispose_incomplete_process(process):
+            if process is not None and not await _dispose_incomplete_process(
+                process, owns_process_group=os.name == "posix"
+            ):
                 raise TransportCleanupError("incomplete stdio process cleanup failed")
             raise TransportStartError("owned stdio process could not start")
-        channel = _ProcessByteChannel(process.stdout, process.stdin, process)
+        channel = _ProcessByteChannel(
+            process.stdout,
+            process.stdin,
+            process,
+            owns_process_group=os.name == "posix",
+        )
         if not _verify_binary(self._binary):
             await channel.close()
             raise TransportStartError("owned stdio binary changed during start")
@@ -462,16 +518,12 @@ def _verify_binary(binary: BinaryIdentity) -> bool:
     return hashlib.sha256(data).hexdigest() == binary.sha256
 
 
-async def _dispose_incomplete_process(process: asyncio.subprocess.Process) -> bool:
+async def _dispose_incomplete_process(
+    process: asyncio.subprocess.Process,
+    *,
+    owns_process_group: bool,
+) -> bool:
     if process.stdin is not None:
         with suppress(Exception):
             process.stdin.close()
-    if process.returncode is None:
-        with suppress(Exception):
-            process.kill()
-    wait_failed = False
-    try:
-        await asyncio.wait_for(process.wait(), _PROCESS_KILL_SECONDS)
-    except Exception:
-        wait_failed = True
-    return not wait_failed and process.returncode is not None
+    return await _OwnedProcess(process, owns_process_group=owns_process_group).close()

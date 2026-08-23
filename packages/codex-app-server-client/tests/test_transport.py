@@ -5,10 +5,12 @@ import hashlib
 import inspect
 import json
 import os
+import signal
 import stat
 import sys
 import tempfile
 import unittest
+from contextlib import suppress
 from pathlib import Path
 from unittest import mock
 
@@ -46,8 +48,13 @@ class MemoryChannel:
         self.incoming: asyncio.Queue[bytes | BaseException] = asyncio.Queue()
         self.writes: list[bytes] = []
         self.close_count = 0
+        self.close_completed = False
         self.close_error: BaseException | None = None
+        self.close_gate: asyncio.Event | None = None
+        self.close_started = asyncio.Event()
         self.write_error: BaseException | None = None
+        self.write_gate: asyncio.Event | None = None
+        self.write_started = asyncio.Event()
         self.active_writes = 0
         self.max_active_writes = 0
 
@@ -62,7 +69,10 @@ class MemoryChannel:
         self.max_active_writes = max(self.max_active_writes, self.active_writes)
         try:
             self.writes.append(data[: max(1, len(data) // 2)])
+            self.write_started.set()
             await asyncio.sleep(0)
+            if self.write_gate is not None:
+                await self.write_gate.wait()
             if self.write_error is not None:
                 raise self.write_error
             self.writes[-1] = data
@@ -71,8 +81,12 @@ class MemoryChannel:
 
     async def close(self) -> None:
         self.close_count += 1
+        self.close_started.set()
+        if self.close_gate is not None:
+            await self.close_gate.wait()
         if self.close_error is not None:
             raise self.close_error
+        self.close_completed = True
 
 
 class FakeWriter:
@@ -83,6 +97,8 @@ class FakeWriter:
         self.drain_gate: asyncio.Event | None = None
         self.close_error: BaseException | None = None
         self.wait_error: BaseException | None = None
+        self.wait_gate: asyncio.Event | None = None
+        self.wait_started = asyncio.Event()
         self.active_writes = 0
         self.max_active_writes = 0
         self._full_data = b""
@@ -111,6 +127,9 @@ class FakeWriter:
             raise self.close_error
 
     async def wait_closed(self) -> None:
+        self.wait_started.set()
+        if self.wait_gate is not None:
+            await self.wait_gate.wait()
         if self.wait_error is not None:
             raise self.wait_error
 
@@ -130,6 +149,27 @@ class RefusingProcess:
 
     def kill(self) -> None:
         self.kill_count += 1
+
+
+class EventProcess(RefusingProcess):
+    def __init__(self) -> None:
+        super().__init__()
+        self.finished = asyncio.Event()
+
+    async def wait(self) -> int:
+        await self.finished.wait()
+        self.returncode = 0
+        return 0
+
+
+class LookupProcess(RefusingProcess):
+    def terminate(self) -> None:
+        self.terminate_count += 1
+        raise ProcessLookupError
+
+    def kill(self) -> None:
+        self.kill_count += 1
+        raise ProcessLookupError
 
 
 class InjectedTransportTests(unittest.IsolatedAsyncioTestCase):
@@ -189,6 +229,43 @@ class InjectedTransportTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(TransportClosedError):
             await channel.write_line(b"{}\n")
         await channel.close()
+
+    async def test_cancelled_partial_write_fail_closes_before_next_writer(self) -> None:
+        underlying = MemoryChannel()
+        underlying.write_gate = asyncio.Event()
+        channel = await InjectedTransport(
+            underlying, ownership=TransportOwnership.OWNED
+        )._open_channel()
+        first = asyncio.create_task(channel.write_line(b'{"first":1}\n'))
+        await underlying.write_started.wait()
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        partial = list(underlying.writes)
+        with self.assertRaises(TransportClosedError):
+            await channel.write_line(b'{"second":2}\n')
+        self.assertEqual(underlying.writes, partial)
+        await channel.close()
+
+    async def test_cancelled_owned_close_continues_and_retry_awaits_cleanup(self) -> None:
+        underlying = MemoryChannel()
+        underlying.close_gate = asyncio.Event()
+        channel = await InjectedTransport(
+            underlying, ownership=TransportOwnership.OWNED
+        )._open_channel()
+        first_close = asyncio.create_task(channel.close())
+        await underlying.close_started.wait()
+        first_close.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first_close
+        self.assertFalse(underlying.close_completed)
+        retry = asyncio.create_task(channel.close())
+        await asyncio.sleep(0)
+        self.assertFalse(retry.done())
+        underlying.close_gate.set()
+        await retry
+        self.assertTrue(underlying.close_completed)
+        self.assertEqual(underlying.close_count, 1)
 
     async def test_injected_eof_and_failed_owned_cleanup_are_discriminating(self) -> None:
         eof = MemoryChannel()
@@ -255,6 +332,46 @@ class StreamChannelTests(unittest.IsolatedAsyncioTestCase):
             await active
         self.assertEqual(writer.active_writes, 0)
 
+    async def test_cancelled_stream_write_fail_closes_before_next_writer(self) -> None:
+        writer = FakeWriter()
+        writer.drain_gate = asyncio.Event()
+        channel = _StreamByteChannel(asyncio.StreamReader(), writer)
+        first = asyncio.create_task(channel.write_line(b'{"first":1}\n'))
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        partial = list(writer.writes)
+        with self.assertRaises(TransportClosedError):
+            await channel.write_line(b'{"second":2}\n')
+        self.assertEqual(writer.writes, partial)
+        await channel.close()
+
+    async def test_cancelled_process_close_continues_and_retry_reaps(self) -> None:
+        writer = FakeWriter()
+        writer.wait_gate = asyncio.Event()
+        process = EventProcess()
+        channel = _ProcessByteChannel(
+            asyncio.StreamReader(),
+            writer,
+            process,  # type: ignore[arg-type]
+        )
+        first_close = asyncio.create_task(channel.close())
+        await writer.wait_started.wait()
+        first_close.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first_close
+        retry = asyncio.create_task(channel.close())
+        await asyncio.sleep(0)
+        self.assertFalse(retry.done())
+        writer.wait_gate.set()
+        process.finished.set()
+        await retry
+        self.assertEqual(process.returncode, 0)
+        self.assertEqual(process.terminate_count, 0)
+        self.assertEqual(process.kill_count, 0)
+
     async def test_stream_bound_eof_partial_write_and_post_close(self) -> None:
         oversized_reader = asyncio.StreamReader()
         oversized_reader.feed_data(b"123456789\n")
@@ -310,6 +427,24 @@ class StreamChannelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(process.terminate_count, 1)
         self.assertEqual(process.kill_count, 1)
 
+    async def test_process_lookup_still_requires_bounded_reap_proof(self) -> None:
+        process = LookupProcess()
+        channel = _ProcessByteChannel(
+            asyncio.StreamReader(),
+            FakeWriter(),
+            process,  # type: ignore[arg-type]
+        )
+        with (
+            mock.patch("codex_app_server_client.transport._PROCESS_EOF_GRACE_SECONDS", 0.001),
+            mock.patch("codex_app_server_client.transport._PROCESS_TERMINATE_SECONDS", 0.001),
+            mock.patch("codex_app_server_client.transport._PROCESS_KILL_SECONDS", 0.001),
+            self.assertRaises(TransportCleanupError),
+        ):
+            await channel.close()
+        self.assertIsNone(process.returncode)
+        self.assertEqual(process.terminate_count, 1)
+        self.assertEqual(process.kill_count, 1)
+
 
 class StdioTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_real_fixture_uses_exact_argv_echoes_and_reaps_child(self) -> None:
@@ -361,6 +496,46 @@ class StdioTransportTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(process.returncode)
             with self.assertRaises(ProcessLookupError):
                 os.kill(pid, 0)
+
+    @unittest.skipUnless(os.name == "posix", "process-group fixture requires POSIX")
+    async def test_owned_stdio_kills_stubborn_descendant_process_group(self) -> None:
+        child_code = (
+            "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"
+        )
+        body = (
+            "import signal, subprocess, sys, time\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}], "
+            "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, "
+            "stderr=subprocess.DEVNULL)\n"
+            "print(child.pid, flush=True)\n"
+            "while True:\n"
+            "    time.sleep(1)\n"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            identity = write_executable(Path(temporary), body)
+            channel = await StdioTransport(identity)._open_channel()
+            process = channel._process  # type: ignore[attr-defined]
+            descendant_pid = int(await channel.read_line(max_bytes=32))
+            try:
+                with (
+                    mock.patch(
+                        "codex_app_server_client.transport._PROCESS_EOF_GRACE_SECONDS",
+                        0.02,
+                    ),
+                    mock.patch(
+                        "codex_app_server_client.transport._PROCESS_TERMINATE_SECONDS",
+                        0.05,
+                    ),
+                    mock.patch("codex_app_server_client.transport._PROCESS_KILL_SECONDS", 1.0),
+                ):
+                    await channel.close()
+                self.assertIsNotNone(process.returncode)
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(descendant_pid, 0)
+            finally:
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
 
     async def test_stale_unresolved_and_non_identity_inputs_are_rejected(self) -> None:
         with self.assertRaises(TypeError):

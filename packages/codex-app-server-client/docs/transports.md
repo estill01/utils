@@ -17,10 +17,13 @@ stdio selection:
 ```
 
 stdin and stdout carry JSON lines and stderr is discarded rather than retained
-in package errors. The returned channel owns the process. Close first closes
-stdin, allows a short EOF exit, then escalates through terminate and kill with
-bounded waits. It does not return from successful cleanup until the child has
-been reaped; failure to prove cleanup raises `TransportCleanupError`.
+in package errors. On POSIX, the process starts in a new session and the
+returned channel owns that complete process group, including the wrapper and
+native descendants. Close first closes stdin, allows a short EOF exit, then
+escalates the owned process/group through terminate and kill with bounded
+waits. It does not return from successful cleanup until the direct child has
+been reaped and the owned group is absent; failure to prove either raises
+`TransportCleanupError`.
 
 ## Unix socket
 
@@ -44,5 +47,8 @@ All modes return one newline-delimited byte channel with serialized writes,
 bounded reads, typed EOF/post-close/cleanup failures, and no retained
 request/response/channel exception content. They do not initialize app-server,
 send a request, interpret a message, dispatch callbacks or events, retry, or
-restart. Tests use deterministic in-memory channels, disposable executable
-fixtures, and temporary local Unix sockets only.
+restart. Cancelling a write fail-closes its wrapper before another writer can
+enter, and cancelling `close()` cannot cancel the retained cleanup task; a
+later close awaits the same cleanup result. Tests use deterministic in-memory
+channels, disposable executable/process-group fixtures, and temporary local
+Unix sockets only.
