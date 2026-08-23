@@ -100,6 +100,29 @@ class PackageIsolationAuditTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "package snapshot contains symlink"):
                 check_package.copy_package_snapshot(source, root / "snapshot")
 
+    def test_missing_and_empty_test_contracts_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.assertRaisesRegex(RuntimeError, "test contract is missing"):
+                check_package.require_test_contract(root / "missing")
+            empty = root / "empty"
+            empty.mkdir()
+            with self.assertRaisesRegex(RuntimeError, "test contract is empty"):
+                check_package.require_test_contract(empty)
+            test_file = empty / "test_present.py"
+            test_file.write_text("# test contract marker\n", encoding="utf-8")
+            self.assertEqual(check_package.require_test_contract(empty), [test_file])
+
+    def test_executed_test_count_must_be_positive_and_exact(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "executed zero or an unknown test count"):
+            check_package.executed_test_count("Ran 0 tests in 0.000s\n\nOK\n")
+        with self.assertRaisesRegex(RuntimeError, "executed zero or an unknown test count"):
+            check_package.executed_test_count("OK\n")
+        self.assertEqual(
+            check_package.executed_test_count("Ran 12 tests in 0.025s\n\nOK\n"),
+            12,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

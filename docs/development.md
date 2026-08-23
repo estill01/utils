@@ -18,7 +18,9 @@ unadmitted, circular, reverse, or undeclared dependencies, creates a clean
 temporary environment, installs only that wheel without dependencies, imports
 it from outside the checkout, and runs the copied package-local test contract.
 The `--all` jobs execute in parallel but never share an environment or install
-another distribution.
+another distribution. The isolation command requires `--tests` and fails if a
+package-local test directory is missing, contains no `test_*.py` files, or
+executes zero tests.
 `scripts/check_quality.py` runs the repository contract plus the exact uv/Ruff
 versions pinned in `tools/toolchain.json`; CI invokes the same envelope.
 

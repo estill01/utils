@@ -247,6 +247,22 @@ def wheel_content_record(archive: zipfile.ZipFile) -> tuple[str, int, int]:
     return hashlib.sha256(payload).hexdigest(), len(rows), total
 
 
+def require_test_contract(tests_root: Path) -> list[Path]:
+    if not tests_root.is_dir():
+        raise RuntimeError(f"package-local test contract is missing: {tests_root}")
+    test_files = sorted(tests_root.rglob("test_*.py"))
+    if not test_files:
+        raise RuntimeError(f"package-local test contract is empty: {tests_root}")
+    return test_files
+
+
+def executed_test_count(output: str) -> int:
+    matches = re.findall(r"^Ran ([0-9]+) tests? in ", output, flags=re.MULTILINE)
+    if len(matches) != 1 or int(matches[0]) < 1:
+        raise RuntimeError("package-local test contract executed zero or an unknown test count")
+    return int(matches[0])
+
+
 def check_package(
     distribution: str,
     package: dict[str, str],
@@ -356,7 +372,8 @@ def check_package(
             "test_source": "isolated-package-snapshot",
         }
         tests_root = snapshot / "tests"
-        if tests and tests_root.is_dir():
+        if tests:
+            require_test_contract(tests_root)
             test_result = run(
                 [
                     str(interpreter),
@@ -372,6 +389,7 @@ def check_package(
                 ],
                 cwd=temporary_root,
             )
+            record["test_count"] = executed_test_count(test_result.stdout)
             record["tests"] = test_result.stdout.strip().splitlines()[-1]
         return record
 
@@ -384,6 +402,8 @@ def main() -> int:
     parser.add_argument("--python", default=sys.executable, dest="python_spec")
     parser.add_argument("--tests", action="store_true")
     args = parser.parse_args()
+    if not args.tests:
+        parser.error("--tests is required for the isolated distribution acceptance check")
 
     uv = require_uv()
     matrix = load_matrix()
