@@ -13,4 +13,7 @@ do not expose every upstream method: `protocol/supported-surface.json` is the
 closed supported feature set and `protocol/public-api.json` is the exact future
 root-export, signature, schema-model, capability, and error contract.
 
+Block 4's transport-independent request-state behavior and injected-channel
+contract are documented in `docs/rpc.md`.
+
 This distribution is currently unlicensed and unpublished.
