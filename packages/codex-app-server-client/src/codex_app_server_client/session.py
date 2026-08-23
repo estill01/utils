@@ -57,6 +57,7 @@ from .surface import FeatureSet, NotificationCapability, RequestCapability, Tran
 from .transport import ClientTransport
 
 _ModelT = TypeVar("_ModelT")
+_MAX_CONNECTION_LINEAGES = 256
 
 
 def _is_finite_number(value: object) -> bool:
@@ -82,7 +83,6 @@ class ClientLimits:
     max_pending_calls: int = 256
     max_events: int = 1024
     max_callbacks: int = 64
-    max_connection_lineages: int = 256
     max_backoff_seconds: float = 30.0
 
     def __post_init__(self) -> None:
@@ -91,7 +91,6 @@ class ClientLimits:
             "max_pending_calls",
             "max_events",
             "max_callbacks",
-            "max_connection_lineages",
         ):
             value = getattr(self, name)
             if type(value) is not int or value < 1:
@@ -159,7 +158,8 @@ class AppServerClient:
         limits: ClientLimits,
         engine: _RpcEngine,
         coordinator: _AsyncCoordinator,
-        connection_lineage: object,
+        declared_lineage: object | None,
+        channel_lineage: object,
     ) -> None:
         if token is not self._CONSTRUCTION_TOKEN:
             raise TypeError("use AppServerClient.connect")
@@ -177,10 +177,9 @@ class AppServerClient:
         self._identity: ClientIdentity | None = None
         self._generation = 1
         self._failure: AppServerClientError | None = None
+        self._max_connection_lineages = _MAX_CONNECTION_LINEAGES
         self._connection_lineages: list[weakref.ReferenceType[object]] = []
-        initial_reference = self._lineage_reference(connection_lineage)
-        if initial_reference is not None:
-            self._connection_lineages.append(initial_reference)
+        self._remember_connection_lineages(declared_lineage, channel_lineage)
 
     @classmethod
     async def connect(
@@ -196,7 +195,7 @@ class AppServerClient:
             raise TypeError("limits must be ClientLimits")
         _EnvelopeValidator(compatibility)
         cls._validate_transport(transport, compatibility)
-        engine, coordinator, connection_lineage = await cls._open_connection(
+        engine, coordinator, declared_lineage, channel_lineage = await cls._open_connection(
             transport, compatibility, limits, generation=1
         )
         return cls(
@@ -206,7 +205,8 @@ class AppServerClient:
             limits,
             engine,
             coordinator,
-            connection_lineage,
+            declared_lineage,
+            channel_lineage,
         )
 
     @staticmethod
@@ -226,11 +226,14 @@ class AppServerClient:
 
     @staticmethod
     def _proposed_transport_lineage(transport: ClientTransport) -> object | None:
-        provider = getattr(transport, "_connection_lineage", None)
-        if not callable(provider):
-            return None
         try:
+            provider = getattr(transport, "_connection_lineage", None)
+            if not callable(provider):
+                return None
             lineage = provider()
+            if inspect.iscoroutine(lineage):
+                lineage.close()
+                raise TypeError("transport connection lineage is unavailable")
         except Exception:
             raise TypeError("transport connection lineage is unavailable") from None
         if lineage is None:
@@ -246,29 +249,37 @@ class AppServerClient:
         except TypeError:
             return None
 
-    def _lineage_is_available(self, lineage: object) -> bool:
-        retained: list[weakref.ReferenceType[object]] = []
-        duplicate = False
-        for reference in self._connection_lineages:
-            accepted = reference()
-            if accepted is None:
-                continue
-            retained.append(reference)
-            if accepted is lineage:
-                duplicate = True
-        self._connection_lineages = retained
-        return (
-            not duplicate
-            and self._lineage_reference(lineage) is not None
-            and len(retained) < self._limits.max_connection_lineages
-        )
+    @staticmethod
+    def _unique_lineages(*lineages: object | None) -> list[object]:
+        unique: list[object] = []
+        for lineage in lineages:
+            if lineage is not None and not any(lineage is item for item in unique):
+                unique.append(lineage)
+        return unique
 
-    def _remember_connection_lineage(self, lineage: object) -> bool:
-        reference = self._lineage_reference(lineage)
-        if reference is None:
+    def _lineages_are_available(self, *lineages: object | None) -> bool:
+        retained: list[weakref.ReferenceType[object]] = []
+        for reference in self._connection_lineages:
+            if reference() is not None:
+                retained.append(reference)
+        self._connection_lineages = retained
+        proposed = self._unique_lineages(*lineages)
+        if any(self._lineage_reference(lineage) is None for lineage in proposed):
             return False
-        self._connection_lineages.append(reference)
-        return True
+        if any(
+            accepted is lineage
+            for reference in retained
+            if (accepted := reference()) is not None
+            for lineage in proposed
+        ):
+            return False
+        return len(retained) + len(proposed) <= self._max_connection_lineages
+
+    def _remember_connection_lineages(self, *lineages: object | None) -> None:
+        for lineage in self._unique_lineages(*lineages):
+            reference = self._lineage_reference(lineage)
+            if reference is not None:
+                self._connection_lineages.append(reference)
 
     @classmethod
     async def _open_connection(
@@ -278,10 +289,9 @@ class AppServerClient:
         limits: ClientLimits,
         *,
         generation: int,
-    ) -> tuple[_RpcEngine, _AsyncCoordinator, object]:
+    ) -> tuple[_RpcEngine, _AsyncCoordinator, object | None, object]:
         proposed_lineage = cls._proposed_transport_lineage(transport)
         channel = await transport._open_channel()
-        connection_lineage = proposed_lineage if proposed_lineage is not None else channel
         try:
             engine = _RpcEngine(
                 channel,
@@ -308,7 +318,7 @@ class AppServerClient:
                     "failed connection construction did not close"
                 ) from None
             raise
-        return engine, coordinator, connection_lineage
+        return engine, coordinator, proposed_lineage, channel
 
     async def initialize(self, identity: ClientIdentity) -> AppServerSession:
         if not isinstance(identity, ClientIdentity):
@@ -412,7 +422,7 @@ class AppServerClient:
                 proposed_lineage = None
             if lineage_failed or proposed_lineage is None:
                 raise self._restart_error(context, "transport-lineage")
-            if not self._lineage_is_available(proposed_lineage):
+            if not self._lineages_are_available(proposed_lineage):
                 raise self._restart_error(context, "transport-lineage")
             stale = StaleGenerationError(
                 generation=failed_generation,
@@ -446,8 +456,14 @@ class AppServerClient:
             self._generation = replacement_generation
             self._session = None
             transport_start_failed = False
+            transport_cleanup_unproven = False
             try:
-                engine, coordinator, replacement_lineage = await self._open_connection(
+                (
+                    engine,
+                    coordinator,
+                    replacement_lineage,
+                    replacement_channel_lineage,
+                ) = await self._open_connection(
                     transport,
                     self._compatibility,
                     self._limits,
@@ -457,17 +473,27 @@ class AppServerClient:
                 self._state = "failed"
                 self._failure = self._restart_error(context, "transport-start-cancelled")
                 raise
+            except TransportCleanupError:
+                transport_cleanup_unproven = True
+                engine = coordinator = None
             except Exception:
                 transport_start_failed = True
                 engine = coordinator = None
+            if transport_cleanup_unproven:
+                self._state = "cleanup-failed"
+                self._failure = self._restart_error(context, "transport-start-cleanup")
+                raise self._failure
             if transport_start_failed or engine is None or coordinator is None:
                 self._state = "failed"
                 self._failure = self._restart_error(context, "transport-start")
                 raise self._failure
-            if replacement_lineage is not proposed_lineage or not self._lineage_is_available(
-                replacement_lineage
+            if replacement_lineage is not proposed_lineage or not self._lineages_are_available(
+                replacement_lineage, replacement_channel_lineage
             ):
                 failure = self._restart_error(context, "transport-lineage")
+                self._transport = transport
+                self._engine = engine
+                self._coordinator = coordinator
                 self._state = "failed"
                 self._failure = failure
                 coordinator.retire(failure)
@@ -476,12 +502,12 @@ class AppServerClient:
                     await self._retain_retirement(engine, coordinator, failure)
                 except Exception:
                     cleanup_failed = True
+                _consume_current_cancellation()
                 if cleanup_failed:
                     failure = self._restart_error(context, "replacement-cleanup")
                     self._failure = failure
                 raise failure
-            if not self._remember_connection_lineage(replacement_lineage):
-                raise AssertionError("validated connection lineage became unavailable")
+            self._remember_connection_lineages(replacement_lineage, replacement_channel_lineage)
             self._transport = transport
             self._engine = engine
             self._coordinator = coordinator
@@ -603,9 +629,16 @@ class AppServerClient:
         failure: AppServerClientError,
     ) -> None:
         retirement = asyncio.create_task(cls._retire_connection(engine, coordinator, failure))
-        while not retirement.done():
+        retirement_done = asyncio.Event()
+
+        def finish_retirement(task: asyncio.Task[None]) -> None:
+            _consume_task_exception(task)
+            retirement_done.set()
+
+        retirement.add_done_callback(finish_retirement)
+        while not retirement_done.is_set():
             try:
-                await asyncio.shield(retirement)
+                await retirement_done.wait()
             except asyncio.CancelledError:
                 continue
         retirement.result()

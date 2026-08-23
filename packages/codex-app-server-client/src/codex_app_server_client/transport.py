@@ -304,7 +304,11 @@ class _InjectedByteChannel:
             try:
                 line = await task
             except asyncio.CancelledError:
-                raise
+                current = asyncio.current_task()
+                if self._cleanup_task is not None or (current is not None and current.cancelling()):
+                    raise
+                read_failed = True
+                line = b""
             except Exception:
                 read_failed = True
                 line = b""
@@ -376,6 +380,8 @@ class _InjectedByteChannel:
         close_failed = False
         try:
             await asyncio.wait_for(self._channel.close(), _STREAM_CLOSE_SECONDS)
+        except asyncio.CancelledError:
+            close_failed = True
         except Exception:
             close_failed = True
         if close_failed:

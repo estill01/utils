@@ -39,11 +39,13 @@ replacement reader can consume late responses, notifications, or callbacks.
 For any other structurally accepted `ClientTransport`, the actual opened
 `ByteChannel` object is checked and closed before reader publication when its
 lineage has already appeared in that client. Structural replacement transports
-must declare a stable private lineage token; unprovable or non-weak-referenceable
-tokens fail before transport claim. The client retains only weak identity
-references, prunes dead lineages, and bounds simultaneously live history with
-`ClientLimits.max_connection_lineages`. Distinct client owners remain
-independent; this is not an ambient channel registry or process singleton.
+must declare a stable private lineage token; that declaration supplements and
+must remain stable across the independent actual-channel check. Unprovable or
+non-weak-referenceable tokens and channels fail closed. The client retains only
+weak identity references, prunes dead lineages, and bounds simultaneously live
+history with a fixed private package capacity. Distinct client owners remain
+independent; this is not an ambient channel registry, public retry budget, or
+process singleton.
 
 After retirement, an old session, callback, selected response, or close attempt
 raises `StaleGenerationError` and cannot read, write, publish, cancel, or close
