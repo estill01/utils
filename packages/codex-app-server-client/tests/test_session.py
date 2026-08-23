@@ -745,6 +745,68 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                     await anext(session.events())
                 self.assertEqual(peer.close_count, 1)
 
+    async def test_non_utf8_and_bom_records_fail_before_publication(self) -> None:
+        import codex_app_server_client as client_api
+
+        encodings = (
+            ("utf-16-le", lambda text: text.encode("utf-16-le")),
+            ("utf-16-be", lambda text: text.encode("utf-16-be")),
+            ("utf-32-le", lambda text: text.encode("utf-32-le")),
+            ("utf-32-be", lambda text: text.encode("utf-32-be")),
+            ("utf-8-bom", lambda text: b"\xef\xbb\xbf" + text.encode("utf-8")),
+        )
+        envelope_kinds = ("response", "event", "callback")
+        for encoding, encode in encodings:
+            for envelope_kind in envelope_kinds:
+                with self.subTest(encoding=encoding, envelope_kind=envelope_kind):
+                    peer = ScriptedSessionPeer()
+                    peer.deferred_methods.add("thread/read")
+                    client, session = await self.initialize(peer)
+                    operation = asyncio.create_task(
+                        session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                    )
+                    request = await self.wait_for_deferred(peer)
+                    if envelope_kind == "response":
+                        envelope = {
+                            "id": request["id"],
+                            "result": model_fixture("ThreadReadResponse"),
+                            "privateMarker": "private-encoding-content",
+                        }
+                    elif envelope_kind == "event":
+                        envelope = {
+                            "method": "warning",
+                            "params": {
+                                "message": "private-encoding-content",
+                            },
+                        }
+                    else:
+                        params = model_fixture("CommandExecutionRequestApprovalParams")
+                        assert isinstance(params, dict)
+                        params["privateMarker"] = "private-encoding-content"
+                        envelope = {
+                            "id": "private-encoding-content",
+                            "method": "item/commandExecution/requestApproval",
+                            "params": params,
+                        }
+                    text = json.dumps(envelope, separators=(",", ":"))
+                    peer.incoming.put_nowait(encode(text) + b"\n")
+                    await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+                    with self.assertRaises(JsonRpcFramingError) as raised:
+                        await operation
+                    self.assertNotIn("private-encoding-content", str(raised.exception))
+                    self.assertNotIn("private-encoding-content", repr(vars(raised.exception)))
+                    with self.assertRaises(JsonRpcFramingError):
+                        await anext(session.events())
+                    with self.assertRaises(JsonRpcFramingError):
+                        await anext(session.callbacks())
+                    self.assertEqual(len(client._coordinator._events), 0)
+                    self.assertEqual(len(client._coordinator._callbacks), 0)
+                    self.assertEqual(len(client._coordinator._callback_states), 0)
+                    self.assertEqual(
+                        sum("result" in write for write in peer.writes),
+                        0,
+                    )
+
     async def test_formatted_integer_overflow_in_notification_fails_closed(self) -> None:
         peer = ScriptedSessionPeer()
         client, session = await self.initialize(peer)
@@ -1600,31 +1662,54 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         await session.close()
 
     async def test_cancelled_callback_waiter_does_not_cancel_selected_response(self) -> None:
-        peer = ScriptedSessionPeer()
-        peer.callback_response_gate = asyncio.Event()
-        _, session = await self.initialize(peer)
-        params = model_fixture("CommandExecutionRequestApprovalParams")
-        assert isinstance(params, dict)
-        peer.queue_callback("approval", "item/commandExecution/requestApproval", params)
-        callback = await asyncio.wait_for(anext(session.callbacks()), 1.0)
-        response_value = model_fixture("CommandExecutionRequestApprovalResponse")
-        assert isinstance(response_value, dict)
-        response = CommandExecutionRequestApprovalResponse.from_dict(response_value)
-        waiter = asyncio.create_task(callback.respond(response))
-        await peer.callback_response_started.wait()
-        waiter.cancel()
-        with self.assertRaises(CallCancelledError):
-            await waiter
-        peer.callback_response_gate.set()
-        for _ in range(100):
-            if callback._state.status == "resolved":
-                break
-            await asyncio.sleep(0)
-        self.assertEqual(callback._state.status, "resolved")
-        with self.assertRaises(CallCancelledError):
-            await callback.respond(response)
-        self.assertEqual(
-            sum(write.get("id") == "approval" and "result" in write for write in peer.writes),
-            1,
-        )
-        await session.close()
+        for cancellation_count in (1, 2):
+            with self.subTest(cancellation_count=cancellation_count):
+                peer = ScriptedSessionPeer()
+                peer.callback_response_gate = asyncio.Event()
+                client, session = await self.initialize(peer, limits=ClientLimits(max_callbacks=1))
+                params = model_fixture("CommandExecutionRequestApprovalParams")
+                assert isinstance(params, dict)
+                request_id = f"approval-{cancellation_count}"
+                peer.queue_callback(request_id, "item/commandExecution/requestApproval", params)
+                callbacks = session.callbacks()
+                callback = await asyncio.wait_for(anext(callbacks), 1.0)
+                response_value = model_fixture("CommandExecutionRequestApprovalResponse")
+                assert isinstance(response_value, dict)
+                response = CommandExecutionRequestApprovalResponse.from_dict(response_value)
+                waiter = asyncio.create_task(callback.respond(response))
+                await peer.callback_response_started.wait()
+                for _ in range(cancellation_count):
+                    waiter.cancel()
+                with self.assertRaises(CallCancelledError):
+                    await waiter
+                self.assertFalse(waiter.cancelled())
+                self.assertEqual(waiter.cancelling(), 0)
+                peer.callback_response_gate.set()
+                for _ in range(100):
+                    if callback._state.status == "resolved":
+                        break
+                    await asyncio.sleep(0)
+                self.assertEqual(callback._state.status, "resolved")
+                self.assertEqual(len(client._coordinator._callback_states), 0)
+                with self.assertRaises(CallCancelledError):
+                    await callback.respond(response)
+                self.assertEqual(
+                    sum(
+                        write.get("id") == request_id and "result" in write for write in peer.writes
+                    ),
+                    1,
+                )
+                successor_id = f"successor-{cancellation_count}"
+                peer.queue_callback(successor_id, "item/commandExecution/requestApproval", params)
+                successor = await asyncio.wait_for(anext(callbacks), 1.0)
+                await successor.respond(response)
+                self.assertEqual(
+                    sum(
+                        write.get("id") == successor_id and "result" in write
+                        for write in peer.writes
+                    ),
+                    1,
+                )
+                self.assertEqual(len(client._coordinator._callback_states), 0)
+                await callbacks.aclose()
+                await session.close()

@@ -623,8 +623,11 @@ class _RpcEngine:
         if not payload:
             raise JsonRpcFramingError("inbound line is empty")
         try:
+            text = payload.decode("utf-8", errors="strict")
+            if text.startswith("\ufeff"):
+                raise UnicodeDecodeError("utf-8", payload, 0, 3, "BOM is forbidden")
             value = json.loads(
-                payload,
+                text,
                 object_pairs_hook=_unique_object,
                 parse_constant=_reject_constant,
             )

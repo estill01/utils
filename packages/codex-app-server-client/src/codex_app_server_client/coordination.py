@@ -334,6 +334,7 @@ class _AsyncCoordinator:
                 _consume_current_cancellation()
                 state.response_task.result()
                 return
+            _consume_current_cancellation()
             raise CallCancelledError("callback response waiter was cancelled") from None
 
     async def _run_callback_response(self, state: _CallbackState, line: bytes) -> None:
