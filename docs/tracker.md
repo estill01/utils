@@ -300,7 +300,7 @@ govern execution.
 | 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `completed` |
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `completed` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `completed` |
-| 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
+| 3 | Implement exact binary/version resolution and schema compatibility | 2 | `in-progress` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `not-started` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `not-started` |
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `not-started` |
@@ -740,7 +740,7 @@ Stop before implementing compatibility or client code.
 
 ## Block 3 — Implement app-server version and schema compatibility
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
