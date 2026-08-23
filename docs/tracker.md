@@ -306,7 +306,7 @@ govern execution.
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `completed` |
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `completed` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `completed` |
-| 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `in-progress` |
+| 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `completed` |
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `not-started` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `not-started` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `not-started` |
@@ -1575,7 +1575,7 @@ Stop before full-distribution qualification or cross-package work.
 
 ## Block 9 — Freeze app-server client distribution conformance
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -1644,7 +1644,83 @@ currentness, package isolation, and absence of product behavior.
 
 ### Completion evidence
 
-Pending.
+- Repository commit: accepted pushed source
+  `08c416da4202b7036110e33e43d34ea590054e2e`, tree
+  `794650275e9a583c9f47276a271f65cc1020c4e8`; `HEAD`, local `main`,
+  `origin/main`, and GitHub `main` independently resolved to that commit with a
+  clean worktree.
+- Package capability ID and version:
+  `codex-app-server-client-package`,
+  `codex-app-server-client==0.1.0`, package root
+  `packages/codex-app-server-client`, public import
+  `codex_app_server_client`.
+- Artifact/root: `codex_app_server_client-0.1.0-py3-none-any.whl`, identical
+  Python 3.11/3.14 SHA-256
+  `1e9dc5b9c7f2edb9676b5a47eb2c9b96498f1b429acec474cd26702fe8e3fdb9`.
+  Its content root is
+  `6ecc26e75197d06682fe9d8d0612edb1e56ead6d04c3a41cde1132e2618efd8f`:
+  SHA-256 of compact sorted-key JSON plus terminal LF over all 302
+  lexicographically sorted non-directory wheel members, with each entry
+  recording path, uncompressed-byte SHA-256, and size; total uncompressed
+  bytes `3,206,562`.
+- Public API and compatibility roots: exactly 92 root exports, no raw RPC API,
+  unchanged frozen public signatures, public API SHA-256
+  `7a032cfe32425aae9166217bae18e59202afe509a465e34c8c74794b6b1fdf93`,
+  and compatibility-fixture SHA-256
+  `82e97c4564c04790d03750397d65b6989df529fbb21aedc14ae67cf96d759651`.
+- Official inputs/currentness: Codex `0.147.0`, source commit
+  `be6e8eac029b183056b7e4402879f15d2c85f61b`, official wrapper SHA-256
+  `134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477`,
+  retained schema root
+  `eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa`,
+  semantic schema root
+  `4e5c64213673b670d2575d7b7670d2089d49f92a92c56f2d16618e4a8857813e`,
+  and selected-surface root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`.
+  The bounded official smoke resolved the exact binary, initialized one owned
+  generation, completed one typed `thread/list(limit=1)`, confirmed the exact
+  8 request/15 notification/3 callback/3 transport projection, and closed it.
+- Deterministic conformance: one in-memory JSON-lines fake covers all eight
+  typed operations, all 15 selected notifications, all three policy-neutral
+  callbacks, disconnect, generation-safe replacement, stale-generation
+  rejection, and exactly-once close. Installed/public-only tests execute the
+  README example, verify the 92-export fixture and signatures, and use no
+  private RPC escape, process, socket, filesystem, repository, or ambient
+  singleton.
+- Validation: the focused directionality/conformance proof passed; all 92
+  focused session tests and all 167 client source tests passed on CPython
+  3.11.15 and 3.14.4 under asyncio debug with runtime warnings promoted. Full
+  repository quality and five protocol-contract mutation checks passed. Both
+  isolated installed-wheel suites passed with the identical artifact hash
+  above.
+- Remediation closure: the first pushed candidate was rejected because a model
+  shared by inbound and outbound schema documents could forward untyped nested
+  extras. The accepted correction propagates exact inbound context through
+  references, arrays, unions, named models, and anonymous objects while
+  recursively rejecting omitted-schema extras in outbound operation params,
+  callback responses, and initialization params before any write. Exact
+  `TextUserInput`, `NetworkPolicyAmendment`, direct-construction serialization,
+  anonymous granular-approval, no-write, and corrected-retry regressions pass.
+- Independent review: distinct reviewer `/root/block0_reviewer` returned
+  `ACCEPT` for the exact pushed commit after reproducing both rejected
+  directionality cases and the anonymous inbound case; independently running
+  focused and full dual-interpreter source tests, quality, both installed-wheel
+  suites, official smoke/currentness, artifact/content-root recomputation,
+  API/signature/export checks, remote-currentness, scope, and clean-tree audit.
+  No material finding remains.
+- Package qualification posture:
+  `package-accepted/program-qualification-pending`. This is the first exact
+  internal package handoff for a consumer adapter, but it does not claim any
+  consumer pin, adoption, availability, production qualification, or reuse
+  right. Internal combined-package compatibility and final package-set
+  qualification remain Blocks 13 and 14.
+- Downstream, Stop, and license audit: the accepted implementation is confined
+  to this distribution, its repository verifier, and package-local smoke. It
+  imports, invokes, mutates, or validates no downstream consumer, adapter, pin,
+  repository, fixture, test, cutover, or acceptance; no Block 10+ behavior is
+  present. Posture remains `no-license-selected/unpublished`; no license,
+  publication, release, redistribution authority, or public reuse claim was
+  added.
 
 ### Stop
 
