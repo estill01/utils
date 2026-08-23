@@ -303,7 +303,7 @@ govern execution.
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `completed` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `completed` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `completed` |
-| 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `not-started` |
+| 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `in-progress` |
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `not-started` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `not-started` |
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `not-started` |
@@ -1161,7 +1161,7 @@ Stop before app-server initialization or typed operations.
 
 ## Block 6 — Implement typed app-server session and operations
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
