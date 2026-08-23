@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "fixtures": {
+    "compatible-superset": {
+      "expected_factory": "neutral_expected",
+      "observed_factory": "neutral_observed",
+      "compatible": true,
+      "unavailable_kinds": []
+    },
+    "exact-mismatch-projection": {
+      "expected_factory": "neutral_expected",
+      "observed_factory": "neutral_incompatible",
+      "compatible": false,
+      "unavailable_kinds": [
+        "capability-missing",
+        "component-root",
+        "component-version",
+        "dependency-missing",
+        "dependency-root",
+        "dependency-version",
+        "feature-missing",
+        "protocol-missing",
+        "protocol-schema",
+        "protocol-version"
+      ]
+    }
+  },
+  "authority_exclusions": [
+    "authorization",
+    "acceptance",
+    "availability decisions",
+    "ambient installed-state discovery",
+    "product identity",
+    "consumer inventory"
+  ]
+}

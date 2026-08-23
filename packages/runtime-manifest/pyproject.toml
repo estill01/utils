@@ -12,3 +12,6 @@ dependencies = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/runtime_manifest"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"contract" = "runtime_manifest/_contract"

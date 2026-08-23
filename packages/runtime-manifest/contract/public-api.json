@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "distribution": "runtime-manifest",
+  "version": "0.1.0",
+  "import_root": "runtime_manifest",
+  "root_exports": [
+    "Capability",
+    "CompatibilityReport",
+    "Component",
+    "ManifestDecodeError",
+    "ManifestError",
+    "ManifestValidationError",
+    "Protocol",
+    "RuntimeManifest",
+    "Sha256Root",
+    "UnavailableKind",
+    "UnavailableReason",
+    "UnsupportedSchemaError",
+    "__version__",
+    "canonical_json",
+    "compare_manifests",
+    "parse_manifest"
+  ],
+  "public_signatures": {
+    "Capability": "(name: 'str', version: 'str') -> None",
+    "CompatibilityReport": "(unavailable_reasons: 'tuple[UnavailableReason, ...]') -> None",
+    "Component": "(name: 'str', version: 'str', content_root: 'Sha256Root') -> None",
+    "Protocol": "(name: 'str', version: 'str', schema_root: 'Sha256Root', features: 'tuple[str, ...]' = ()) -> None",
+    "RuntimeManifest": "(component: 'Component', protocols: 'tuple[Protocol, ...]' = (), capabilities: 'tuple[Capability, ...]' = (), dependencies: 'tuple[Component, ...]' = (), schema_version: 'int' = 1) -> None",
+    "Sha256Root": "(value: 'str') -> None",
+    "UnavailableReason": "(kind: 'UnavailableKind', subject: 'str', expected: 'str', observed: 'str | None') -> None",
+    "canonical_json": "(manifest: 'RuntimeManifest') -> 'str'",
+    "compare_manifests": "(expected: 'RuntimeManifest', observed: 'RuntimeManifest') -> 'CompatibilityReport'",
+    "parse_manifest": "(document: 'str | bytes') -> 'RuntimeManifest'"
+  },
+  "public_properties": {
+    "CompatibilityReport.compatible": "(self) -> 'bool'"
+  },
+  "testing_exports": [
+    "neutral_expected",
+    "neutral_incompatible",
+    "neutral_observed"
+  ],
+  "testing_signatures": {
+    "neutral_expected": "() -> 'RuntimeManifest'",
+    "neutral_incompatible": "() -> 'RuntimeManifest'",
+    "neutral_observed": "() -> 'RuntimeManifest'"
+  },
+  "error_hierarchy": {
+    "ManifestError": [
+      "Exception"
+    ],
+    "ManifestValidationError": [
+      "ManifestError",
+      "ValueError"
+    ],
+    "ManifestDecodeError": [
+      "ManifestError"
+    ],
+    "UnsupportedSchemaError": [
+      "ManifestDecodeError"
+    ]
+  },
+  "unavailable_kind_values": {
+    "COMPONENT_NAME": "component-name",
+    "COMPONENT_VERSION": "component-version",
+    "COMPONENT_ROOT": "component-root",
+    "PROTOCOL_MISSING": "protocol-missing",
+    "PROTOCOL_VERSION": "protocol-version",
+    "PROTOCOL_SCHEMA": "protocol-schema",
+    "FEATURE_MISSING": "feature-missing",
+    "CAPABILITY_MISSING": "capability-missing",
+    "CAPABILITY_VERSION": "capability-version",
+    "DEPENDENCY_MISSING": "dependency-missing",
+    "DEPENDENCY_VERSION": "dependency-version",
+    "DEPENDENCY_ROOT": "dependency-root"
+  }
+}
