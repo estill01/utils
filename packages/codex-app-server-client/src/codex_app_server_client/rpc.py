@@ -440,6 +440,8 @@ class _RpcEngine:
         if pending is not None and pending.future is future:
             del self._pending[request_id]
             future.cancel()
+        elif future.done() and not future.cancelled():
+            future.exception()
 
     def _abandon(self, request_id: int, future: asyncio.Future[Any]) -> None:
         pending = self._pending.get(request_id)

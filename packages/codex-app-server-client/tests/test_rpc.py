@@ -36,6 +36,7 @@ class DeterministicPeer:
         self.writes: list[bytes] = []
         self.closed = False
         self.write_error: BaseException | None = None
+        self.response_during_write: dict[str, object] | None = None
 
     async def read_line(self, *, max_bytes: int) -> bytes:
         item = await self.incoming.get()
@@ -44,6 +45,11 @@ class DeterministicPeer:
         return item
 
     async def write_line(self, data: bytes) -> None:
+        if self.response_during_write is not None:
+            request = json.loads(data)
+            response = {"id": request["id"], **self.response_during_write}
+            self.incoming.put_nowait(json.dumps(response).encode() + b"\n")
+            await asyncio.sleep(0)
         if self.write_error is not None:
             error, self.write_error = self.write_error, None
             raise error
@@ -331,6 +337,28 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
             contexts,
         )
 
+    async def test_partial_write_success_race_consumes_completed_future(self) -> None:
+        engine, peer = self.engine()
+        peer.response_during_write = {"result": {"delivered": True}}
+        peer.write_error = RuntimeError("drain failed")
+        contexts = await self.assert_failed_write_has_no_orphan(engine)
+        self.assertEqual(engine.pending_count, 0)
+        self.assertFalse(
+            any("Future exception was never retrieved" in str(item) for item in contexts),
+            contexts,
+        )
+
+    async def test_partial_write_remote_error_race_consumes_completed_future(self) -> None:
+        engine, peer = self.engine()
+        peer.response_during_write = {"error": {"code": -32002, "message": "already resolved"}}
+        peer.write_error = RuntimeError("drain failed")
+        contexts = await self.assert_failed_write_has_no_orphan(engine)
+        self.assertEqual(engine.pending_count, 0)
+        self.assertFalse(
+            any("Future exception was never retrieved" in str(item) for item in contexts),
+            contexts,
+        )
+
     async def test_oversized_inbound_line_fails_pending_without_leak(self) -> None:
         engine, peer = self.engine(_RpcLimits(max_message_bytes=96))
         call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
@@ -376,6 +404,22 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
                 stack.append(current.__cause__)
             if current.__context__ is not None:
                 stack.append(current.__context__)
+
+    async def assert_failed_write_has_no_orphan(
+        self, engine: _RpcEngine
+    ) -> list[dict[str, object]]:
+        loop = asyncio.get_running_loop()
+        contexts: list[dict[str, object]] = []
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: contexts.append(context))
+        try:
+            with self.assertRaises(JsonRpcFramingError):
+                await engine.call(RequestCapability.THREAD_READ, {})
+            gc.collect()
+            await asyncio.sleep(0)
+        finally:
+            loop.set_exception_handler(previous_handler)
+        return contexts
 
 
 class RpcLimitTests(unittest.TestCase):
