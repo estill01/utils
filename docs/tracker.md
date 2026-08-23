@@ -295,9 +295,9 @@ points without re-bloating their implementation:
 The legacy labels are references only. Current Block numbers and dependencies
 govern execution.
 
-| Block | Functionality targeted | Depends on | Status |
+| Block | Scope | Depends on | Status |
 |---:|---|---:|---|
-| 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `in-progress` |
+| 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `completed` |
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `not-started` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `not-started` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
@@ -325,7 +325,7 @@ Required order:
 
 ## Block 0 — Decide package admission and architecture boundaries
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -427,10 +427,12 @@ leakage, and whether any candidate is speculative.
   first correction attempt also suffered shell expansion of the `$implement`
   token. The admission record now binds the canonical task, turn, item, exact
   194-byte length, terminating LF, and reviewer-confirmed SHA-256. Fresh
-  exact-revision review is pending.
-- Independent review: prior distinct read-only review accepted commit
-  `58b6d70665c6d7148426c4ff212552f196e09b3e`; the source-hash remediation
-  requires a fresh exact-revision disposition before re-acceptance.
+  exact-revision review accepted commit
+  `601cd587d6c60bfa0c9724d75f72e39d1d555a5e`.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for exact commit
+  `601cd587d6c60bfa0c9724d75f72e39d1d555a5e` after independently verifying the
+  canonical 194 bytes, terminal LF, and SHA-256.
 - Product-capability review:
   - Trigger: consequential Block 0 posture.
   - Frame identity: `docs/tracker.md`, Block 0, frame SHA-256
@@ -453,8 +455,8 @@ leakage, and whether any candidate is speculative.
 - Downstream-interaction audit: clean; no consumer repository was opened,
   executed, imported, changed, or tested.
 - License/release posture: `no-license-selected/unpublished`.
-- Post-block audit: `reopened` for exact direct-source hash correction and
-  otherwise unchanged.
+- Post-block audit: `accepted`; the source-provenance remediation is closed and
+  substantive admission/architecture content is unchanged.
 - Git durability: candidate and remediation commits pushed to `origin/main`;
   accepted status is recorded by the next scoped tracker checkpoint.
 
