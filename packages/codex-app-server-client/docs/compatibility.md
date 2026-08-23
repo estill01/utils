@@ -7,8 +7,12 @@ transport.
 `resolve_codex_binary()` resolves one exact executable. A path-like argument is
 used exactly. A bare name or the default `codex` is searched across `PATH`; no
 match raises `CodexBinaryNotFoundError` and more than one distinct resolved
-file raises `AmbiguousCodexBinaryError`. The resolved file is hashed and
-`--version` must produce a parseable `codex-cli X.Y.Z` result.
+file raises `AmbiguousCodexBinaryError`. A string containing a path separator
+and every `os.PathLike` value is resolved exactly; only a bare string name uses
+`PATH`. The resolved file's bytes and stable file identity are captured before
+and after `--version`; deletion or replacement fails as `CodexVersionError`
+rather than producing a mixed identity. The probe must produce a parseable
+`codex-cli X.Y.Z` result.
 
 `inspect_compatibility()` accepts a previously probed `BinaryIdentity`. With no
 `schema_dir`, it reads the wheel-retained official schemas and performs no
@@ -28,6 +32,12 @@ Compatibility requires all of:
   and
 - presence of every frozen initialize, request, notification, and callback
   method in its official union.
+
+The loaded `supported-surface.json` content is itself rehashed before features
+are projected. Public inspection validates required schema files and selected
+methods before comparing the whole-tree root, so a missing required schema is
+`SchemaMissingError`, an absent selected method is `UnsupportedFeatureError`,
+and other valid-JSON drift is `SchemaRootMismatchError`.
 
 The semantic root is SHA-256 over sorted lines of
 `<canonical-json-sha256>  <relative-path>\n`. Canonical JSON uses sorted keys,

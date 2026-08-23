@@ -28,7 +28,6 @@ from codex_app_server_client import (
 from codex_app_server_client.compatibility import (
     _generate_schema_tree,
     _packaged_protocol_root,
-    _required_features,
 )
 
 
@@ -41,6 +40,26 @@ def fake_identity(version: str = "0.147.0") -> BinaryIdentity:
 def write_probe(directory: Path, version: str) -> Path:
     executable = directory / "codex"
     executable.write_text(f"#!{sys.executable}\nprint('codex-cli {version}')\n", encoding="utf-8")
+    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    return executable
+
+
+def write_mutating_probe(directory: Path, action: str) -> Path:
+    executable = directory / "codex"
+    executable.write_text(
+        (
+            f"#!{sys.executable}\n"
+            "from pathlib import Path\n"
+            "target = Path(__file__)\n"
+            + (
+                "target.unlink()\n"
+                if action == "delete"
+                else "target.write_text('# replacement\\n', encoding='utf-8')\n"
+            )
+            + "print('codex-cli 0.147.0')\n"
+        ),
+        encoding="utf-8",
+    )
     executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
     return executable
 
@@ -71,6 +90,44 @@ class BinaryResolutionTests(unittest.TestCase):
     def test_malformed_version_probe_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             executable = write_probe(Path(temporary), "not-a-version")
+            with self.assertRaises(CodexVersionError):
+                resolve_codex_binary(executable)
+
+    def test_explicit_dot_slash_path_does_not_search_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            write_probe(directory, "0.147.0")
+            previous = Path.cwd()
+            try:
+                os.chdir(directory)
+                with mock.patch.dict(os.environ, {"PATH": "/definitely/missing"}):
+                    identity = resolve_codex_binary("./codex")
+            finally:
+                os.chdir(previous)
+        self.assertEqual(identity.reported_version, "0.147.0")
+
+    def test_pathlike_bare_filename_is_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            write_probe(directory, "0.147.0")
+            previous = Path.cwd()
+            try:
+                os.chdir(directory)
+                with mock.patch.dict(os.environ, {"PATH": "/definitely/missing"}):
+                    identity = resolve_codex_binary(Path("codex"))
+            finally:
+                os.chdir(previous)
+        self.assertEqual(identity.reported_version, "0.147.0")
+
+    def test_self_replacing_probe_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            executable = write_mutating_probe(Path(temporary), "replace")
+            with self.assertRaises(CodexVersionError):
+                resolve_codex_binary(executable)
+
+    def test_self_deleting_probe_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            executable = write_mutating_probe(Path(temporary), "delete")
             with self.assertRaises(CodexVersionError):
                 resolve_codex_binary(executable)
 
@@ -111,9 +168,21 @@ class CompatibilityTests(unittest.TestCase):
 
     def test_malformed_schema_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            Path(temporary, "broken.json").write_text("{", encoding="utf-8")
+            copied = Path(temporary) / "schemas"
+            packaged = _packaged_protocol_root().joinpath("upstream", "0.147.0")
+            shutil.copytree(Path(str(packaged)), copied)
+            Path(copied, "RequestId.json").write_text("{", encoding="utf-8")
             with self.assertRaises(SchemaMalformedError):
-                inspect_compatibility(fake_identity(), schema_dir=temporary)
+                inspect_compatibility(fake_identity(), schema_dir=copied)
+
+    def test_missing_required_schema_is_discriminating_through_public_api(self) -> None:
+        packaged = _packaged_protocol_root().joinpath("upstream", "0.147.0")
+        with tempfile.TemporaryDirectory() as temporary:
+            copied = Path(temporary) / "schemas"
+            shutil.copytree(Path(str(packaged)), copied)
+            (copied / "ClientNotification.json").unlink()
+            with self.assertRaises(SchemaMissingError):
+                inspect_compatibility(fake_identity(), schema_dir=copied)
 
     def test_semantic_schema_drift_is_rejected(self) -> None:
         packaged = _packaged_protocol_root().joinpath("upstream", "0.147.0")
@@ -127,16 +196,11 @@ class CompatibilityTests(unittest.TestCase):
             with self.assertRaises(SchemaRootMismatchError):
                 inspect_compatibility(fake_identity(), schema_dir=copied)
 
-    def test_missing_selected_feature_is_discriminating(self) -> None:
+    def test_missing_selected_feature_is_discriminating_through_public_api(self) -> None:
         upstream = _packaged_protocol_root().joinpath("upstream", "0.147.0")
         with tempfile.TemporaryDirectory() as temporary:
-            copied = Path(temporary)
-            for name in (
-                "codex_app_server_protocol.v2.schemas.json",
-                "ServerRequest.json",
-                "ClientNotification.json",
-            ):
-                Path(copied, name).write_bytes(upstream.joinpath(name).read_bytes())
+            copied = Path(temporary) / "schemas"
+            shutil.copytree(Path(str(upstream)), copied)
             aggregate_path = copied / "codex_app_server_protocol.v2.schemas.json"
             aggregate = json.loads(aggregate_path.read_text(encoding="utf-8"))
             aggregate["definitions"]["ClientRequest"]["oneOf"] = [
@@ -146,7 +210,25 @@ class CompatibilityTests(unittest.TestCase):
             ]
             aggregate_path.write_text(json.dumps(aggregate), encoding="utf-8")
             with self.assertRaises(UnsupportedFeatureError):
-                _required_features(_packaged_protocol_root(), copied)
+                inspect_compatibility(fake_identity(), schema_dir=copied)
+
+    def test_changed_selected_surface_is_rejected_through_public_api(self) -> None:
+        packaged = _packaged_protocol_root()
+        with tempfile.TemporaryDirectory() as temporary:
+            copied = Path(temporary) / "protocol"
+            shutil.copytree(Path(str(packaged)), copied)
+            surface_path = copied / "supported-surface.json"
+            surface = json.loads(surface_path.read_text(encoding="utf-8"))
+            surface["client_requests"]["public_typed"].remove("review/start")
+            surface_path.write_text(json.dumps(surface), encoding="utf-8")
+            with (
+                mock.patch(
+                    "codex_app_server_client.compatibility._packaged_protocol_root",
+                    return_value=copied,
+                ),
+                self.assertRaises(SchemaRootMismatchError),
+            ):
+                inspect_compatibility(fake_identity())
 
     def test_generation_uses_exact_nonexperimental_argv(self) -> None:
         completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="")

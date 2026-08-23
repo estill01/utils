@@ -89,8 +89,15 @@ def _path_candidates(name: str) -> list[Path]:
 
 def _resolve_path(executable: str | os.PathLike[str] | None) -> Path:
     if executable is not None:
-        supplied = Path(executable)
-        if supplied.is_absolute() or supplied.parent != Path("."):
+        raw = os.fspath(executable)
+        explicit_path = (
+            not isinstance(executable, str)
+            or os.path.isabs(raw)
+            or os.sep in raw
+            or (os.altsep is not None and os.altsep in raw)
+        )
+        supplied = Path(raw)
+        if explicit_path:
             try:
                 resolved = supplied.resolve(strict=True)
             except FileNotFoundError as error:
@@ -113,12 +120,39 @@ def _resolve_path(executable: str | os.PathLike[str] | None) -> Path:
     return candidates[0]
 
 
+def _binary_snapshot(path: Path) -> tuple[bytes, tuple[int, int, int, int, int]]:
+    try:
+        before = path.stat()
+        data = path.read_bytes()
+        after = path.stat()
+    except OSError as error:
+        raise CodexVersionError(f"Codex executable changed during probe: {path}") from error
+    before_identity = (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
+    after_identity = (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+    if before_identity != after_identity:
+        raise CodexVersionError(f"Codex executable changed while being read: {path}")
+    return data, after_identity
+
+
 def resolve_codex_binary(
     executable: str | os.PathLike[str] | None = None,
 ) -> BinaryIdentity:
     """Resolve one exact executable and probe its reported Codex version."""
 
     path = _resolve_path(executable)
+    before_data, before_identity = _binary_snapshot(path)
     try:
         completed = subprocess.run(
             [str(path), "--version"],
@@ -136,10 +170,13 @@ def resolve_codex_binary(
         raise CodexVersionError(
             f"Codex version probe returned an invalid result for {path}: {output!r}"
         )
+    after_data, after_identity = _binary_snapshot(path)
+    if before_identity != after_identity or before_data != after_data:
+        raise CodexVersionError(f"Codex executable changed during version probe: {path}")
     return BinaryIdentity(
         path=path,
         reported_version=match.group("version"),
-        sha256=_sha256(path.read_bytes()),
+        sha256=_sha256(before_data),
     )
 
 
@@ -214,8 +251,17 @@ def _methods(document: dict[str, Any], *, definition: str | None = None) -> set[
         raise SchemaMalformedError("method union has an invalid structure") from error
 
 
-def _required_features(protocol_root: Traversable, schema_root: Traversable) -> FeatureSet:
-    surface = _load_json(protocol_root.joinpath("supported-surface.json"), "supported surface")
+def _surface_root(surface: dict[str, Any]) -> str:
+    content = dict(surface)
+    try:
+        del content["selected_surface_root"]
+    except KeyError as error:
+        raise SchemaMalformedError("supported surface has no recorded root") from error
+    encoded = json.dumps(content, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+    return _sha256(encoded)
+
+
+def _required_features(surface: dict[str, Any], schema_root: Traversable) -> FeatureSet:
     aggregate = _load_json(
         schema_root.joinpath("codex_app_server_protocol.v2.schemas.json"),
         "v2 aggregate",
@@ -287,6 +333,20 @@ def inspect_compatibility(
         raise SchemaRootMismatchError("protocol target differs from the frozen package target")
 
     protocol_root = _packaged_protocol_root()
+    surface = _load_json(protocol_root.joinpath("supported-surface.json"), "supported surface")
+    actual_surface_root = _surface_root(surface)
+    try:
+        recorded_surface_root = surface["selected_surface_root"]["sha256"]
+    except (KeyError, TypeError) as error:
+        raise SchemaMalformedError("supported surface root record is malformed") from error
+    if (
+        actual_surface_root != target.selected_surface_root_sha256
+        or recorded_surface_root != target.selected_surface_root_sha256
+    ):
+        raise SchemaRootMismatchError(
+            "selected surface changed: "
+            f"expected {target.selected_surface_root_sha256}, got {actual_surface_root}"
+        )
     compatibility = _load_json(
         protocol_root.joinpath("compatibility.json"), "compatibility metadata"
     )
@@ -304,6 +364,7 @@ def inspect_compatibility(
         schema_root = path
     else:
         schema_root = protocol_root.joinpath("upstream", target.codex_version)
+    features = _required_features(surface, schema_root)
     byte_root, semantic_root, file_count, total_bytes = _tree_roots(schema_root)
     if not external and byte_root != target.schema_tree_root_sha256:
         raise SchemaRootMismatchError(
@@ -319,7 +380,6 @@ def inspect_compatibility(
         raise SchemaRootMismatchError("schema file count changed")
     if not external and total_bytes != compatibility["schema_total_bytes"]:
         raise SchemaRootMismatchError("retained schema byte count changed")
-    features = _required_features(protocol_root, schema_root)
     return CompatibilityResult(
         target=target,
         binary=binary,
