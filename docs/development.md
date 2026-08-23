@@ -6,7 +6,7 @@ The repository-owned checks are:
 
 ```bash
 python3 scripts/check_quality.py
-python3 scripts/check_package.py --all --python 3.11
+python3 scripts/check_package.py --all --python 3.11 --tests
 ```
 
 `scripts/check_package.py` resolves the repository root from its own location,

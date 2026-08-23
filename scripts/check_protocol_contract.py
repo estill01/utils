@@ -15,6 +15,7 @@ PROTOCOL_ROOT = REPOSITORY_ROOT / "packages" / "codex-app-server-client" / "prot
 MANIFEST_PATH = PROTOCOL_ROOT / "upstream-manifest.json"
 SURFACE_PATH = PROTOCOL_ROOT / "supported-surface.json"
 PUBLIC_API_PATH = PROTOCOL_ROOT / "public-api.json"
+COMPATIBILITY_PATH = PROTOCOL_ROOT / "compatibility.json"
 EXPECTED_UPSTREAM = {
     "repository": "https://github.com/openai/codex",
     "npm_distribution": "@openai/codex",
@@ -35,6 +36,19 @@ EXPECTED_SCHEMA_FILE_COUNT = 285
 EXPECTED_SCHEMA_BYTES = 2_925_973
 EXPECTED_SURFACE_ROOT = "9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f"
 EXPECTED_PUBLIC_API_SHA256 = "11e02c9c460821ebd5dd08f80b6544eb45b2217a53b90918ca472c26d14e1a21"
+EXPECTED_COMPATIBILITY = {
+    "schema_version": 1,
+    "codex_version": "0.147.0",
+    "source_commit": "be6e8eac029b183056b7e4402879f15d2c85f61b",
+    "schema_tree_root_sha256": EXPECTED_SCHEMA_ROOT,
+    "semantic_schema_root_sha256": (
+        "4e5c64213673b670d2575d7b7670d2089d49f92a92c56f2d16618e4a8857813e"
+    ),
+    "schema_file_count": EXPECTED_SCHEMA_FILE_COUNT,
+    "schema_total_bytes": EXPECTED_SCHEMA_BYTES,
+    "selected_surface_root_sha256": EXPECTED_SURFACE_ROOT,
+    "public_api_sha256": EXPECTED_PUBLIC_API_SHA256,
+}
 
 
 def methods(union: dict[str, object]) -> set[str]:
@@ -84,10 +98,13 @@ def main() -> int:
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     surface = json.loads(args.surface.read_text(encoding="utf-8"))
     api = json.loads(args.public_api.read_text(encoding="utf-8"))
+    compatibility = json.loads(COMPATIBILITY_PATH.read_text(encoding="utf-8"))
     if manifest["upstream"] != EXPECTED_UPSTREAM:
         raise RuntimeError("frozen upstream identity changed")
     if manifest["generation"] != EXPECTED_GENERATION:
         raise RuntimeError("frozen schema generation identity changed")
+    if compatibility != EXPECTED_COMPATIBILITY:
+        raise RuntimeError("frozen compatibility metadata changed")
     version = manifest["upstream"]["codex_version"]
     if surface["protocol"]["codex_version"] != version:
         raise RuntimeError("surface and upstream Codex versions differ")

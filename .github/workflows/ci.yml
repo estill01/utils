@@ -43,3 +43,4 @@ jobs:
           python scripts/check_package.py
           --package ${{ matrix.package }}
           --python ${{ matrix.python }}
+          --tests

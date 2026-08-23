@@ -54,7 +54,12 @@ def environment_python(environment: Path) -> Path:
 
 
 def check_package(
-    distribution: str, package: dict[str, str], *, python_spec: str, uv: str
+    distribution: str,
+    package: dict[str, str],
+    *,
+    python_spec: str,
+    uv: str,
+    tests: bool,
 ) -> dict[str, str]:
     package_root = (REPOSITORY_ROOT / package["path"]).resolve()
     if package_root.parent != (REPOSITORY_ROOT / "packages").resolve():
@@ -105,7 +110,7 @@ def check_package(
             "print(package.__version__)"
         )
         result = run([str(interpreter), "-I", "-c", probe], cwd=temporary_root)
-        return {
+        record = {
             "distribution": distribution,
             "import": package["import"],
             "version": result.stdout.strip(),
@@ -113,6 +118,25 @@ def check_package(
             "wheel_sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
             "python": python_spec,
         }
+        tests_root = package_root / "tests"
+        if tests and tests_root.is_dir():
+            test_result = run(
+                [
+                    str(interpreter),
+                    "-I",
+                    "-m",
+                    "unittest",
+                    "discover",
+                    "-s",
+                    str(tests_root),
+                    "-p",
+                    "test_*.py",
+                    "-v",
+                ],
+                cwd=temporary_root,
+            )
+            record["tests"] = test_result.stdout.strip().splitlines()[-1]
+        return record
 
 
 def main() -> int:
@@ -121,6 +145,7 @@ def main() -> int:
     selection.add_argument("--package")
     selection.add_argument("--all", action="store_true")
     parser.add_argument("--python", default=sys.executable, dest="python_spec")
+    parser.add_argument("--tests", action="store_true")
     args = parser.parse_args()
 
     uv = require_uv()
@@ -133,7 +158,13 @@ def main() -> int:
         parser.error(f"unknown package: {', '.join(unknown)}")
 
     results = [
-        check_package(name, packages[name], python_spec=args.python_spec, uv=uv)
+        check_package(
+            name,
+            packages[name],
+            python_spec=args.python_spec,
+            uv=uv,
+            tests=args.tests,
+        )
         for name in selected
     ]
     print(json.dumps({"results": results}, indent=2, sort_keys=True))

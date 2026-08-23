@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "codex_version": "0.147.0",
+  "source_commit": "be6e8eac029b183056b7e4402879f15d2c85f61b",
+  "schema_tree_root_sha256": "eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa",
+  "semantic_schema_root_sha256": "4e5c64213673b670d2575d7b7670d2089d49f92a92c56f2d16618e4a8857813e",
+  "schema_file_count": 285,
+  "schema_total_bytes": 2925973,
+  "selected_surface_root_sha256": "9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f",
+  "public_api_sha256": "11e02c9c460821ebd5dd08f80b6544eb45b2217a53b90918ca472c26d14e1a21"
+}
