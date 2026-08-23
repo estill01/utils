@@ -109,6 +109,8 @@ class ScriptedSessionPeer:
             "platformOs": "macos",
             "userAgent": "fixture",
         }
+        self.notification_after_initialized: dict[str, object] | None = None
+        self.notifications_before_response: set[str] = set()
         self.result_overrides: dict[str, object] = {}
         self.responses = {
             operation: model_fixture(response)
@@ -131,6 +133,8 @@ class ScriptedSessionPeer:
         value = json.loads(data)
         self.writes.append(value)
         if "id" not in value:
+            if value.get("method") == "initialized" and self.notification_after_initialized:
+                self._queue_notification(self.notification_after_initialized)
             return
         method = value["method"]
         result = (
@@ -139,7 +143,12 @@ class ScriptedSessionPeer:
             else self.result_overrides.get(method, self.responses[method])
         )
         response = {"id": value["id"], "result": result}
+        if method in self.notifications_before_response:
+            self._queue_notification({"method": "warning", "params": {"message": "server-warning"}})
         self.incoming.put_nowait(json.dumps(response).encode("utf-8") + b"\n")
+
+    def _queue_notification(self, value: dict[str, object]) -> None:
+        self.incoming.put_nowait(json.dumps(value).encode("utf-8") + b"\n")
 
     async def close(self) -> None:
         self.close_count += 1
@@ -217,20 +226,52 @@ class TypedSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(capabilities["requestAttestation"])
         selected = {item.value for item in NotificationCapability}
         opted_out = set(capabilities["optOutNotificationMethods"])
-        self.assertTrue(opted_out)
-        self.assertTrue(selected.isdisjoint(opted_out))
+        self.assertEqual(len(opted_out), 70)
+        self.assertTrue(selected.issubset(opted_out))
         self.assertEqual(session.generation, 1)
         self.assertEqual(
             session.capabilities.transports,
             frozenset({TransportCapability.INJECTED_BYTE_CHANNEL}),
         )
         self.assertTrue(all(session.capabilities.supports(item) for item in RequestCapability))
+        self.assertEqual(session.capabilities.notifications, frozenset())
+        self.assertEqual(session.capabilities.callbacks, frozenset())
         with self.assertRaises(SessionStateError):
             await client.initialize(ClientIdentity("fixture", "1.0"))
         with self.assertRaises(SessionStateError):
             await client.initialize(ClientIdentity("changed", "2.0"))
         await session.close()
         self.assertEqual(peer.close_count, 1)
+
+    async def test_opted_out_notification_before_request_fails_closed(self) -> None:
+        import codex_app_server_client as client_api
+
+        peer = ScriptedSessionPeer()
+        peer.notification_after_initialized = {
+            "method": "warning",
+            "params": {"message": "server-warning"},
+        }
+        client, session = await self.initialize(peer)
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        with self.assertRaises(SessionStateError):
+            await session.read_thread(client_api.ThreadReadParams(threadId="x"))
+        self.assertEqual(client._state, "failed")
+        self.assertEqual([write["method"] for write in peer.writes], ["initialize", "initialized"])
+        self.assertEqual(peer.close_count, 1)
+
+    async def test_opted_out_notification_between_request_and_response_fails_closed(self) -> None:
+        import codex_app_server_client as client_api
+
+        peer = ScriptedSessionPeer()
+        peer.notifications_before_response.add("thread/read")
+        client, session = await self.initialize(peer)
+        with self.assertRaises(JsonRpcValidationError):
+            await session.read_thread(client_api.ThreadReadParams(threadId="x"))
+        self.assertEqual(client._state, "failed")
+        self.assertEqual(peer.writes[-1]["method"], "thread/read")
+        self.assertEqual(peer.close_count, 1)
+        with self.assertRaises(SessionStateError):
+            await session.read_thread(client_api.ThreadReadParams(threadId="x"))
 
     async def test_all_eight_operations_are_exactly_typed_and_validated(self) -> None:
         import codex_app_server_client as client_api

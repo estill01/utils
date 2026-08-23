@@ -15,8 +15,8 @@ performs this order:
 1. send the official `initialize` request with the exact client identity;
 2. declare `experimentalApi=false`, no extensions, no legacy MCP form
    elicitation, and no attestation request;
-3. opt out of every retained server notification outside the frozen selected
-   notification set;
+3. opt out of every retained server notification until Block 7 installs the
+   bounded notification/callback coordinator;
 4. validate the complete initialize response against the retained official
    schema; and
 5. send the parameter-free `initialized` notification before returning the
@@ -46,6 +46,12 @@ in the exact Block 3 `FeatureSet`, and the result must decode as the matching
 retained response schema. Invalid results fail the connection with a
 content-free `JsonRpcValidationError`. There is no public method-string,
 payload-dictionary, request-ID, or byte-write API.
+
+At this Block boundary `AppServerSession.capabilities` reports the eight
+implemented request capabilities and only the active transport. Notification
+and callback sets are empty until Block 7 implements those paths. A peer that
+violates the all-notification opt-out fails the response-only connection closed
+and cannot publish or corrupt a typed result.
 
 ## Frozen model graph
 

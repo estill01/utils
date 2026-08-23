@@ -74,7 +74,7 @@ class ClientLimits:
             raise ValueError("max_backoff_seconds must be positive and finite")
 
 
-def _unselected_notification_methods() -> tuple[str, ...]:
+def _retained_notification_methods() -> tuple[str, ...]:
     root = _packaged_protocol_root().joinpath("upstream", PINNED_PROTOCOL.codex_version)
     schema = _load_json(root.joinpath("ServerNotification.json"), "ServerNotification")
     variants = schema.get("oneOf")
@@ -95,10 +95,10 @@ def _unselected_notification_methods() -> tuple[str, ...]:
     selected = {capability.value for capability in NotificationCapability}
     if not selected.issubset(methods):
         raise InitializationError("selected notification is absent from the retained schema")
-    return tuple(sorted(set(methods).difference(selected)))
+    return tuple(sorted(methods))
 
 
-_UNSELECTED_NOTIFICATION_METHODS = _unselected_notification_methods()
+_BLOCK6_NOTIFICATION_OPTOUTS = _retained_notification_methods()
 
 
 def _consume_task_exception(task: asyncio.Task[None]) -> None:
@@ -195,7 +195,7 @@ class AppServerClient:
                             "experimentalApi": False,
                             "extensions": {},
                             "mcpServerOpenaiFormElicitation": False,
-                            "optOutNotificationMethods": list(_UNSELECTED_NOTIFICATION_METHODS),
+                            "optOutNotificationMethods": list(_BLOCK6_NOTIFICATION_OPTOUTS),
                             "requestAttestation": False,
                         },
                     },
@@ -215,8 +215,8 @@ class AppServerClient:
                 raise InitializationError("app-server initialization failed")
             capabilities = FeatureSet(
                 requests=self._compatibility.features.requests,
-                notifications=self._compatibility.features.notifications,
-                callbacks=self._compatibility.features.callbacks,
+                notifications=frozenset(),
+                callbacks=frozenset(),
                 transports=frozenset({self._transport.capability}),
             )
             self._session = AppServerSession(
@@ -276,6 +276,12 @@ class AppServerSession:
     @property
     def capabilities(self) -> FeatureSet:
         return self._capabilities
+
+    def _ensure_active(self) -> None:
+        if self._client._engine.failure is not None:
+            self._client._state = "failed"
+        if self._client._state != "initialized":
+            raise SessionStateError("typed operation requires an active initialized session")
 
     async def close(self) -> None:
         await self._client.close()
@@ -376,17 +382,22 @@ class AppServerSession:
         response_type: type[_ModelT],
         timeout: float | None,
     ) -> _ModelT:
-        if self._client._state != "initialized":
-            raise SessionStateError("typed operation requires an active initialized session")
+        self._ensure_active()
         if not isinstance(params, expected_params):
             raise TypeError(f"{capability.value} requires its exact frozen params model")
         if not self._capabilities.supports(capability):
             raise UnsupportedFeatureError(f"request capability is unavailable: {capability.value}")
-        result = await self._client._engine.call(
-            capability,
-            params.to_dict(),  # type: ignore[attr-defined]
-            timeout=timeout,
-        )
+        try:
+            result = await self._client._engine.call(
+                capability,
+                params.to_dict(),  # type: ignore[attr-defined]
+                timeout=timeout,
+            )
+        except Exception:
+            if self._client._engine.failure is not None:
+                await self._client._engine.wait_closed()
+                self._client._state = "failed"
+            raise
         response: _ModelT | None = None
         invalid_result = False
         try:
