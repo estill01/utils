@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import collections
 import concurrent.futures
 import hashlib
 import json
@@ -111,6 +112,10 @@ def validate_package_paths(
         resolved = candidate.resolve()
         if resolved.parent != resolved_packages_root:
             raise RuntimeError(f"package path escapes packages/: {distribution}: {relative}")
+        nested_symlinks = sorted(path for path in candidate.rglob("*") if path.is_symlink())
+        if nested_symlinks:
+            rendered = ", ".join(str(path.relative_to(candidate)) for path in nested_symlinks)
+            raise RuntimeError(f"package tree contains symlink(s): {distribution}: {rendered}")
         roots[distribution] = resolved
     return roots
 
@@ -243,22 +248,86 @@ def wheel_metadata(archive: zipfile.ZipFile) -> tuple[str, str, str, tuple[str, 
     if len(names) != 1:
         raise RuntimeError(f"wheel must contain exactly one METADATA file, found {len(names)}")
     message = BytesParser().parsebytes(archive.read(names[0]))
-    name = message.get("Name")
-    version = message.get("Version")
-    requires_python = message.get("Requires-Python")
-    if not all(isinstance(value, str) and value for value in (name, version, requires_python)):
-        raise RuntimeError("wheel METADATA is missing Name, Version, or Requires-Python")
+
+    def singleton(field: str) -> str:
+        values = message.get_all(field, [])
+        if len(values) != 1 or not isinstance(values[0], str) or not values[0]:
+            raise RuntimeError(f"wheel METADATA must contain exactly one {field} header")
+        return values[0]
+
+    name = singleton("Name")
+    version = singleton("Version")
+    requires_python = singleton("Requires-Python")
     requirements = tuple(message.get_all("Requires-Dist", []))
     return normalize_distribution(name), version, requires_python, requirements
 
 
+def validated_wheel_member_names(archive: zipfile.ZipFile) -> tuple[str, ...]:
+    names = tuple(info.filename for info in archive.infolist() if not info.is_dir())
+    duplicates = sorted(name for name, count in collections.Counter(names).items() if count > 1)
+    if duplicates:
+        raise RuntimeError(f"wheel contains duplicate member name(s): {duplicates}")
+    invalid: list[str] = []
+    for name in names:
+        path = PurePosixPath(name)
+        if (
+            path.is_absolute()
+            or not path.parts
+            or ".." in path.parts
+            or "\\" in name
+            or path.as_posix() != name
+        ):
+            invalid.append(name)
+    if invalid:
+        raise RuntimeError(f"wheel contains unsafe member path(s): {sorted(invalid)}")
+    return names
+
+
+def wheel_distribution_component(distribution: str) -> str:
+    return re.sub(r"[-_.]+", "_", distribution)
+
+
+def wheel_version_component(version: str) -> str:
+    return re.sub(r"[^A-Za-z0-9.]+", "_", version)
+
+
+def audit_wheel_layout(
+    member_names: tuple[str, ...],
+    *,
+    distribution: str,
+    import_root: str,
+    version: str,
+) -> None:
+    dist_info = (
+        f"{wheel_distribution_component(distribution)}-{wheel_version_component(version)}.dist-info"
+    )
+    import_prefix = f"{import_root}/"
+    metadata_prefix = f"{dist_info}/"
+    unexpected = sorted(
+        name
+        for name in member_names
+        if not name.startswith(import_prefix) and not name.startswith(metadata_prefix)
+    )
+    if unexpected:
+        raise RuntimeError(f"wheel contains unexpected top-level member(s): {unexpected}")
+    required = {
+        f"{import_root}/__init__.py",
+        f"{dist_info}/METADATA",
+        f"{dist_info}/RECORD",
+        f"{dist_info}/WHEEL",
+    }
+    missing = sorted(required - set(member_names))
+    if missing:
+        raise RuntimeError(f"wheel layout is missing required member(s): {missing}")
+
+
 def imported_roots_from_wheel(archive: zipfile.ZipFile) -> set[str]:
     roots: set[str] = set()
-    for name in sorted(archive.namelist()):
-        if not name.endswith(".py") or name.endswith("/"):
+    for info in sorted(archive.infolist(), key=lambda item: item.filename):
+        if info.is_dir() or not info.filename.endswith(".py"):
             continue
-        source = archive.read(name).decode("utf-8")
-        tree = ast.parse(source, filename=name)
+        source = archive.read(info).decode("utf-8")
+        tree = ast.parse(source, filename=info.filename)
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 roots.update(alias.name.partition(".")[0] for alias in node.names)
@@ -293,7 +362,7 @@ def wheel_content_record(archive: zipfile.ZipFile) -> tuple[str, int, int]:
         (item for item in archive.infolist() if not item.is_dir()),
         key=lambda item: item.filename,
     ):
-        data = archive.read(info.filename)
+        data = archive.read(info)
         total += len(data)
         rows.append(
             {
@@ -445,7 +514,7 @@ def check_package(
             raise RuntimeError(f"expected one wheel for {distribution}, found {len(wheels)}")
         wheel = wheels[0]
         with zipfile.ZipFile(wheel) as archive:
-            members = archive.namelist()
+            members = validated_wheel_member_names(archive)
             import_prefix = f"{import_root}/"
             if not any(member.startswith(import_prefix) for member in members):
                 raise RuntimeError(f"wheel is missing import root {import_prefix}")
@@ -466,6 +535,12 @@ def check_package(
                     f"wheel Python baseline mismatch for {distribution}: "
                     f"expected {python_requires}, observed {requires_python}"
                 )
+            audit_wheel_layout(
+                members,
+                distribution=distribution,
+                import_root=import_root,
+                version=version,
+            )
             audit_requirement_contract(
                 distribution,
                 expected=expected_requirements,

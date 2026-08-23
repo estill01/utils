@@ -7,6 +7,7 @@ import io
 import sys
 import tempfile
 import unittest
+import warnings
 import zipfile
 from pathlib import Path
 
@@ -110,6 +111,35 @@ class PackageIsolationAuditTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "package root must be a real directory"):
                 check_package.validate_package_paths(records, repository_root=root)
 
+    def test_package_tree_symlinks_fail_before_metadata_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packages_root = root / "packages"
+            packages_root.mkdir()
+            outside = root / "outside.toml"
+            outside.write_text("[project]\ndependencies = []\n", encoding="utf-8")
+            records = {
+                "unselected": {
+                    "path": "packages/unselected",
+                    "import": "unselected",
+                    "version": "1",
+                    "runtime_dependencies": (),
+                }
+            }
+            for relative in (Path("pyproject.toml"), Path("contract/schema.json")):
+                with self.subTest(relative=relative):
+                    package_root = packages_root / "unselected"
+                    package_root.mkdir()
+                    target = package_root / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.symlink_to(outside)
+                    with self.assertRaisesRegex(RuntimeError, "package tree contains symlink"):
+                        check_package.validate_package_paths(records, repository_root=root)
+                    target.unlink()
+                    if target.parent != package_root:
+                        target.parent.rmdir()
+                    package_root.rmdir()
+
     def test_circular_dependencies_include_the_exact_cycle(self) -> None:
         graph = {"alpha": ("beta",), "beta": ("gamma",), "gamma": ("alpha",)}
         with self.assertRaisesRegex(
@@ -171,6 +201,69 @@ class PackageIsolationAuditTests(unittest.TestCase):
             second = check_package.wheel_content_record(archive)
         self.assertEqual(first, second)
         self.assertEqual(first[1:], (2, 144))
+
+    def test_duplicate_wheel_members_are_rejected_before_audit(self) -> None:
+        for duplicate in (
+            "neutral/__init__.py",
+            "neutral/_contract/schema.json",
+        ):
+            with self.subTest(duplicate=duplicate):
+                buffer = io.BytesIO()
+                with warnings.catch_warnings(), zipfile.ZipFile(buffer, "w") as archive:
+                    warnings.simplefilter("ignore", UserWarning)
+                    archive.writestr(duplicate, b"first")
+                    archive.writestr(duplicate, b"second")
+                buffer.seek(0)
+                with (
+                    zipfile.ZipFile(buffer) as archive,
+                    self.assertRaisesRegex(RuntimeError, "duplicate member name"),
+                ):
+                    check_package.validated_wheel_member_names(archive)
+
+    def test_wheel_metadata_singleton_headers_are_exact(self) -> None:
+        for field, conflicting in (
+            ("Name", "other"),
+            ("Version", "9"),
+            ("Requires-Python", ">=9"),
+        ):
+            with self.subTest(field=field):
+                headers = {
+                    "Name": "neutral",
+                    "Version": "1",
+                    "Requires-Python": ">=3.11",
+                }
+                metadata = "Metadata-Version: 2.3\n" + "".join(
+                    f"{name}: {value}\n" for name, value in headers.items()
+                )
+                metadata += f"{field}: {conflicting}\n\n"
+                buffer = io.BytesIO()
+                with zipfile.ZipFile(buffer, "w") as writer:
+                    writer.writestr("neutral-1.dist-info/METADATA", metadata)
+                buffer.seek(0)
+                with (
+                    zipfile.ZipFile(buffer) as archive,
+                    self.assertRaisesRegex(RuntimeError, f"exactly one {field} header"),
+                ):
+                    check_package.wheel_metadata(archive)
+
+    def test_wheel_layout_rejects_combined_and_top_level_modules(self) -> None:
+        base = (
+            "neutral/__init__.py",
+            "neutral-1.dist-info/METADATA",
+            "neutral-1.dist-info/RECORD",
+            "neutral-1.dist-info/WHEEL",
+        )
+        for unexpected in ("other/__init__.py", "utils.py"):
+            with (
+                self.subTest(unexpected=unexpected),
+                self.assertRaisesRegex(RuntimeError, "unexpected top-level member"),
+            ):
+                check_package.audit_wheel_layout(
+                    (*base, unexpected),
+                    distribution="neutral",
+                    import_root="neutral",
+                    version="1",
+                )
 
     def test_package_snapshot_rejects_symlink_escape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
