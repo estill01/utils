@@ -308,7 +308,7 @@ govern execution.
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `completed` |
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `completed` |
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `completed` |
-| 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `in-progress` |
+| 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `completed` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `not-started` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `not-started` |
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `not-started` |
@@ -1884,7 +1884,7 @@ Stop before cross-package composition or any service implementation.
 
 ## Block 11 — Implement the non-authoritative runtime-manifest package
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -1964,7 +1964,80 @@ absence of authority states, and absence of consumer identifiers.
 
 ### Completion evidence
 
-Pending.
+- Accepted exact source: pushed commit
+  `6f7a7ea3c105c7461e6cb4c83944dd094883f187`, tree
+  `13aad3d7299095b02893e55356b1959929b525ca`. Local `HEAD`, local
+  `main`, `origin/main`, and GitHub `main` independently resolved to that
+  commit with a clean worktree.
+- Package capability ID and version: `runtime-manifest-package`,
+  `runtime-manifest==0.1.0`, package root `packages/runtime-manifest`, public
+  import `runtime_manifest`.
+- Artifact/root: `runtime_manifest-0.1.0-py3-none-any.whl`, identical Python
+  3.11/3.14 SHA-256
+  `f2e601d542272187998296f09d33b2235002d108fe07c0b3c89a678ea1d010ac`.
+  Its content root is
+  `db8f7f7d0b0105361f9b1380ff1d1cc432e720be02def65880a9ef484ad112a2`:
+  SHA-256 of compact sorted-key JSON plus terminal LF over all 12
+  lexicographically sorted non-directory wheel members, with each entry
+  recording path, uncompressed-byte SHA-256, and size; total uncompressed
+  bytes `33,954`.
+- Public API and compatibility inputs: exactly 16 root exports plus three
+  frozen testing exports, constructor and function signatures, error
+  hierarchy, unavailable-reason enum values, and finite resource limits;
+  public-API root
+  `ab4c1d7fd98b6b405dc0a2f0fd2f31957dae8fb0872796f46ba4b448c34e0c37`,
+  manifest-schema root
+  `1f6a7c0a46e69600d0ec3ee0917da1be185fba0097e845e99f6152cd1a31ad18`,
+  compatibility-fixture root
+  `326aa3d0b865f24c12b385c5a6ac8b161cd1fa0c984ac9f7dadd7c2b05b0c7f9`,
+  and supported-Python root
+  `ffd6652354d681053411ad82de6e7e8c8a687cdf873514c773fbad03ad834d73`.
+  The acceptance interpreters are CPython 3.11 and 3.14.
+- Descriptive behavior: exact frozen component/version/content, protocol/schema
+  feature, capability, and dependency records serialize to one canonical
+  sorted compact JSON form with a terminal LF. Comparison is deterministic,
+  treats observed descriptive supersets as compatible, and projects exact
+  ordered unavailable reasons for every mismatch without taking runtime
+  action. Unknown schema versions and malformed, recursive, oversized, or
+  non-canonical scalar inputs fail through explicit package errors.
+- Bounds and schema proof: document bytes, collection cardinality, feature
+  cardinality, reason count, names, roots, and reason subjects are bounded
+  before traversal, regex, hashing, sorting, or UTF-8 allocation. Tests cover
+  lone surrogates, recursion, oversized integers and hostile object tuples,
+  JSON integer `1` versus `1.0`, unknown-version discrimination before v1
+  shape validation, and ECMA-262-safe treatment of U+2028/U+2029, later C0
+  controls, and terminal newlines. Runtime-only cross-field and scalar-form
+  invariants are explicitly recorded by the schema rather than implied.
+- Validation: all 24 package tests passed from source and from the isolated
+  installed wheel on CPython 3.11 and 3.14. Full maintained repository quality,
+  pinned Ruff lint/format, and five protocol-contract mutation checks passed;
+  the two interpreter builds produced the identical wheel hash above.
+  Package-data resources in each installed wheel exactly matched the four
+  recorded roots.
+- Independent review: distinct reviewer `/root/block0_reviewer` rejected two
+  earlier exact candidates, reproducing nine canonicality, limit-ordering,
+  recursion, schema-parity, schema-version, and text-pattern defects. The
+  reviewer then returned `ACCEPT` for exact commit `6f7a7ea...` after
+  independently rerunning both source and installed-wheel interpreter suites,
+  repository quality, artifact and content-root computation, resource/API
+  checks, adversarial limit and schema cases, remote-currentness, inward-scope,
+  license, and clean-tree audits. No material finding remains; standard JSON
+  Schema consumers must honor the documented extension invariants or use the
+  strict package parser.
+- Package qualification posture:
+  `package-accepted/program-qualification-pending`. These immutable values are
+  the first eligible internal source/package handoff for descriptive runtime
+  metadata consumption, but they record no consumer adapter, pin, adoption,
+  availability, authorization, acceptance, production qualification, or reuse
+  right. Internal combined-package compatibility and final package-set
+  qualification remain Blocks 13 and 14.
+- Downstream, Stop, and license audit: the accepted implementation is confined
+  to this distribution and repository-owned quality checks. It imports,
+  invokes, discovers, mutates, or validates no downstream consumer, adapter,
+  repository, fixture, test, cutover, or acceptance; no Block 12+ behavior is
+  present. Posture remains `no-license-selected/unpublished`; no license,
+  publication, release, redistribution authority, or public reuse claim was
+  added.
 
 ### Stop
 
