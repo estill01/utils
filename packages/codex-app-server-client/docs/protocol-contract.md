@@ -92,6 +92,12 @@ exactly-once response mechanism but never chooses an approval or product
 action. Unknown or unselected inbound requests are rejected with a typed
 unsupported-message error; there is no raw fallback.
 
+The non-experimental `0.147.0` generation includes the selected plan-delta and
+user-input files even though their upstream schema descriptions use the word
+experimental. Their presence in the non-experimental tree plus their explicit
+Block 2 selection governs this frozen contract; it does not admit any other
+experimental method. Removing them requires a reviewed contract-root change.
+
 `protocol/supported-surface.json` records a neutral necessity statement for
 each selected request, notification, callback, and transport. The selected set
 is eight request methods, fifteen notification methods, three callback methods,

@@ -19,5 +19,7 @@ Block 5's explicit local transport and resource-ownership behavior is in
 `docs/transports.md`.
 Block 6's exact initialize handshake, immutable schema-model graph, and eight
 typed request methods are in `docs/session.md`.
+Block 7's bounded event/callback streams and exact call-termination behavior
+are in `docs/coordination.md`.
 
 This distribution is currently unlicensed and unpublished.

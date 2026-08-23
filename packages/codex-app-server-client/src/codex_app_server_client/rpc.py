@@ -17,13 +17,17 @@ from .compatibility import (
     _packaged_protocol_root,
 )
 from .errors import (
+    AppServerClientError,
+    CallCancelledError,
     CorrelationError,
+    DisconnectedError,
     JsonRpcFramingError,
     JsonRpcValidationError,
     MessageTooLargeError,
     RemoteRpcError,
     RequestLimitError,
     SchemaRootMismatchError,
+    SessionStateError,
     TransportCleanupError,
     UnsupportedFeatureError,
 )
@@ -44,6 +48,16 @@ class ByteChannel(Protocol):
 
     async def close(self) -> None:
         """Close the channel and unblock any active read."""
+
+
+class _InboundHandler(Protocol):
+    """Private typed coordinator installed by the initialized-session layer."""
+
+    def accept_notification(self, method: str, params: object) -> None: ...
+
+    def accept_callback(self, request_id: str | int, method: str, params: object) -> None: ...
+
+    def terminate(self, failure: AppServerClientError | None) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +124,25 @@ class _EnvelopeValidator:
             raise JsonRpcValidationError("outbound request ID changed during validation")
         self._integer_id(value["id"], "request.id")
 
+    def inbound_request(self, value: object) -> tuple[str | int, str, object]:
+        self._validate(value, self._request, self._request, "server request")
+        if not isinstance(value, Mapping):
+            raise JsonRpcValidationError("server request must be an object")
+        request_id = self._request_id(value["id"], "server request.id")
+        method = value.get("method")
+        if not isinstance(method, str):
+            raise JsonRpcValidationError("server request method must be a string")
+        return request_id, method, value.get("params")
+
+    def notification(self, value: object) -> tuple[str, object]:
+        self._validate(value, self._notification, self._notification, "notification")
+        if not isinstance(value, Mapping):
+            raise JsonRpcValidationError("notification must be an object")
+        method = value.get("method")
+        if not isinstance(method, str):
+            raise JsonRpcValidationError("notification method must be a string")
+        return method, value.get("params")
+
     def response(self, value: object) -> tuple[int, bool]:
         if not isinstance(value, Mapping):
             raise JsonRpcValidationError("inbound JSON-RPC message must be an object")
@@ -129,12 +162,28 @@ class _EnvelopeValidator:
         if value != {"method": "initialized"}:
             raise JsonRpcValidationError("initialized notification changed during validation")
 
+    def successful_response(self, value: object, *, request_id: str | int) -> None:
+        self._validate(value, self._response, self._response, "callback response")
+        if not isinstance(value, Mapping) or value.get("id") != request_id:
+            raise JsonRpcValidationError("callback response ID changed during validation")
+        self._request_id(value["id"], "callback response.id")
+
     @staticmethod
     def _integer_id(value: object, path: str) -> int:
         if isinstance(value, bool) or not isinstance(value, int):
             raise JsonRpcValidationError(f"{path} must be an integer")
         if not 1 <= value <= _INT64_MAX:
             raise JsonRpcValidationError(f"{path} must be a positive int64")
+        return value
+
+    @staticmethod
+    def _request_id(value: object, path: str) -> str | int:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise JsonRpcValidationError(f"{path} must be a string or integer")
+        if not _INT64_MIN <= value <= _INT64_MAX:
+            raise JsonRpcValidationError(f"{path} must be within int64")
         return value
 
     def _validate(
@@ -249,6 +298,7 @@ class _RpcEngine:
         self._failure: BaseException | None = None
         self._channel_closed = False
         self._cleanup_failure: TransportCleanupError | None = None
+        self._inbound_handler: _InboundHandler | None = None
 
     @property
     def pending_count(self) -> int:
@@ -262,7 +312,12 @@ class _RpcEngine:
         if self._failure is not None:
             raise self._failure
         if self._reader_task is None:
-            self._reader_task = asyncio.create_task(self._read_responses())
+            self._reader_task = asyncio.create_task(self._read_messages())
+
+    def _set_inbound_handler(self, handler: _InboundHandler) -> None:
+        if self._inbound_handler is not None or self._reader_task is not None:
+            raise SessionStateError("inbound coordination may be installed exactly once")
+        self._inbound_handler = handler
 
     async def call(
         self,
@@ -271,8 +326,10 @@ class _RpcEngine:
         *,
         timeout: float | None = None,
     ) -> Any:
-        if timeout is not None and timeout <= 0:
-            raise ValueError("timeout must be positive")
+        if timeout is not None and (
+            isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0
+        ):
+            raise ValueError("timeout must be a positive number")
         if not isinstance(capability, RequestCapability):
             raise TypeError("capability must be RequestCapability")
         if not self._compatibility.features.supports(capability):
@@ -317,24 +374,24 @@ class _RpcEngine:
         await self.start()
         request_id, future = self._register(capability)
         request = {"id": request_id, "method": method, "params": params}
-        write_failed = False
         try:
             line = self._encode_request(request, request_id=request_id)
-            async with self._write_lock:
-                await self._channel.write_line(line)
         except asyncio.CancelledError:
             self._abandon(request_id, future)
             raise
         except (JsonRpcValidationError, MessageTooLargeError):
             self._discard_unsent(request_id, future)
             raise
+        write_task = asyncio.create_task(self._write_request(line, request_id))
+        write_task.add_done_callback(_consume_task_exception)
+        try:
+            await asyncio.shield(write_task)
+        except asyncio.CancelledError:
+            self._abandon(request_id, future)
+            raise
         except Exception:
-            write_failed = True
-        if write_failed:
             self._discard_unsent(request_id, future)
-            failure = JsonRpcFramingError(f"byte-channel write failed for request {request_id}")
-            await self._fail(failure)
-            raise failure
+            raise
         try:
             if timeout is None:
                 return await asyncio.shield(future)
@@ -346,12 +403,28 @@ class _RpcEngine:
             self._abandon(request_id, future)
             raise
 
+    async def _write_request(self, line: bytes, request_id: int) -> None:
+        write_failed = False
+        try:
+            async with self._write_lock:
+                await self._channel.write_line(line)
+        except asyncio.CancelledError:
+            failure = CallCancelledError(f"request write was cancelled: {request_id}")
+            await self._fail(failure)
+            raise failure from None
+        except Exception:
+            write_failed = True
+        if write_failed:
+            failure = self._io_failure("byte-channel write failed")
+            await self._fail(failure)
+            raise failure
+
     async def wait_closed(self) -> None:
         await self._closed.wait()
 
-    async def close(self) -> None:
+    async def close(self, failure: AppServerClientError | None = None) -> None:
         if self._failure is None:
-            await self._fail(JsonRpcFramingError("RPC engine closed"))
+            await self._fail(failure or JsonRpcFramingError("RPC engine closed"))
         else:
             await self._close_channel()
         reader = self._reader_task
@@ -412,31 +485,47 @@ class _RpcEngine:
             )
         return line
 
-    async def _read_responses(self) -> None:
+    async def _read_messages(self) -> None:
         try:
             while self._failure is None:
                 try:
                     line = await self._channel.read_line(max_bytes=self._limits.max_message_bytes)
                 except asyncio.CancelledError:
                     raise
-                except Exception:
-                    await self._fail(JsonRpcFramingError("byte-channel read failed"))
+                except Exception as error:
+                    failure = self._io_failure("byte-channel read failed", error)
+                    await self._fail(failure)
                     return
-                self._accept_response(line)
+                self._accept_message(line)
         except asyncio.CancelledError:
             raise
         except Exception as error:
             failure = (
                 error
-                if isinstance(error, _APP_RPC_ERRORS)
+                if isinstance(error, AppServerClientError)
                 else JsonRpcFramingError("byte-channel read failed")
             )
             await self._fail(failure)
         finally:
             self._closed.set()
 
-    def _accept_response(self, line: bytes) -> None:
+    def _accept_message(self, line: bytes) -> None:
         value = self._decode_line(line)
+        if isinstance(value, Mapping) and "method" in value:
+            if "result" in value or "error" in value:
+                raise JsonRpcValidationError("inbound method envelope cannot be a response")
+            handler = self._inbound_handler
+            if handler is None:
+                raise JsonRpcValidationError("inbound method envelope is unavailable")
+            if "id" in value:
+                request_id, method, params = self._validator.inbound_request(value)
+                handler.accept_callback(request_id, method, params)
+            else:
+                method, params = self._validator.notification(value)
+                handler.accept_notification(method, params)
+            return
+        if isinstance(value, Mapping) and "params" in value:
+            raise JsonRpcValidationError("inbound response cannot contain params")
         request_id, is_error = self._validator.response(value)
         if request_id in self._abandoned:
             self._remove_history(self._abandoned_order, self._abandoned, request_id)
@@ -457,6 +546,34 @@ class _RpcEngine:
             )
         else:
             pending.future.set_result(value["result"])
+
+    async def _send_callback_result(self, request_id: str | int, result: object) -> None:
+        if self._failure is not None:
+            raise self._failure
+        response = {"id": request_id, "result": result}
+        self._validator.successful_response(response, request_id=request_id)
+        line = self._encode_value(response, "callback response")
+        write_failed = False
+        try:
+            async with self._write_lock:
+                await self._channel.write_line(line)
+        except asyncio.CancelledError:
+            failure = CallCancelledError("callback response write was cancelled")
+            await self._fail(failure)
+            raise failure from None
+        except Exception:
+            write_failed = True
+        if write_failed:
+            failure = DisconnectedError("callback response write failed")
+            await self._fail(failure)
+            raise failure
+
+    def _io_failure(self, label: str, error: BaseException | None = None) -> AppServerClientError:
+        if self._inbound_handler is not None:
+            return DisconnectedError(label)
+        if isinstance(error, (JsonRpcFramingError, MessageTooLargeError)):
+            return error
+        return JsonRpcFramingError(label)
 
     def _decode_line(self, line: bytes) -> object:
         if not isinstance(line, bytes):
@@ -522,6 +639,13 @@ class _RpcEngine:
             for call in pending.values():
                 if not call.future.done():
                     call.future.set_exception(failure)
+            handler = self._inbound_handler
+            if handler is not None:
+                handler.terminate(
+                    failure
+                    if isinstance(failure, AppServerClientError)
+                    else DisconnectedError("connection coordination failed")
+                )
         await self._close_channel()
         self._closed.set()
 
@@ -537,9 +661,7 @@ class _RpcEngine:
             self._cleanup_failure = TransportCleanupError("byte-channel cleanup failed")
 
 
-_APP_RPC_ERRORS = (
-    CorrelationError,
-    JsonRpcFramingError,
-    JsonRpcValidationError,
-    MessageTooLargeError,
-)
+def _consume_task_exception(task: asyncio.Task[None]) -> None:
+    if not task.cancelled():
+        with suppress(Exception):
+            task.exception()

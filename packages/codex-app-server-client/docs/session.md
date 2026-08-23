@@ -15,8 +15,8 @@ performs this order:
 1. send the official `initialize` request with the exact client identity;
 2. declare `experimentalApi=false`, no extensions, no legacy MCP form
    elicitation, and no attestation request;
-3. opt out of every retained server notification until Block 7 installs the
-   bounded notification/callback coordinator;
+3. opt out of the 55 retained notifications outside the exact selected set,
+   after installing the bounded Block 7 notification/callback coordinator;
 4. validate the complete initialize response against the retained official
    schema; and
 5. send the parameter-free `initialized` notification before returning the
@@ -47,11 +47,11 @@ retained response schema. Invalid results fail the connection with a
 content-free `JsonRpcValidationError`. There is no public method-string,
 payload-dictionary, request-ID, or byte-write API.
 
-At this Block boundary `AppServerSession.capabilities` reports the eight
-implemented request capabilities and only the active transport. Notification
-and callback sets are empty until Block 7 implements those paths. A peer that
-violates the all-notification opt-out fails the response-only connection closed
-and cannot publish or corrupt a typed result.
+The composed Block 7 session reports the eight implemented request
+capabilities, 15 selected notification capabilities, three selected callback
+capabilities, and only the active transport. A peer that sends an unselected
+notification or callback fails the connection closed and cannot publish or
+corrupt a typed result.
 
 ## Frozen model graph
 
@@ -70,7 +70,7 @@ expose request/result content.
 
 ## Stop boundary
 
-This layer does not project server notifications, register or answer callbacks,
-coordinate call cancellation/disconnect races, restart a process, replace a
-generation, choose approval policy, or operate any external consumer. Those
-behaviors remain outside Block 6.
+The typed request layer itself does not interpret server notifications or choose
+callback decisions. The composed Block 7 coordinator owns their transport and
+termination mechanics. Restarting a process, replacing a generation, choosing
+approval policy, or operating an external consumer remains outside this layer.

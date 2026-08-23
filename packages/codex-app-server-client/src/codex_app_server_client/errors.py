@@ -91,3 +91,19 @@ class InitializationError(AppServerClientError):
 
 class SessionStateError(AppServerClientError):
     """A typed session operation was attempted in an invalid lifecycle state."""
+
+
+class CallTimeoutError(AppServerClientError):
+    """A local request deadline elapsed before one terminal result was selected."""
+
+
+class CallCancelledError(AppServerClientError):
+    """A local call or callback answer was cancelled exactly once."""
+
+
+class CallbackCapacityError(AppServerClientError):
+    """The bounded outstanding server-callback capacity is exhausted."""
+
+
+class DisconnectedError(AppServerClientError):
+    """The peer connection ended before pending asynchronous work completed."""

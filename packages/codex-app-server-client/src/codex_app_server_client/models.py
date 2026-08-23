@@ -12,7 +12,7 @@ from typing import Any, Literal, Self
 
 from .compatibility import PINNED_PROTOCOL, _load_json, _packaged_protocol_root
 
-_PUBLIC_SCHEMA_FILES = (
+_OPERATION_SCHEMA_FILES = (
     "v2/ThreadStartParams.json",
     "v2/ThreadStartResponse.json",
     "v2/ThreadResumeParams.json",
@@ -29,6 +29,36 @@ _PUBLIC_SCHEMA_FILES = (
     "v2/TurnInterruptResponse.json",
     "v2/ReviewStartParams.json",
     "v2/ReviewStartResponse.json",
+)
+_NOTIFICATION_SCHEMA_FILES = (
+    "v2/ErrorNotification.json",
+    "v2/WarningNotification.json",
+    "v2/DeprecationNoticeNotification.json",
+    "v2/ThreadStartedNotification.json",
+    "v2/ThreadStatusChangedNotification.json",
+    "v2/ThreadClosedNotification.json",
+    "v2/TurnStartedNotification.json",
+    "v2/TurnCompletedNotification.json",
+    "v2/TurnDiffUpdatedNotification.json",
+    "v2/TurnPlanUpdatedNotification.json",
+    "v2/ItemStartedNotification.json",
+    "v2/ItemCompletedNotification.json",
+    "v2/AgentMessageDeltaNotification.json",
+    "v2/PlanDeltaNotification.json",
+    "v2/ReasoningSummaryTextDeltaNotification.json",
+)
+_CALLBACK_SCHEMA_FILES = (
+    "CommandExecutionRequestApprovalParams.json",
+    "CommandExecutionRequestApprovalResponse.json",
+    "FileChangeRequestApprovalParams.json",
+    "FileChangeRequestApprovalResponse.json",
+    "ToolRequestUserInputParams.json",
+    "ToolRequestUserInputResponse.json",
+)
+_PUBLIC_SCHEMA_FILES = (
+    *_OPERATION_SCHEMA_FILES,
+    *_NOTIFICATION_SCHEMA_FILES,
+    *_CALLBACK_SCHEMA_FILES,
 )
 _INTERNAL_SCHEMA_FILES = ("v1/InitializeParams.json", "v1/InitializeResponse.json")
 _PUBLIC_MODEL_NAMES = tuple(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+from collections.abc import AsyncIterator
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import TypeVar
@@ -14,7 +15,10 @@ from .compatibility import (
     _load_json,
     _packaged_protocol_root,
 )
+from .coordination import ServerCallback, ServerEvent, _AsyncCoordinator
 from .errors import (
+    CallCancelledError,
+    CallTimeoutError,
     InitializationError,
     JsonRpcValidationError,
     SessionStateError,
@@ -98,7 +102,11 @@ def _retained_notification_methods() -> tuple[str, ...]:
     return tuple(sorted(methods))
 
 
-_BLOCK6_NOTIFICATION_OPTOUTS = _retained_notification_methods()
+def _notification_optouts(features: FeatureSet) -> tuple[str, ...]:
+    selected_available = {capability.value for capability in features.notifications}
+    return tuple(
+        method for method in _retained_notification_methods() if method not in selected_available
+    )
 
 
 def _consume_task_exception(task: asyncio.Task[None]) -> None:
@@ -122,6 +130,7 @@ class AppServerClient:
         compatibility: CompatibilityResult,
         limits: ClientLimits,
         engine: _RpcEngine,
+        coordinator: _AsyncCoordinator,
     ) -> None:
         if token is not self._CONSTRUCTION_TOKEN:
             raise TypeError("use AppServerClient.connect")
@@ -129,6 +138,7 @@ class AppServerClient:
         self._compatibility = compatibility
         self._limits = limits
         self._engine = engine
+        self._coordinator = coordinator
         self._state = "connected"
         self._state_lock = asyncio.Lock()
         self._close_lock = asyncio.Lock()
@@ -168,6 +178,13 @@ class AppServerClient:
                     max_pending_calls=limits.max_pending_calls,
                 ),
             )
+            coordinator = _AsyncCoordinator(
+                engine,
+                compatibility.features,
+                max_events=limits.max_events,
+                max_callbacks=limits.max_callbacks,
+            )
+            engine._set_inbound_handler(coordinator)
         except Exception:
             try:
                 await channel.close()
@@ -176,7 +193,14 @@ class AppServerClient:
                     "failed connection construction did not close"
                 ) from None
             raise
-        return cls(cls._CONSTRUCTION_TOKEN, transport, compatibility, limits, engine)
+        return cls(
+            cls._CONSTRUCTION_TOKEN,
+            transport,
+            compatibility,
+            limits,
+            engine,
+            coordinator,
+        )
 
     async def initialize(self, identity: ClientIdentity) -> AppServerSession:
         if not isinstance(identity, ClientIdentity):
@@ -195,7 +219,9 @@ class AppServerClient:
                             "experimentalApi": False,
                             "extensions": {},
                             "mcpServerOpenaiFormElicitation": False,
-                            "optOutNotificationMethods": list(_BLOCK6_NOTIFICATION_OPTOUTS),
+                            "optOutNotificationMethods": list(
+                                _notification_optouts(self._compatibility.features)
+                            ),
                             "requestAttestation": False,
                         },
                     },
@@ -215,8 +241,8 @@ class AppServerClient:
                 raise InitializationError("app-server initialization failed")
             capabilities = FeatureSet(
                 requests=self._compatibility.features.requests,
-                notifications=frozenset(),
-                callbacks=frozenset(),
+                notifications=self._compatibility.features.notifications,
+                callbacks=self._compatibility.features.callbacks,
                 transports=frozenset({self._transport.capability}),
             )
             self._session = AppServerSession(
@@ -245,7 +271,8 @@ class AppServerClient:
     async def _run_close(self) -> None:
         async with self._state_lock:
             self._state = "closed"
-            await self._engine.close()
+            self._coordinator.terminate(None)
+            await self._engine.close(CallCancelledError("client closed"))
 
     async def _invalidate(self, failure: JsonRpcValidationError) -> None:
         self._state = "failed"
@@ -285,6 +312,14 @@ class AppServerSession:
 
     async def close(self) -> None:
         await self._client.close()
+
+    async def events(self) -> AsyncIterator[ServerEvent]:
+        async for event in self._client._coordinator.events():
+            yield event
+
+    async def callbacks(self) -> AsyncIterator[ServerCallback]:
+        async for callback in self._client._coordinator.callbacks():
+            yield callback
 
     async def start_thread(
         self, params: ThreadStartParams, *, timeout: float | None = None
@@ -393,6 +428,8 @@ class AppServerSession:
                 params.to_dict(),  # type: ignore[attr-defined]
                 timeout=timeout,
             )
+        except TimeoutError:
+            raise CallTimeoutError(f"request timed out: {capability.value}") from None
         except Exception:
             if self._client._engine.failure is not None:
                 await self._client._engine.wait_closed()
