@@ -298,7 +298,7 @@ govern execution.
 | Block | Scope | Depends on | Status |
 |---:|---|---:|---|
 | 0 | Decide package admission, architecture, ownership, and the no-downstream boundary | — | `completed` |
-| 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `in-progress` |
+| 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `completed` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `not-started` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `not-started` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `not-started` |
@@ -468,7 +468,7 @@ Stop before creating package skeletons, build metadata, or CI.
 
 ## Block 1 — Establish independent packaging and CI baseline
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -536,7 +536,49 @@ development-versus-runtime dependency direction.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed commit
+  `3c5510f81aa67f4c34c1510e27d30176fc5c2ab1`, tree
+  `4e48d2075b926474e959264388bd1a7f8ec38012`; `origin/main` matched the
+  candidate during review.
+- Distribution/version roots: `codex-app-server-client==0.1.0` at
+  `packages/codex-app-server-client`, `embedded-service-contract==0.1.0` at
+  `packages/embedded-service-contract`, and `runtime-manifest==0.1.0` at
+  `packages/runtime-manifest`. Each exposes only its own import namespace and
+  package-local `__version__`; the repository root is not a distribution.
+- Artifact proof: clean isolated builds, dependency-free installs, and imports
+  passed on Python 3.11 and 3.14. Wheel SHA-256 values were respectively
+  `37db7241ce052baf09d2cbccf92b44f2e127d839917a97dc5d8ca83ae83f5b2d`,
+  `24c8035e44fd9a203bd3923e541db440f6c11a801a8a210ae0629415b8e9da9f`,
+  and `0b1de132470200d0435bfc6579b8e5dd5655eb89d6cf403235a12e2b1b8e88d7`
+  on both interpreters.
+- Compatibility inputs: package matrix SHA-256
+  `3436da75aa77685ffc87b99c4bb3d1795875596cb64549c70dc06e14ad9727c9`,
+  changed-test map SHA-256
+  `aaab545ad786df21e956320b7a2b775c64ab236767d9746a6a544e49ed9f3661`,
+  and toolchain manifest SHA-256
+  `09e59e2d487cba7b3eba6af044dc02dbd0c41325d3ca1889b218e4e01d408370`.
+  The maintained runners enforce uv `0.11.9` and Ruff `0.15.12`; CI invokes
+  those same repository-owned envelopes.
+- Focused and negative validation: both `.github/...` and `./.github/...`
+  changes select all three package jobs; package-local changes remain scoped;
+  unknown package names fail closed; repository checks confirm no top-level
+  `utils` import, root distribution, runtime dependency, cross-package import,
+  license, or publication/release configuration.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for the exact pushed source above after rechecking the two
+  remediated findings, all isolated builds/imports, deterministic artifact
+  hashes, namespace and dependency boundaries, and absence of Block 2+
+  behavior or downstream interaction.
+- Product-capability review: the accepted three-distribution architecture was
+  implemented at skeleton level with one pinned development/CI envelope; the
+  rejected alternatives were a combined root distribution and unversioned
+  ambient tooling. Independent versioning, downstream replaceability, and
+  runtime isolation are preserved.
+- Currentness and qualification posture: current for the accepted Block 1
+  skeleton/tooling contract only; not a functional package handoff and not yet
+  qualified for consumer adoption. No consumer repository was opened,
+  executed, imported, changed, or tested.
+- License/release posture: `no-license-selected/unpublished`.
 
 ### Stop
 
