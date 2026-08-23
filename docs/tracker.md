@@ -306,7 +306,7 @@ govern execution.
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `completed` |
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `completed` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `completed` |
-| 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `not-started` |
+| 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `in-progress` |
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `not-started` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `not-started` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `not-started` |
@@ -1575,7 +1575,7 @@ Stop before full-distribution qualification or cross-package work.
 
 ## Block 9 — Freeze app-server client distribution conformance
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
