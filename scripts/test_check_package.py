@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -23,11 +24,91 @@ class PackageIsolationAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid runtime requirement"):
             check_package.requirement_distribution("!!!")
 
-    def test_reverse_and_unadmitted_dependencies_fail_clearly(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "reverse/downstream dependency.*librsi"):
-            check_package.audit_dependency_edges("neutral", ("librsi",), {"neutral"})
+    def test_unadmitted_dependencies_fail_without_consumer_knowledge(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "unadmitted runtime dependency.*requests"):
             check_package.audit_dependency_edges("neutral", ("requests",), {"neutral"})
+
+    def test_dependency_contract_preserves_versions_markers_and_urls(self) -> None:
+        pairs = [
+            (("peer==1",), ("peer==2",)),
+            (("peer; python_version < '3.13'",), ("peer; python_version >= '3.13'",)),
+            (
+                ("peer @ https://example.invalid/one.whl",),
+                ("peer @ https://example.invalid/two.whl",),
+            ),
+        ]
+        for expected, observed in pairs:
+            with (
+                self.subTest(observed=observed),
+                self.assertRaisesRegex(RuntimeError, "runtime dependency contract differs"),
+            ):
+                check_package.audit_requirement_contract(
+                    "neutral",
+                    expected=expected,
+                    observed=observed,
+                    source="source",
+                )
+
+    def test_admitted_peer_edge_cannot_self_authorize_from_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            roots: dict[str, Path] = {}
+            packages: dict[str, dict[str, object]] = {}
+            for distribution, dependencies in (
+                ("alpha", ["beta>=1"]),
+                ("beta", []),
+            ):
+                package_root = root / distribution
+                package_root.mkdir()
+                (package_root / "pyproject.toml").write_text(
+                    (
+                        "[project]\n"
+                        f'name = "{distribution}"\n'
+                        'version = "1"\n'
+                        f"dependencies = {dependencies!r}\n"
+                    ),
+                    encoding="utf-8",
+                )
+                roots[distribution] = package_root
+                packages[distribution] = {
+                    "path": f"packages/{distribution}",
+                    "import": distribution,
+                    "version": "1",
+                    "runtime_dependencies": (),
+                }
+            with self.assertRaisesRegex(RuntimeError, "source runtime dependency contract differs"):
+                check_package.audit_dependency_graph(packages, roots)
+
+    def test_all_matrix_paths_are_contained_before_metadata_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            packages_root = root / "packages"
+            packages_root.mkdir()
+            valid = packages_root / "valid"
+            valid.mkdir()
+            outside = root / "outside"
+            outside.mkdir()
+            records = {
+                "selected": {
+                    "path": "packages/valid",
+                    "import": "valid",
+                    "version": "1",
+                    "runtime_dependencies": (),
+                },
+                "unselected": {
+                    "path": "../outside",
+                    "import": "outside",
+                    "version": "1",
+                    "runtime_dependencies": (),
+                },
+            }
+            with self.assertRaisesRegex(RuntimeError, "package path escapes packages/.*unselected"):
+                check_package.validate_package_paths(records, repository_root=root)
+
+            records["unselected"]["path"] = "packages/link"
+            (packages_root / "link").symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, "package root must be a real directory"):
+                check_package.validate_package_paths(records, repository_root=root)
 
     def test_circular_dependencies_include_the_exact_cycle(self) -> None:
         graph = {"alpha": ("beta",), "beta": ("gamma",), "gamma": ("alpha",)}
@@ -84,7 +165,7 @@ class PackageIsolationAuditTests(unittest.TestCase):
         with zipfile.ZipFile(buffer) as archive:
             self.assertEqual(
                 check_package.wheel_metadata(archive),
-                ("neutral-package", "1.2.3", ">=3.11", ("admitted-dependency",)),
+                ("neutral-package", "1.2.3", ">=3.11", ("admitted-dependency>=2",)),
             )
             first = check_package.wheel_content_record(archive)
             second = check_package.wheel_content_record(archive)
@@ -122,6 +203,78 @@ class PackageIsolationAuditTests(unittest.TestCase):
             check_package.executed_test_count("Ran 12 tests in 0.025s\n\nOK\n"),
             12,
         )
+
+    def test_retained_package_data_requires_exact_members_and_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package_root = Path(temporary)
+            contract = package_root / "contract"
+            contract.mkdir()
+            (contract / "schema.json").write_bytes(b'{"schema":1}\n')
+            (package_root / "pyproject.toml").write_text(
+                (
+                    "[tool.hatch.build.targets.wheel.force-include]\n"
+                    '"contract" = "neutral/_contract"\n'
+                ),
+                encoding="utf-8",
+            )
+
+            def archive_with(resources: dict[str, bytes]) -> zipfile.ZipFile:
+                buffer = io.BytesIO()
+                with zipfile.ZipFile(buffer, "w") as writer:
+                    writer.writestr("neutral/__init__.py", "")
+                    for name, content in resources.items():
+                        writer.writestr(name, content)
+                buffer.seek(0)
+                archive = zipfile.ZipFile(buffer)
+                self.addCleanup(buffer.close)
+                self.addCleanup(archive.close)
+                return archive
+
+            with self.assertRaisesRegex(RuntimeError, "package-data members differ.*missing"):
+                check_package.audit_forced_package_data(
+                    package_root,
+                    archive_with({}),
+                    import_root="neutral",
+                )
+            with self.assertRaisesRegex(RuntimeError, "package-data bytes differ"):
+                check_package.audit_forced_package_data(
+                    package_root,
+                    archive_with({"neutral/_contract/schema.json": b"changed\n"}),
+                    import_root="neutral",
+                )
+            with self.assertRaisesRegex(RuntimeError, "package-data members differ.*extra"):
+                check_package.audit_forced_package_data(
+                    package_root,
+                    archive_with(
+                        {
+                            "neutral/_contract/schema.json": b'{"schema":1}\n',
+                            "neutral/_contract/extra.json": b"{}\n",
+                        }
+                    ),
+                    import_root="neutral",
+                )
+            retained_root, retained_count = check_package.audit_forced_package_data(
+                package_root,
+                archive_with({"neutral/_contract/schema.json": b'{"schema":1}\n'}),
+                import_root="neutral",
+            )
+            self.assertEqual(retained_count, 1)
+            self.assertRegex(retained_root, r"^[0-9a-f]{64}$")
+
+    def test_child_failure_includes_bounded_captured_output(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            self.assertRaisesRegex(RuntimeError, "DETAIL") as raised,
+        ):
+            check_package.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "print('DETAIL'); raise SystemExit(7)",
+                ],
+                cwd=Path(temporary),
+            )
+        self.assertIn("exit 7", str(raised.exception))
 
 
 if __name__ == "__main__":

@@ -13,10 +13,18 @@ python3 scripts/check_package.py --all --python 3.14 --tests
 `scripts/check_package.py` resolves the repository root from its own location,
 uses the configured `uv` executable, copies each distribution into an isolated
 package-only snapshot, and builds each wheel independently. It audits wheel
-metadata and Python imports against the admitted dependency graph, rejects
-unadmitted, circular, reverse, or undeclared dependencies, creates a clean
-temporary environment, installs only that wheel without dependencies, imports
-it from outside the checkout, and runs the copied package-local test contract.
+metadata and Python imports against the exact dependency requirements frozen in
+`tools/package_matrix.json`. Source and wheel requirement strings must match
+that contract without discarding versions, extras, markers, URLs, or order; the
+derived admitted graph must remain acyclic and cannot self-authorize a new
+edge. The runner then creates a clean temporary environment, installs only that
+wheel without dependencies, imports it from outside the checkout, and runs the
+copied package-local test contract.
+Every declared retained package-data mapping is also checked for an exact
+source-to-wheel member set and byte identity, so source-test fallbacks cannot
+hide missing, altered, or unexpected installed resources. Failed build,
+install, import, or test commands retain a bounded tail of their captured
+diagnostic output.
 The `--all` jobs execute in parallel but never share an environment or install
 another distribution. The isolation command requires `--tests` and fails if a
 package-local test directory is missing, contains no `test_*.py` files, or

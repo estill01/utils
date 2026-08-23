@@ -9,6 +9,7 @@ import concurrent.futures
 import hashlib
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -16,29 +17,34 @@ import tempfile
 import tomllib
 import zipfile
 from email.parser import BytesParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MATRIX_PATH = REPOSITORY_ROOT / "tools" / "package_matrix.json"
 TOOLCHAIN_PATH = REPOSITORY_ROOT / "tools" / "toolchain.json"
-FORBIDDEN_DISTRIBUTIONS = {
-    "librsi",
-    "patent-studio",
-    "software-factory",
-    "utils",
-}
 NAME_PATTERN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+MAX_COMMAND_DIAGNOSTIC_CHARACTERS = 8_000
 
 
 def run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        cwd=cwd,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
+    try:
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+    except subprocess.CalledProcessError as exc:
+        output = exc.stdout if isinstance(exc.stdout, str) else ""
+        truncated = len(output) > MAX_COMMAND_DIAGNOSTIC_CHARACTERS
+        detail = output[-MAX_COMMAND_DIAGNOSTIC_CHARACTERS:].rstrip()
+        prefix = "[earlier output truncated]\n" if truncated else ""
+        rendered = f"\n{prefix}{detail}" if detail else ""
+        raise RuntimeError(
+            f"command failed with exit {exc.returncode}: {shlex.join(command)}{rendered}"
+        ) from exc
 
 
 def load_matrix() -> dict[str, object]:
@@ -56,25 +62,60 @@ def requirement_distribution(value: str) -> str:
     return normalize_distribution(match.group(1))
 
 
-def package_records(matrix: dict[str, object]) -> dict[str, dict[str, str]]:
+def package_records(matrix: dict[str, object]) -> dict[str, dict[str, object]]:
     raw = matrix.get("packages")
     if not isinstance(raw, dict):
         raise RuntimeError("package matrix is missing packages")
-    records: dict[str, dict[str, str]] = {}
+    records: dict[str, dict[str, object]] = {}
     for distribution, details in raw.items():
         if not isinstance(distribution, str) or not isinstance(details, dict):
             raise RuntimeError("package matrix contains a malformed record")
         if not all(isinstance(details.get(field), str) for field in ("path", "import", "version")):
             raise RuntimeError(f"package matrix record is incomplete: {distribution}")
-        records[normalize_distribution(distribution)] = {
+        runtime_dependencies = details.get("runtime_dependencies")
+        if not isinstance(runtime_dependencies, list) or not all(
+            isinstance(item, str) for item in runtime_dependencies
+        ):
+            raise RuntimeError(
+                f"package matrix runtime dependency contract is malformed: {distribution}"
+            )
+        normalized = normalize_distribution(distribution)
+        if normalized in records:
+            raise RuntimeError(f"duplicate normalized distribution: {normalized}")
+        records[normalized] = {
             "path": details["path"],
             "import": details["import"],
             "version": details["version"],
+            "runtime_dependencies": tuple(runtime_dependencies),
         }
     return records
 
 
-def declared_runtime_dependencies(package_root: Path) -> tuple[str, ...]:
+def validate_package_paths(
+    packages: dict[str, dict[str, object]],
+    *,
+    repository_root: Path = REPOSITORY_ROOT,
+) -> dict[str, Path]:
+    packages_root = repository_root / "packages"
+    if packages_root.is_symlink() or not packages_root.is_dir():
+        raise RuntimeError("repository packages root must be a real directory")
+    resolved_packages_root = packages_root.resolve()
+    roots: dict[str, Path] = {}
+    for distribution, package in packages.items():
+        relative = Path(str(package["path"]))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise RuntimeError(f"package path escapes packages/: {distribution}: {relative}")
+        candidate = repository_root / relative
+        if candidate.is_symlink() or not candidate.is_dir():
+            raise RuntimeError(f"package root must be a real directory: {distribution}: {relative}")
+        resolved = candidate.resolve()
+        if resolved.parent != resolved_packages_root:
+            raise RuntimeError(f"package path escapes packages/: {distribution}: {relative}")
+        roots[distribution] = resolved
+    return roots
+
+
+def declared_runtime_requirements(package_root: Path) -> tuple[str, ...]:
     document = tomllib.loads((package_root / "pyproject.toml").read_text(encoding="utf-8"))
     project = document.get("project")
     if not isinstance(project, dict):
@@ -84,7 +125,21 @@ def declared_runtime_dependencies(package_root: Path) -> tuple[str, ...]:
         isinstance(item, str) for item in dependencies
     ):
         raise RuntimeError(f"runtime dependencies are malformed: {package_root}")
-    return tuple(sorted(requirement_distribution(item) for item in dependencies))
+    return tuple(dependencies)
+
+
+def audit_requirement_contract(
+    distribution: str,
+    *,
+    expected: tuple[str, ...],
+    observed: tuple[str, ...],
+    source: str,
+) -> None:
+    if observed != expected:
+        raise RuntimeError(
+            f"{source} runtime dependency contract differs for {distribution}: "
+            f"expected={expected}, observed={observed}"
+        )
 
 
 def audit_dependency_edges(
@@ -92,11 +147,6 @@ def audit_dependency_edges(
     dependencies: tuple[str, ...],
     admitted: set[str],
 ) -> None:
-    forbidden = sorted(set(dependencies) & FORBIDDEN_DISTRIBUTIONS)
-    if forbidden:
-        raise RuntimeError(
-            f"reverse/downstream dependency in {distribution}: {', '.join(forbidden)}"
-        )
     unadmitted = sorted(set(dependencies) - admitted)
     if unadmitted:
         raise RuntimeError(
@@ -126,13 +176,24 @@ def validate_acyclic_graph(graph: dict[str, tuple[str, ...]]) -> None:
 
 
 def audit_dependency_graph(
-    packages: dict[str, dict[str, str]],
+    packages: dict[str, dict[str, object]],
+    package_roots: dict[str, Path],
 ) -> dict[str, tuple[str, ...]]:
     admitted = set(packages)
     graph: dict[str, tuple[str, ...]] = {}
     for distribution, package in packages.items():
-        package_root = (REPOSITORY_ROOT / package["path"]).resolve()
-        dependencies = declared_runtime_dependencies(package_root)
+        allowed_requirements = package["runtime_dependencies"]
+        assert isinstance(allowed_requirements, tuple)
+        source_requirements = declared_runtime_requirements(package_roots[distribution])
+        audit_requirement_contract(
+            distribution,
+            expected=allowed_requirements,
+            observed=source_requirements,
+            source="source",
+        )
+        dependencies = tuple(
+            requirement_distribution(requirement) for requirement in allowed_requirements
+        )
         audit_dependency_edges(distribution, dependencies, admitted)
         graph[distribution] = dependencies
     validate_acyclic_graph(graph)
@@ -187,10 +248,8 @@ def wheel_metadata(archive: zipfile.ZipFile) -> tuple[str, str, str, tuple[str, 
     requires_python = message.get("Requires-Python")
     if not all(isinstance(value, str) and value for value in (name, version, requires_python)):
         raise RuntimeError("wheel METADATA is missing Name, Version, or Requires-Python")
-    dependencies = tuple(
-        sorted(requirement_distribution(value) for value in message.get_all("Requires-Dist", []))
-    )
-    return normalize_distribution(name), version, requires_python, dependencies
+    requirements = tuple(message.get_all("Requires-Dist", []))
+    return normalize_distribution(name), version, requires_python, requirements
 
 
 def imported_roots_from_wheel(archive: zipfile.ZipFile) -> set[str]:
@@ -247,6 +306,86 @@ def wheel_content_record(archive: zipfile.ZipFile) -> tuple[str, int, int]:
     return hashlib.sha256(payload).hexdigest(), len(rows), total
 
 
+def audit_forced_package_data(
+    package_root: Path,
+    archive: zipfile.ZipFile,
+    *,
+    import_root: str,
+) -> tuple[str, int]:
+    document = tomllib.loads((package_root / "pyproject.toml").read_text(encoding="utf-8"))
+    try:
+        force_include = document["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    except (KeyError, TypeError) as exc:
+        raise RuntimeError(f"wheel has no declared retained package data: {package_root}") from exc
+    if not isinstance(force_include, dict) or not force_include:
+        raise RuntimeError(f"wheel has no declared retained package data: {package_root}")
+
+    archive_members = {name for name in archive.namelist() if name and not name.endswith("/")}
+    retained_rows: list[dict[str, str | int]] = []
+    retained_destinations: set[str] = set()
+    resolved_root = package_root.resolve()
+    for source_value, destination_value in sorted(force_include.items()):
+        if not isinstance(source_value, str) or not isinstance(destination_value, str):
+            raise RuntimeError("wheel force-include mapping must contain text paths")
+        source_relative = Path(source_value)
+        if source_relative.is_absolute():
+            raise RuntimeError(f"wheel package-data source must be relative: {source_value}")
+        source = (package_root / source_relative).resolve()
+        if not source.is_relative_to(resolved_root):
+            raise RuntimeError(f"wheel package-data source escapes package root: {source_value}")
+        destination_path = PurePosixPath(destination_value)
+        if (
+            destination_path.is_absolute()
+            or ".." in destination_path.parts
+            or not destination_path.parts
+            or destination_path.parts[0] != import_root
+            or "\\" in destination_value
+        ):
+            raise RuntimeError(
+                f"wheel package-data destination escapes import root: {destination_value}"
+            )
+        destination = destination_path.as_posix().rstrip("/")
+        if source.is_file():
+            expected = {destination: source}
+            actual = {destination} if destination in archive_members else set()
+        elif source.is_dir():
+            expected = {
+                f"{destination}/{path.relative_to(source).as_posix()}": path
+                for path in sorted(item for item in source.rglob("*") if item.is_file())
+            }
+            prefix = f"{destination}/"
+            actual = {name for name in archive_members if name.startswith(prefix)}
+        else:
+            raise RuntimeError(f"wheel package-data source is missing: {source_value}")
+        if not expected:
+            raise RuntimeError(f"wheel package-data source is empty: {source_value}")
+        if set(expected) != actual:
+            missing = sorted(set(expected) - actual)
+            extra = sorted(actual - set(expected))
+            raise RuntimeError(
+                f"wheel package-data members differ for {source_value}: "
+                f"missing={missing}, extra={extra}"
+            )
+        overlap = retained_destinations & set(expected)
+        if overlap:
+            raise RuntimeError(f"wheel package-data destinations overlap: {sorted(overlap)}")
+        retained_destinations.update(expected)
+        for member, source_path in sorted(expected.items()):
+            source_data = source_path.read_bytes()
+            wheel_data = archive.read(member)
+            if source_data != wheel_data:
+                raise RuntimeError(f"wheel package-data bytes differ: {member}")
+            retained_rows.append(
+                {
+                    "path": member,
+                    "sha256": hashlib.sha256(wheel_data).hexdigest(),
+                    "size": len(wheel_data),
+                }
+            )
+    payload = json.dumps(retained_rows, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    return hashlib.sha256(payload).hexdigest(), len(retained_rows)
+
+
 def require_test_contract(tests_root: Path) -> list[Path]:
     if not tests_root.is_dir():
         raise RuntimeError(f"package-local test contract is missing: {tests_root}")
@@ -265,19 +404,22 @@ def executed_test_count(output: str) -> int:
 
 def check_package(
     distribution: str,
-    package: dict[str, str],
+    package: dict[str, object],
     *,
-    packages: dict[str, dict[str, str]],
+    package_root: Path,
+    packages: dict[str, dict[str, object]],
     dependency_graph: dict[str, tuple[str, ...]],
     python_requires: str,
     python_spec: str,
     uv: str,
     tests: bool,
 ) -> dict[str, object]:
-    package_root = (REPOSITORY_ROOT / package["path"]).resolve()
-    if package_root.parent != (REPOSITORY_ROOT / "packages").resolve():
-        raise RuntimeError(f"package path escapes packages/: {package_root}")
-
+    import_root = package["import"]
+    version_contract = package["version"]
+    expected_requirements = package["runtime_dependencies"]
+    assert isinstance(import_root, str)
+    assert isinstance(version_contract, str)
+    assert isinstance(expected_requirements, tuple)
     with tempfile.TemporaryDirectory(prefix=f"utils-{distribution}-") as temporary:
         temporary_root = Path(temporary)
         snapshot = temporary_root / "package"
@@ -304,19 +446,19 @@ def check_package(
         wheel = wheels[0]
         with zipfile.ZipFile(wheel) as archive:
             members = archive.namelist()
-            import_prefix = f"{package['import']}/"
+            import_prefix = f"{import_root}/"
             if not any(member.startswith(import_prefix) for member in members):
                 raise RuntimeError(f"wheel is missing import root {import_prefix}")
             if any(member.startswith("utils/") for member in members):
                 raise RuntimeError("wheel exposes prohibited top-level utils import")
-            name, version, requires_python, metadata_dependencies = wheel_metadata(archive)
+            name, version, requires_python, metadata_requirements = wheel_metadata(archive)
             if name != distribution:
                 raise RuntimeError(
                     f"wheel distribution mismatch: expected {distribution}, observed {name}"
                 )
-            if version != package["version"]:
+            if version != version_contract:
                 raise RuntimeError(
-                    f"wheel version mismatch for {distribution}: expected {package['version']}, "
+                    f"wheel version mismatch for {distribution}: expected {version_contract}, "
                     f"observed {version}"
                 )
             if requires_python != python_requires:
@@ -324,20 +466,26 @@ def check_package(
                     f"wheel Python baseline mismatch for {distribution}: "
                     f"expected {python_requires}, observed {requires_python}"
                 )
-            source_dependencies = dependency_graph[distribution]
-            if metadata_dependencies != source_dependencies:
-                raise RuntimeError(
-                    f"wheel dependency metadata differs for {distribution}: "
-                    f"source={source_dependencies}, wheel={metadata_dependencies}"
-                )
+            audit_requirement_contract(
+                distribution,
+                expected=expected_requirements,
+                observed=metadata_requirements,
+                source="wheel",
+            )
+            dependency_names = dependency_graph[distribution]
             declared_import_roots = {
-                packages[dependency]["import"] for dependency in metadata_dependencies
+                str(packages[dependency]["import"]) for dependency in dependency_names
             }
             external_imports = audit_wheel_imports(
                 distribution,
                 imported_roots_from_wheel(archive),
-                import_root=package["import"],
+                import_root=import_root,
                 declared_import_roots=declared_import_roots,
+            )
+            retained_root, retained_count = audit_forced_package_data(
+                snapshot,
+                archive,
+                import_root=import_root,
             )
             content_root, member_count, uncompressed_bytes = wheel_content_record(archive)
 
@@ -351,14 +499,14 @@ def check_package(
             cwd=REPOSITORY_ROOT,
         )
         probe = (
-            f"import {package['import']} as package; "
-            f"assert package.__version__ == {package['version']!r}; "
+            f"import {import_root} as package; "
+            f"assert package.__version__ == {version_contract!r}; "
             "print(package.__version__)"
         )
         result = run([str(interpreter), "-I", "-c", probe], cwd=temporary_root)
         record: dict[str, object] = {
             "distribution": distribution,
-            "import": package["import"],
+            "import": import_root,
             "version": result.stdout.strip(),
             "wheel": wheel.name,
             "wheel_sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
@@ -366,9 +514,11 @@ def check_package(
             "wheel_members": member_count,
             "wheel_uncompressed_bytes": uncompressed_bytes,
             "python": python_spec,
-            "declared_dependencies": list(metadata_dependencies),
+            "declared_dependencies": list(metadata_requirements),
             "observed_external_imports": list(external_imports),
             "dependency_audit": "passed",
+            "retained_package_data_files": retained_count,
+            "retained_package_data_root_sha256": retained_root,
             "test_source": "isolated-package-snapshot",
         }
         tests_root = snapshot / "tests"
@@ -408,7 +558,8 @@ def main() -> int:
     uv = require_uv()
     matrix = load_matrix()
     packages = package_records(matrix)
-    dependency_graph = audit_dependency_graph(packages)
+    package_roots = validate_package_paths(packages)
+    dependency_graph = audit_dependency_graph(packages, package_roots)
     selected = sorted(packages) if args.all else [args.package]
     unknown = [name for name in selected if name not in packages]
     if unknown:
@@ -423,6 +574,7 @@ def main() -> int:
                 check_package,
                 name,
                 packages[name],
+                package_root=package_roots[name],
                 packages=packages,
                 dependency_graph=dependency_graph,
                 python_requires=python_requires,
