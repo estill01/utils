@@ -9,6 +9,11 @@ authorization, acceptance, product identity, or availability decisions.
 Compatibility means only that an observed manifest contains the exact required
 versions and roots; unrelated observed records are allowed.
 
+Schema version 1 bounds UTF-8 documents to 524,288 bytes, with at most 32
+protocols, 32 features per protocol, 64 capabilities, and 64 dependencies.
+The retained schema records the few cross-record invariants that JSON Schema
+cannot express portably and the strict parser enforces them fail-closed.
+
 ```python executable
 from runtime_manifest import canonical_json, compare_manifests, parse_manifest
 from runtime_manifest.testing import neutral_expected, neutral_observed

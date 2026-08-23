@@ -74,5 +74,14 @@
     "DEPENDENCY_MISSING": "dependency-missing",
     "DEPENDENCY_VERSION": "dependency-version",
     "DEPENDENCY_ROOT": "dependency-root"
+  },
+  "resource_limits": {
+    "document_utf8_bytes": 524288,
+    "protocols": 32,
+    "features_per_protocol": 32,
+    "capabilities": 64,
+    "dependencies": 64,
+    "unavailable_subject_characters": 257,
+    "unavailable_reasons": 1283
   }
 }

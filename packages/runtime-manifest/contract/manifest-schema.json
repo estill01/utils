@@ -20,23 +20,37 @@
     },
     "protocols": {
       "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/protocol"
       }
     },
     "capabilities": {
       "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/capability"
       }
     },
     "dependencies": {
       "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/component"
       }
     }
   },
+  "x-document-max-utf8-bytes": 524288,
+  "x-runtime-semantic-invariants": [
+    "protocol names are unique even when the remaining record fields differ",
+    "capability names are unique even when versions differ",
+    "dependency names are unique even when versions or roots differ",
+    "a component cannot depend on its own component name",
+    "all text contains Unicode scalar values only"
+  ],
   "$defs": {
     "name": {
       "type": "string",
@@ -94,6 +108,7 @@
         },
         "features": {
           "type": "array",
+          "maxItems": 32,
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/name"

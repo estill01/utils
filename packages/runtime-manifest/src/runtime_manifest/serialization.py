@@ -15,6 +15,8 @@ from .model import (
 )
 from .model import Protocol as ProtocolRecord
 
+MAX_DOCUMENT_UTF8_BYTES = 524_288
+
 
 def _root_text(root: Sha256Root) -> str:
     return f"sha256:{root.value}"
@@ -121,11 +123,21 @@ def parse_manifest(document: str | bytes) -> RuntimeManifest:
     """Decode one exact schema-v1 manifest and reject unknown fields."""
 
     if type(document) is bytes:
+        if len(document) > MAX_DOCUMENT_UTF8_BYTES:
+            raise ManifestDecodeError("manifest exceeds the UTF-8 byte limit")
         try:
             text = document.decode("utf-8")
         except UnicodeDecodeError as error:
             raise ManifestDecodeError("manifest bytes must be UTF-8") from error
     elif type(document) is str:
+        try:
+            encoded = document.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise ManifestDecodeError(
+                "manifest text must contain only Unicode scalar values"
+            ) from error
+        if len(encoded) > MAX_DOCUMENT_UTF8_BYTES:
+            raise ManifestDecodeError("manifest exceeds the UTF-8 byte limit")
         text = document
     else:
         raise TypeError("document must be str or bytes")
@@ -137,7 +149,7 @@ def parse_manifest(document: str | bytes) -> RuntimeManifest:
         )
     except ManifestDecodeError:
         raise
-    except (json.JSONDecodeError, TypeError) as error:
+    except (json.JSONDecodeError, RecursionError, TypeError, ValueError) as error:
         raise ManifestDecodeError("manifest is not strict JSON") from error
     root = _exact_object(
         decoded,
