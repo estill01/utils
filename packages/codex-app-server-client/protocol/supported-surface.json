@@ -1,5 +1,9 @@
 {
   "schema_version": 1,
+  "selected_surface_root": {
+    "algorithm": "sha256 of compact sorted-key UTF-8 JSON plus terminal LF after removing selected_surface_root",
+    "sha256": "9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f"
+  },
   "protocol": {
     "codex_version": "0.147.0",
     "family": "app-server",
@@ -42,7 +46,6 @@
       "error",
       "warning",
       "deprecationNotice",
-      "configWarning",
       "thread/started",
       "thread/status/changed",
       "thread/closed",
@@ -82,5 +85,44 @@
     "shell-and-command-execution-requests",
     "deprecated-callbacks",
     "consumer-and-product-types"
-  ]
+  ],
+  "necessity": {
+    "requests": {
+      "thread/start": "create the one server-owned thread required for a new typed session",
+      "thread/resume": "reattach to an existing thread after host or transport replacement",
+      "thread/read": "recover a current typed thread projection after reconnect or missed events",
+      "thread/list": "perform bounded typed discovery when the caller does not retain a thread identifier",
+      "turn/start": "submit work within an initialized thread without raw RPC",
+      "turn/steer": "add caller input to an active turn through the official typed operation",
+      "turn/interrupt": "request remote turn termination; local call cancellation is not equivalent",
+      "review/start": "start the official domain-neutral review operation without a raw method escape"
+    },
+    "notifications": {
+      "error": "surface structured terminal or nonterminal server failure",
+      "warning": "surface a nonfatal server warning without exposing content logs",
+      "deprecationNotice": "surface protocol currentness evidence needed for compatibility review",
+      "thread/started": "attribute the server-created thread projection",
+      "thread/status/changed": "track the current lifecycle state of the active thread",
+      "thread/closed": "terminate thread-scoped pending work deterministically",
+      "turn/started": "attribute subsequent items and deltas to the active turn",
+      "turn/completed": "provide the authoritative terminal result for a turn",
+      "turn/diff/updated": "provide the typed cumulative file-change projection",
+      "turn/plan/updated": "provide the typed cumulative plan projection",
+      "item/started": "establish an item before item-scoped deltas arrive",
+      "item/completed": "close item-scoped streaming and expose its final projection",
+      "item/agentMessage/delta": "stream the primary typed assistant-message output",
+      "item/plan/delta": "stream plan-item text before the cumulative plan update",
+      "item/reasoning/summaryTextDelta": "stream the official summary channel without raw response events"
+    },
+    "callbacks": {
+      "item/commandExecution/requestApproval": "return caller policy for a command request without package-selected approval",
+      "item/fileChange/requestApproval": "return caller policy for a file-change request without package-selected approval",
+      "item/tool/requestUserInput": "return caller-supplied answers to the official typed question callback"
+    },
+    "transports": {
+      "owned-stdio": "own one local app-server process with deterministic cleanup",
+      "unix-socket": "attach to an explicitly addressed local app-server connection without process ownership",
+      "injected-byte-channel": "test and embed the same RPC/session behavior without hidden transport creation"
+    }
+  }
 }

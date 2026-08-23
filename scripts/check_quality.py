@@ -36,7 +36,33 @@ def main() -> int:
         )
 
     run([sys.executable, "scripts/check_repo.py"])
+    run(
+        [
+            sys.executable,
+            "scripts/schema_tree.py",
+            "--schema-dir",
+            "packages/codex-app-server-client/protocol/upstream/0.147.0",
+            "--manifest",
+            "packages/codex-app-server-client/protocol/upstream-manifest.json",
+            "--codex-version",
+            "0.147.0",
+            "--source-tag",
+            "rust-v0.147.0",
+            "--source-tag-object",
+            "3ed6f04f6bf8b7c46299d1cb1ff99c74ce21a51d",
+            "--source-commit",
+            "be6e8eac029b183056b7e4402879f15d2c85f61b",
+            "--wrapper-sha256",
+            "134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477",
+            "--native-target",
+            "aarch64-apple-darwin",
+            "--native-sha256",
+            "19c4f144c5226a9f17c58e6f0fa854843b0f77a6eb420f40e2745a12f10f5d37",
+            "--check",
+        ]
+    )
     run([sys.executable, "scripts/check_protocol_contract.py"])
+    run([sys.executable, "scripts/test_protocol_contract.py"])
     ruff = f"ruff=={TOOLCHAIN['ruff']}"
     run([uv, "tool", "run", "--from", ruff, "ruff", "check", "."])
     run([uv, "tool", "run", "--from", ruff, "ruff", "format", "--check", "."])

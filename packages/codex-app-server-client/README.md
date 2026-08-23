@@ -10,6 +10,7 @@ The frozen protocol contract is in `docs/protocol-contract.md`, its Block
 ownership proof is in `docs/proof-map.md`, and the complete non-experimental
 official schema snapshot and manifest are under `protocol/`. Those artifacts
 do not expose every upstream method: `protocol/supported-surface.json` is the
-closed supported feature set.
+closed supported feature set and `protocol/public-api.json` is the exact future
+root-export, signature, schema-model, capability, and error contract.
 
 This distribution is currently unlicensed and unpublished.

@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "selected_surface_root_sha256": "9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f",
+  "root_module": "codex_app_server_client",
+  "compatibility_functions": {
+    "resolve_codex_binary": "(executable: str | os.PathLike[str] | None = None) -> BinaryIdentity",
+    "inspect_compatibility": "(binary: BinaryIdentity, target: ProtocolTarget = PINNED_PROTOCOL, *, schema_dir: str | os.PathLike[str] | None = None) -> CompatibilityResult"
+  },
+  "lifecycle": {
+    "AppServerClient.connect": "async (transport: ClientTransport, compatibility: CompatibilityResult, *, limits: ClientLimits = ClientLimits()) -> AppServerClient",
+    "AppServerClient.initialize": "async (identity: ClientIdentity) -> AppServerSession",
+    "AppServerClient.replace": "async (transport: ClientTransport, *, backoff: BackoffHook | None = None) -> AppServerSession",
+    "AppServerClient.close": "async () -> None",
+    "AppServerSession.close": "async () -> None",
+    "AppServerSession.generation": "property -> int",
+    "AppServerSession.capabilities": "property -> FeatureSet",
+    "AppServerSession.events": "async () -> AsyncIterator[ServerEvent]",
+    "AppServerSession.callbacks": "async () -> AsyncIterator[ServerCallback]"
+  },
+  "session_operations": {
+    "start_thread": {
+      "protocol_method": "thread/start",
+      "signature": "async (params: ThreadStartParams, *, timeout: float | None = None) -> ThreadStartResponse"
+    },
+    "resume_thread": {
+      "protocol_method": "thread/resume",
+      "signature": "async (params: ThreadResumeParams, *, timeout: float | None = None) -> ThreadResumeResponse"
+    },
+    "read_thread": {
+      "protocol_method": "thread/read",
+      "signature": "async (params: ThreadReadParams, *, timeout: float | None = None) -> ThreadReadResponse"
+    },
+    "list_threads": {
+      "protocol_method": "thread/list",
+      "signature": "async (params: ThreadListParams, *, timeout: float | None = None) -> ThreadListResponse"
+    },
+    "start_turn": {
+      "protocol_method": "turn/start",
+      "signature": "async (params: TurnStartParams, *, timeout: float | None = None) -> TurnStartResponse"
+    },
+    "steer_turn": {
+      "protocol_method": "turn/steer",
+      "signature": "async (params: TurnSteerParams, *, timeout: float | None = None) -> TurnSteerResponse"
+    },
+    "interrupt_turn": {
+      "protocol_method": "turn/interrupt",
+      "signature": "async (params: TurnInterruptParams, *, timeout: float | None = None) -> TurnInterruptResponse"
+    },
+    "start_review": {
+      "protocol_method": "review/start",
+      "signature": "async (params: ReviewStartParams, *, timeout: float | None = None) -> ReviewStartResponse"
+    }
+  },
+  "schema_models": {
+    "ClientIdentity": "codex_app_server_protocol.v2.schemas.json#/definitions/ClientInfo",
+    "ThreadStartParams": "v2/ThreadStartParams.json#",
+    "ThreadStartResponse": "v2/ThreadStartResponse.json#",
+    "ThreadResumeParams": "v2/ThreadResumeParams.json#",
+    "ThreadResumeResponse": "v2/ThreadResumeResponse.json#",
+    "ThreadReadParams": "v2/ThreadReadParams.json#",
+    "ThreadReadResponse": "v2/ThreadReadResponse.json#",
+    "ThreadListParams": "v2/ThreadListParams.json#",
+    "ThreadListResponse": "v2/ThreadListResponse.json#",
+    "TurnStartParams": "v2/TurnStartParams.json#",
+    "TurnStartResponse": "v2/TurnStartResponse.json#",
+    "TurnSteerParams": "v2/TurnSteerParams.json#",
+    "TurnSteerResponse": "v2/TurnSteerResponse.json#",
+    "TurnInterruptParams": "v2/TurnInterruptParams.json#",
+    "TurnInterruptResponse": "v2/TurnInterruptResponse.json#",
+    "ReviewStartParams": "v2/ReviewStartParams.json#",
+    "ReviewStartResponse": "v2/ReviewStartResponse.json#"
+  },
+  "notification_models": {
+    "error": "ErrorNotification",
+    "warning": "WarningNotification",
+    "deprecationNotice": "DeprecationNoticeNotification",
+    "thread/started": "ThreadStartedNotification",
+    "thread/status/changed": "ThreadStatusChangedNotification",
+    "thread/closed": "ThreadClosedNotification",
+    "turn/started": "TurnStartedNotification",
+    "turn/completed": "TurnCompletedNotification",
+    "turn/diff/updated": "TurnDiffUpdatedNotification",
+    "turn/plan/updated": "TurnPlanUpdatedNotification",
+    "item/started": "ItemStartedNotification",
+    "item/completed": "ItemCompletedNotification",
+    "item/agentMessage/delta": "AgentMessageDeltaNotification",
+    "item/plan/delta": "PlanDeltaNotification",
+    "item/reasoning/summaryTextDelta": "ReasoningSummaryTextDeltaNotification"
+  },
+  "callback_models": {
+    "item/commandExecution/requestApproval": {
+      "callback": "CommandExecutionApprovalCallback",
+      "params": "CommandExecutionRequestApprovalParams",
+      "response": "CommandExecutionRequestApprovalResponse",
+      "respond_signature": "async (response: CommandExecutionRequestApprovalResponse) -> None"
+    },
+    "item/fileChange/requestApproval": {
+      "callback": "FileChangeApprovalCallback",
+      "params": "FileChangeRequestApprovalParams",
+      "response": "FileChangeRequestApprovalResponse",
+      "respond_signature": "async (response: FileChangeRequestApprovalResponse) -> None"
+    },
+    "item/tool/requestUserInput": {
+      "callback": "UserInputCallback",
+      "params": "ToolRequestUserInputParams",
+      "response": "ToolRequestUserInputResponse",
+      "respond_signature": "async (response: ToolRequestUserInputResponse) -> None"
+    }
+  },
+  "capability_enums": {
+    "RequestCapability": {
+      "THREAD_START": "thread/start",
+      "THREAD_RESUME": "thread/resume",
+      "THREAD_READ": "thread/read",
+      "THREAD_LIST": "thread/list",
+      "TURN_START": "turn/start",
+      "TURN_STEER": "turn/steer",
+      "TURN_INTERRUPT": "turn/interrupt",
+      "REVIEW_START": "review/start"
+    },
+    "NotificationCapability": {
+      "ERROR": "error",
+      "WARNING": "warning",
+      "DEPRECATION_NOTICE": "deprecationNotice",
+      "THREAD_STARTED": "thread/started",
+      "THREAD_STATUS_CHANGED": "thread/status/changed",
+      "THREAD_CLOSED": "thread/closed",
+      "TURN_STARTED": "turn/started",
+      "TURN_COMPLETED": "turn/completed",
+      "TURN_DIFF_UPDATED": "turn/diff/updated",
+      "TURN_PLAN_UPDATED": "turn/plan/updated",
+      "ITEM_STARTED": "item/started",
+      "ITEM_COMPLETED": "item/completed",
+      "AGENT_MESSAGE_DELTA": "item/agentMessage/delta",
+      "PLAN_DELTA": "item/plan/delta",
+      "REASONING_SUMMARY_TEXT_DELTA": "item/reasoning/summaryTextDelta"
+    },
+    "CallbackCapability": {
+      "COMMAND_EXECUTION_APPROVAL": "item/commandExecution/requestApproval",
+      "FILE_CHANGE_APPROVAL": "item/fileChange/requestApproval",
+      "USER_INPUT": "item/tool/requestUserInput"
+    },
+    "TransportCapability": {
+      "OWNED_STDIO": "owned-stdio",
+      "UNIX_SOCKET": "unix-socket",
+      "INJECTED_BYTE_CHANNEL": "injected-byte-channel"
+    }
+  },
+  "support_query": "FeatureSet.supports(capability: RequestCapability | NotificationCapability | CallbackCapability | TransportCapability) -> bool",
+  "transport_api": {
+    "ByteChannel.read_line": "async (*, max_bytes: int) -> bytes",
+    "ByteChannel.write_line": "async (data: bytes) -> None",
+    "ByteChannel.close": "async () -> None",
+    "StdioTransport": "(binary: BinaryIdentity)",
+    "UnixSocketTransport": "(socket_path: os.PathLike[str] | str)",
+    "InjectedTransport": "(channel: ByteChannel, *, ownership: TransportOwnership)",
+    "TransportOwnership": {
+      "OWNED": "owned",
+      "BORROWED": "borrowed"
+    }
+  },
+  "configuration_models": {
+    "ProtocolTarget": "(codex_version: str, source_commit: str, schema_tree_root_sha256: str, selected_surface_root_sha256: str)",
+    "BinaryIdentity": "(path: pathlib.Path, reported_version: str, sha256: str)",
+    "CompatibilityResult": "(target: ProtocolTarget, binary: BinaryIdentity, semantic_schema_root_sha256: str, features: FeatureSet)",
+    "ClientIdentity": "(name: str, version: str, title: str | None = None)",
+    "ClientLimits": "(max_message_bytes: int = 8388608, max_pending_calls: int = 256, max_events: int = 1024, max_callbacks: int = 64, max_backoff_seconds: float = 30.0)",
+    "RestartContext": "(failed_generation: int, replacement_generation: int, cause: AppServerClientError)",
+    "BackoffHook": "Callable[[RestartContext], float]"
+  },
+  "errors": {
+    "base": "AppServerClientError",
+    "subclasses": [
+      "CodexBinaryNotFoundError",
+      "AmbiguousCodexBinaryError",
+      "CodexVersionError",
+      "SchemaMissingError",
+      "SchemaMalformedError",
+      "SchemaRootMismatchError",
+      "UnsupportedFeatureError",
+      "JsonRpcFramingError",
+      "JsonRpcValidationError",
+      "RequestLimitError",
+      "MessageTooLargeError",
+      "CorrelationError",
+      "RemoteRpcError",
+      "TransportStartError",
+      "TransportClosedError",
+      "TransportOwnershipError",
+      "TransportCleanupError",
+      "InitializationError",
+      "SessionStateError",
+      "CallTimeoutError",
+      "CallCancelledError",
+      "CallbackCapacityError",
+      "DisconnectedError",
+      "StaleGenerationError",
+      "RestartError"
+    ]
+  },
+  "root_exports": [
+    "__version__",
+    "PINNED_PROTOCOL",
+    "resolve_codex_binary",
+    "inspect_compatibility",
+    "ProtocolTarget",
+    "BinaryIdentity",
+    "CompatibilityResult",
+    "FeatureSet",
+    "ClientIdentity",
+    "ClientLimits",
+    "RestartContext",
+    "BackoffHook",
+    "RequestCapability",
+    "NotificationCapability",
+    "CallbackCapability",
+    "TransportCapability",
+    "ByteChannel",
+    "ClientTransport",
+    "StdioTransport",
+    "UnixSocketTransport",
+    "InjectedTransport",
+    "TransportOwnership",
+    "AppServerClient",
+    "AppServerSession",
+    "ThreadStartParams",
+    "ThreadStartResponse",
+    "ThreadResumeParams",
+    "ThreadResumeResponse",
+    "ThreadReadParams",
+    "ThreadReadResponse",
+    "ThreadListParams",
+    "ThreadListResponse",
+    "TurnStartParams",
+    "TurnStartResponse",
+    "TurnSteerParams",
+    "TurnSteerResponse",
+    "TurnInterruptParams",
+    "TurnInterruptResponse",
+    "ReviewStartParams",
+    "ReviewStartResponse",
+    "ErrorNotification",
+    "WarningNotification",
+    "DeprecationNoticeNotification",
+    "ThreadStartedNotification",
+    "ThreadStatusChangedNotification",
+    "ThreadClosedNotification",
+    "TurnStartedNotification",
+    "TurnCompletedNotification",
+    "TurnDiffUpdatedNotification",
+    "TurnPlanUpdatedNotification",
+    "ItemStartedNotification",
+    "ItemCompletedNotification",
+    "AgentMessageDeltaNotification",
+    "PlanDeltaNotification",
+    "ReasoningSummaryTextDeltaNotification",
+    "ServerEvent",
+    "CommandExecutionApprovalCallback",
+    "CommandExecutionRequestApprovalParams",
+    "CommandExecutionRequestApprovalResponse",
+    "FileChangeApprovalCallback",
+    "FileChangeRequestApprovalParams",
+    "FileChangeRequestApprovalResponse",
+    "UserInputCallback",
+    "ToolRequestUserInputParams",
+    "ToolRequestUserInputResponse",
+    "ServerCallback",
+    "AppServerClientError",
+    "CodexBinaryNotFoundError",
+    "AmbiguousCodexBinaryError",
+    "CodexVersionError",
+    "SchemaMissingError",
+    "SchemaMalformedError",
+    "SchemaRootMismatchError",
+    "UnsupportedFeatureError",
+    "JsonRpcFramingError",
+    "JsonRpcValidationError",
+    "RequestLimitError",
+    "MessageTooLargeError",
+    "CorrelationError",
+    "RemoteRpcError",
+    "TransportStartError",
+    "TransportClosedError",
+    "TransportOwnershipError",
+    "TransportCleanupError",
+    "InitializationError",
+    "SessionStateError",
+    "CallTimeoutError",
+    "CallCancelledError",
+    "CallbackCapacityError",
+    "DisconnectedError",
+    "StaleGenerationError",
+    "RestartError"
+  ],
+  "model_generation_rule": "For each selected top-level schema, generate immutable typed classes for every transitively reachable definition using its exact schema title or definition key; fail on same-name unequal schemas; required properties have no default, optional properties default to None, arrays become tuples, schema unions become closed Python unions, and additional properties are accepted only where the official schema explicitly permits them.",
+  "root_exports_rule": "Export exactly root_exports and nothing else; export no raw request, raw notification, JSON value, method-string, or payload-dictionary API. Transitively generated nested schema models remain in codex_app_server_client.models."
+}
