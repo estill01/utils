@@ -270,6 +270,7 @@ class _RpcEngine:
         await self.start()
         request_id, future = self._register(capability)
         request = {"id": request_id, "method": capability.value, "params": params}
+        write_failed = False
         try:
             line = self._encode_request(request, request_id=request_id)
             async with self._write_lock:
@@ -280,13 +281,16 @@ class _RpcEngine:
         except (JsonRpcValidationError, MessageTooLargeError):
             self._discard_unsent(request_id, future)
             raise
-        except Exception as error:
+        except Exception:
+            write_failed = True
+        if write_failed:
+            self._discard_unsent(request_id, future)
             failure = JsonRpcFramingError(f"byte-channel write failed for request {request_id}")
             await self._fail(failure)
-            raise failure from error
+            raise failure
         try:
             if timeout is None:
-                return await future
+                return await asyncio.shield(future)
             return await asyncio.wait_for(asyncio.shield(future), timeout)
         except TimeoutError:
             self._abandon(request_id, future)
@@ -345,10 +349,10 @@ class _RpcEngine:
                 ensure_ascii=False,
                 separators=(",", ":"),
             ).encode("utf-8")
-        except (TypeError, ValueError, UnicodeEncodeError) as error:
-            raise JsonRpcValidationError(
-                f"request {request_id} contains a non-JSON value"
-            ) from error
+        except (TypeError, ValueError, UnicodeEncodeError):
+            payload = None
+        if payload is None:
+            raise JsonRpcValidationError(f"request {request_id} contains a non-JSON value")
         line = payload + b"\n"
         if len(line) > self._limits.max_message_bytes:
             raise MessageTooLargeError(
@@ -360,7 +364,13 @@ class _RpcEngine:
     async def _read_responses(self) -> None:
         try:
             while self._failure is None:
-                line = await self._channel.read_line(max_bytes=self._limits.max_message_bytes)
+                try:
+                    line = await self._channel.read_line(max_bytes=self._limits.max_message_bytes)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    await self._fail(JsonRpcFramingError("byte-channel read failed"))
+                    return
                 self._accept_response(line)
         except asyncio.CancelledError:
             raise
@@ -419,8 +429,11 @@ class _RpcEngine:
                 object_pairs_hook=_unique_object,
                 parse_constant=_reject_constant,
             )
-        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
-            raise JsonRpcFramingError("inbound line is not strict JSON") from error
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            value = None
+        if value is None:
+            raise JsonRpcFramingError("inbound line is not strict JSON")
+        return value
 
     def _discard_unsent(self, request_id: int, future: asyncio.Future[Any]) -> None:
         pending = self._pending.get(request_id)

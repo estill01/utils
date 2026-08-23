@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import inspect
 import json
 import unittest
@@ -34,6 +35,7 @@ class DeterministicPeer:
         self.outgoing: asyncio.Queue[bytes] = asyncio.Queue()
         self.writes: list[bytes] = []
         self.closed = False
+        self.write_error: BaseException | None = None
 
     async def read_line(self, *, max_bytes: int) -> bytes:
         item = await self.incoming.get()
@@ -42,6 +44,9 @@ class DeterministicPeer:
         return item
 
     async def write_line(self, data: bytes) -> None:
+        if self.write_error is not None:
+            error, self.write_error = self.write_error, None
+            raise error
         if self.closed:
             raise EOFError("peer is closed")
         self.writes.append(data)
@@ -173,6 +178,40 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
         self.assertIsNone(engine.failure)
 
+    async def test_ready_success_response_racing_cancellation_keeps_engine_healthy(self) -> None:
+        engine, peer = self.engine()
+        call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
+        request = await peer.request()
+        peer.incoming.put_nowait(
+            json.dumps({"id": request["id"], "result": {"ready": True}}).encode() + b"\n"
+        )
+        call.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await call
+        await asyncio.sleep(0)
+        self.assertIsNone(engine.failure)
+        self.assertEqual(engine.pending_count, 0)
+
+    async def test_ready_remote_error_racing_cancellation_keeps_engine_healthy(self) -> None:
+        engine, peer = self.engine()
+        call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
+        request = await peer.request()
+        peer.incoming.put_nowait(
+            json.dumps(
+                {
+                    "id": request["id"],
+                    "error": {"code": -32001, "message": "private-response-content"},
+                }
+            ).encode()
+            + b"\n"
+        )
+        call.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await call
+        await asyncio.sleep(0)
+        self.assertIsNone(engine.failure)
+        self.assertEqual(engine.pending_count, 0)
+
     async def test_peer_closure_fails_every_pending_call_without_leak(self) -> None:
         engine, peer = self.engine()
         call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
@@ -183,6 +222,15 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
         await engine.wait_closed()
         self.assertEqual(engine.pending_count, 0)
         self.assertTrue(peer.closed)
+
+    async def test_read_failure_does_not_retain_channel_content(self) -> None:
+        engine, peer = self.engine()
+        call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
+        await peer.request()
+        await peer.fail(RuntimeError("private-read-channel-content"))
+        with self.assertRaises(JsonRpcFramingError) as raised:
+            await call
+        self.assert_exception_graph_excludes(raised.exception, "private-read-channel-content")
 
     async def test_unmatched_id_is_a_fatal_correlation_error(self) -> None:
         engine, peer = self.engine()
@@ -243,6 +291,46 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
                     await call
                 self.assertEqual(engine.pending_count, 0)
 
+    async def test_framing_failure_does_not_retain_inbound_content(self) -> None:
+        engine, peer = self.engine()
+        call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
+        await peer.request()
+        await peer.raw(b'{"private-response-content"\n')
+        with self.assertRaises(JsonRpcFramingError) as raised:
+            await call
+        self.assert_exception_graph_excludes(raised.exception, "private-response-content")
+
+    async def test_outbound_validation_does_not_retain_request_content(self) -> None:
+        class PrivateValue:
+            def __repr__(self) -> str:
+                return "private-request-content"
+
+        engine, _ = self.engine()
+        with self.assertRaises(JsonRpcValidationError) as raised:
+            await engine.call(RequestCapability.THREAD_START, {"invalid": PrivateValue()})
+        self.assert_exception_graph_excludes(raised.exception, "private-request-content")
+
+    async def test_write_failure_is_content_free_and_has_no_unretrieved_future(self) -> None:
+        engine, peer = self.engine()
+        peer.write_error = RuntimeError("private-channel-content")
+        loop = asyncio.get_running_loop()
+        contexts: list[dict[str, object]] = []
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: contexts.append(context))
+        try:
+            with self.assertRaises(JsonRpcFramingError) as raised:
+                await engine.call(RequestCapability.THREAD_READ, {})
+            gc.collect()
+            await asyncio.sleep(0)
+        finally:
+            loop.set_exception_handler(previous_handler)
+        self.assert_exception_graph_excludes(raised.exception, "private-channel-content")
+        self.assertEqual(engine.pending_count, 0)
+        self.assertFalse(
+            any("Future exception was never retrieved" in str(item) for item in contexts),
+            contexts,
+        )
+
     async def test_oversized_inbound_line_fails_pending_without_leak(self) -> None:
         engine, peer = self.engine(_RpcLimits(max_message_bytes=96))
         call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
@@ -272,6 +360,22 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("import socket", source)
         self.assertNotIn("create_subprocess", source)
         self.assertNotIn("open_unix_connection", source)
+
+    def assert_exception_graph_excludes(self, error: BaseException, secret: str) -> None:
+        seen: set[int] = set()
+        stack: list[BaseException] = [error]
+        while stack:
+            current = stack.pop()
+            if id(current) in seen:
+                continue
+            seen.add(id(current))
+            self.assertNotIn(secret, repr(current))
+            self.assertNotIn(secret, repr(current.args))
+            self.assertNotIn(secret, repr(vars(current)))
+            if current.__cause__ is not None:
+                stack.append(current.__cause__)
+            if current.__context__ is not None:
+                stack.append(current.__context__)
 
 
 class RpcLimitTests(unittest.TestCase):
