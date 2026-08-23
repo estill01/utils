@@ -303,7 +303,7 @@ govern execution.
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `completed` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `completed` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `completed` |
-| 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `in-progress` |
+| 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `completed` |
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `not-started` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `not-started` |
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `not-started` |
@@ -1161,7 +1161,7 @@ Stop before app-server initialization or typed operations.
 
 ## Block 6 — Implement typed app-server session and operations
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -1227,7 +1227,69 @@ RPC encapsulation, and absence of product semantics.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed commit
+  `3dc57c61cbe18ea4d1f6af6ec4179615066ce044`, tree
+  `521a4520843a8827f1f99c641d6f1834f544b959`; `origin/main` matched the
+  independently reviewed candidate and the worktree was clean.
+- Distribution/version and artifact root: `codex-app-server-client==0.1.0` at
+  `packages/codex-app-server-client`, import root `codex_app_server_client`.
+  The root exports `AppServerClient`, `Session`, `ClientLimits`,
+  `ClientIdentity`, the 16 selected top-level operation parameter/result
+  models, and discriminating session/initialization errors. Raw JSON-RPC
+  methods, payloads, connections, and session roots remain private.
+- Exact model graph: the accepted official Codex `0.147.0` selected-surface
+  root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`
+  resolves to 193 registered retained schema names/types, including 97 frozen,
+  slotted object dataclasses. Same-name unequal definitions are rejected;
+  required fields have no default, optional fields use `None`, arrays become
+  tuples, string enums are closed, unions remain closed aliases, and only
+  explicitly open objects retain additional properties.
+- Handshake and negotiated surface: one compatible transport sends exactly one
+  `initialize`, advertises the explicit Block 6 false/empty feature posture,
+  opts out of all 70 retained server notifications, validates the typed
+  initialize result, and then sends `initialized`. The resulting session
+  exposes eight request capabilities, zero notification capabilities, zero
+  callback capabilities, and only its active owned transport.
+- Typed operations: the exact public request surface is thread start, resume,
+  read, and list; turn start, steer, and interrupt; and review start. Every
+  operation applies its independent compatibility/capability gate and decodes
+  its exact typed result. Invalid results fail the session closed without
+  publishing an unvalidated value or enabling another write.
+- Lifecycle and diagnostic proof: incompatibility fails before transport claim;
+  cancelled close preserves and retrieves one retained cleanup result; and an
+  unexpected notification immediately after initialization or while a request
+  is pending closes the engine once, fails the session, completes cleanup, and
+  exposes no protocol content through exceptions or event-loop diagnostics.
+  The pending-request schedule is clean on Python 3.11 and 3.14.
+- Focused and artifact validation: all 14 focused session tests and all 86
+  complete client source tests passed, as did the full maintained repository
+  quality command. Isolated installed-wheel tests passed on Python 3.11 and
+  3.14 with identical wheel SHA-256
+  `606c41283474c816c9e6ca6ccb29c7167ad96d270976d1ac5d6f40a31d667061`.
+- Bounded official smoke: the official Codex `0.147.0` wrapper with SHA-256
+  `134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477`
+  initialized generation 1, reported the exact 8/0/0 request/notification/
+  callback capability split, used owned stdio, and exited with return code 0.
+  Ambiguous ambient binary resolution was separately rejected before transport
+  claim.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for the exact pushed source after one remediation cycle.
+  The reviewer independently replayed both Python versions and both retained
+  notification-failure schedules, audited the model graph and exact public
+  exports, ran the official process smoke, reran focused, complete-source,
+  quality, and installed-wheel proof, and found no remaining material issue.
+- Currentness and qualification posture: current and accepted for the Block 6
+  initialized typed-session layer over Blocks 3–5. Notification/callback and
+  call-termination coordination, restart safety, complete client conformance,
+  and final package qualification remain pending Blocks 7–9 and 14.
+- Downstream and Stop audit: source, models, tests, fixtures, docs, and proof
+  remain repository-local and domain-neutral. No consumer repository, adapter,
+  pin, fixture, test, process, cutover, or acceptance was imported, invoked,
+  changed, or claimed. No notification projection, server callback answer,
+  retry, restart, product policy, public listener, or service runtime is
+  present.
+- License/release posture: `no-license-selected/unpublished`.
 
 ### Stop
 
