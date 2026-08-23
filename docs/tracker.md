@@ -301,7 +301,7 @@ govern execution.
 | 1 | Create independent package skeletons, version policy, shared development tooling, and CI baseline | 0 | `completed` |
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `completed` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `completed` |
-| 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `in-progress` |
+| 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `completed` |
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `not-started` |
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `not-started` |
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `not-started` |
@@ -882,7 +882,7 @@ Stop before implementing JSON-RPC state or any transport.
 
 ## Block 4 — Implement bounded JSON-RPC request state
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -951,7 +951,67 @@ cleanup, error taxonomy, and transport independence.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed commit
+  `3d56fe1d30c8902a2dbb9007c6f9de3f12bc749f`, tree
+  `0a441abc53e5de34c228d8ef8b1f08417c789e2a`; `origin/main` matched the
+  independently reviewed candidate. The candidate incorporates the initial
+  implementation plus two independently requested race/diagnostic remediation
+  commits.
+- Distribution/version and artifact root: `codex-app-server-client==0.1.0` at
+  `packages/codex-app-server-client`, import root `codex_app_server_client`.
+  The root exports the exact frozen `ByteChannel` protocol and Block 4 error
+  classes; request allocation, arbitrary method strings, framing writes, the
+  RPC engine, and RPC limits remain private.
+- Compatibility inputs: the engine requires Block 3's exact
+  `CompatibilityResult`, canonical semantic schema root
+  `4e5c64213673b670d2575d7b7670d2089d49f92a92c56f2d16618e4a8857813e`,
+  and closed `RequestCapability` membership. Envelopes validate against the
+  wheel-retained official Codex `0.147.0` `JSONRPCRequest`,
+  `JSONRPCResponse`, and `JSONRPCError` schemas; the package deliberately
+  narrows upstream string-or-integer IDs to positive bounded `int64` values.
+- Framing/bounds proof: strict UTF-8 JSON lines accept LF or CRLF and reject
+  absent or embedded newlines, empty/non-object/malformed records, duplicate
+  JSON keys, nonstandard constants, invalid envelopes, non-integer IDs, and
+  inbound or outbound byte-limit violations. Pending calls, message bytes,
+  and request-ID allocation are bounded before use.
+- Correlation/lifecycle proof: concurrent out-of-order responses resolve the
+  matching call exactly once. Success, remote error, timeout, cancellation,
+  malformed input, unmatched/duplicate IDs, peer closure, immediate write
+  failure, and partial-write success/error races all remove pending state.
+  One late response to a timed-out or cancelled call is consumed without
+  resurrecting or fatally corrupting the call.
+- Diagnostic-minimization proof: validated `RemoteRpcError` retains only
+  request ID, integer code, and whether data was present. Forced malformed
+  inbound, outbound serialization, read-channel, write-channel, and
+  partial-write failures expose no request/response/channel content through
+  the delivered exception, its cause/context graph, arguments, or attributes.
+- Focused and negative validation: 26 deterministic RPC tests pass under
+  asyncio debug mode with runtime warnings promoted. They include forced
+  queued-response/cancellation schedules for success and remote error and
+  forced response-before-write-failure schedules for both outcome families;
+  no unretrieved future warning or pending leak remains.
+- Consolidated validation: all 44 package source tests, repository quality,
+  retained protocol/root checks, and five frozen-contract mutation checks
+  pass. Isolated installed-wheel tests pass on Python 3.11 and 3.14 with
+  identical wheel SHA-256
+  `d8ae36a06b3e03fdb5ffbf6036511ed50375317846017862221888eebc1282c5`.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` on the exact pushed candidate after two rejected
+  candidates exposed and drove closure of cancellation, content-retention,
+  immediate-write, and partial-write races. The final review independently
+  reproduced every forced schedule, reran full quality and both wheel tests,
+  and found no material issue.
+- Currentness and qualification posture: current and accepted for the Block 4
+  transport-independent RPC package layer using Block 3's accepted Codex
+  `0.147.0` compatibility input. Concrete transports, initialization, typed
+  session behavior, complete client conformance, and final distribution
+  qualification remain pending Blocks 5–9.
+- Downstream and Stop audit: implementation and tests use only an injected
+  in-memory byte channel. No subprocess, socket, concrete transport,
+  initialization/session, notification/callback, retry/restart, raw public RPC
+  escape hatch, downstream repository/API/type, license, publish, or release
+  effect is present.
+- License/release posture: `no-license-selected/unpublished`.
 
 ### Stop
 
