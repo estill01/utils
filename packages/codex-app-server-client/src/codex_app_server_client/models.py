@@ -64,6 +64,14 @@ _INTERNAL_SCHEMA_FILES = ("v1/InitializeParams.json", "v1/InitializeResponse.jso
 _PUBLIC_MODEL_NAMES = tuple(
     path.removeprefix("v2/").removesuffix(".json") for path in _PUBLIC_SCHEMA_FILES
 )
+_INTEGER_FORMAT_BOUNDS = {
+    "int32": (-(2**31), 2**31 - 1),
+    "int64": (-(2**63), 2**63 - 1),
+    "uint": (0, 2**64 - 1),
+    "uint16": (0, 2**16 - 1),
+    "uint32": (0, 2**32 - 1),
+    "uint64": (0, 2**64 - 1),
+}
 
 
 class _ModelValidationError(ValueError):
@@ -579,6 +587,11 @@ def _decode(
 def _validate_number_constraints(
     schema: Mapping[str, object], value: int | float, path: str
 ) -> None:
+    integer_format = schema.get("format")
+    if integer_format in _INTEGER_FORMAT_BOUNDS:
+        lower, upper = _INTEGER_FORMAT_BOUNDS[integer_format]
+        if value < lower or value > upper:
+            raise _ModelValidationError(f"{path} is outside the retained {integer_format} range")
     minimum = schema.get("minimum")
     if isinstance(minimum, (int, float)) and value < minimum:
         raise _ModelValidationError(f"{path} is below the retained minimum")

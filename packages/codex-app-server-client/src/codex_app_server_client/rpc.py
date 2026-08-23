@@ -371,6 +371,7 @@ class _RpcEngine:
         capability: RequestCapability | None,
         timeout: float | None,
     ) -> Any:
+        deadline = None if timeout is None else asyncio.get_running_loop().time() + timeout
         await self.start()
         request_id, future = self._register(capability)
         request = {"id": request_id, "method": method, "params": params}
@@ -385,21 +386,32 @@ class _RpcEngine:
         write_task = asyncio.create_task(self._write_request(line, request_id))
         write_task.add_done_callback(_consume_task_exception)
         try:
-            await asyncio.shield(write_task)
+            await _await_before_deadline(write_task, deadline)
+        except TimeoutError:
+            if _has_selected_result(future):
+                return future.result()
+            self._abandon(request_id, future)
+            raise
         except asyncio.CancelledError:
+            if _has_selected_result(future):
+                _consume_current_cancellation()
+                return future.result()
             self._abandon(request_id, future)
             raise
         except Exception:
             self._discard_unsent(request_id, future)
             raise
         try:
-            if timeout is None:
-                return await asyncio.shield(future)
-            return await asyncio.wait_for(asyncio.shield(future), timeout)
+            return await _await_before_deadline(future, deadline)
         except TimeoutError:
+            if _has_selected_result(future):
+                return future.result()
             self._abandon(request_id, future)
             raise
         except asyncio.CancelledError:
+            if _has_selected_result(future):
+                _consume_current_cancellation()
+                return future.result()
             self._abandon(request_id, future)
             raise
 
@@ -547,12 +559,16 @@ class _RpcEngine:
         else:
             pending.future.set_result(value["result"])
 
-    async def _send_callback_result(self, request_id: str | int, result: object) -> None:
+    def _prepare_callback_result(self, request_id: str | int, result: object) -> bytes:
         if self._failure is not None:
             raise self._failure
         response = {"id": request_id, "result": result}
         self._validator.successful_response(response, request_id=request_id)
-        line = self._encode_value(response, "callback response")
+        return self._encode_value(response, "callback response")
+
+    async def _send_prepared_callback_result(self, line: bytes) -> None:
+        if self._failure is not None:
+            raise self._failure
         write_failed = False
         try:
             async with self._write_lock:
@@ -569,10 +585,10 @@ class _RpcEngine:
             raise failure
 
     def _io_failure(self, label: str, error: BaseException | None = None) -> AppServerClientError:
-        if self._inbound_handler is not None:
-            return DisconnectedError(label)
         if isinstance(error, (JsonRpcFramingError, MessageTooLargeError)):
             return error
+        if self._inbound_handler is not None:
+            return DisconnectedError(label)
         return JsonRpcFramingError(label)
 
     def _decode_line(self, line: bytes) -> object:
@@ -665,3 +681,25 @@ def _consume_task_exception(task: asyncio.Task[None]) -> None:
     if not task.cancelled():
         with suppress(Exception):
             task.exception()
+
+
+def _has_selected_result(future: asyncio.Future[Any]) -> bool:
+    return future.done() and not future.cancelled()
+
+
+def _consume_current_cancellation() -> None:
+    task = asyncio.current_task()
+    if task is not None:
+        task.uncancel()
+
+
+async def _await_before_deadline(future: asyncio.Future[Any], deadline: float | None) -> Any:
+    if future.done():
+        return future.result()
+    remaining = None if deadline is None else deadline - asyncio.get_running_loop().time()
+    if remaining is not None and remaining <= 0:
+        raise TimeoutError
+    done, _ = await asyncio.wait((future,), timeout=remaining)
+    if future not in done:
+        raise TimeoutError
+    return future.result()

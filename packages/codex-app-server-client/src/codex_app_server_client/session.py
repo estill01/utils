@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 from collections.abc import AsyncIterator
-from contextlib import suppress
+from contextlib import aclosing, suppress
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -314,12 +314,14 @@ class AppServerSession:
         await self._client.close()
 
     async def events(self) -> AsyncIterator[ServerEvent]:
-        async for event in self._client._coordinator.events():
-            yield event
+        async with aclosing(self._client._coordinator.events()) as events:
+            async for event in events:
+                yield event
 
     async def callbacks(self) -> AsyncIterator[ServerCallback]:
-        async for callback in self._client._coordinator.callbacks():
-            yield callback
+        async with aclosing(self._client._coordinator.callbacks()) as callbacks:
+            async for callback in callbacks:
+                yield callback
 
     async def start_thread(
         self, params: ThreadStartParams, *, timeout: float | None = None

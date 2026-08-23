@@ -172,6 +172,12 @@ def _consume_task_exception(task: asyncio.Task[None]) -> None:
             task.exception()
 
 
+def _consume_current_cancellation() -> None:
+    task = asyncio.current_task()
+    if task is not None:
+        task.uncancel()
+
+
 def _construct_callback(
     callback_type: type[ServerCallback], params: object, state: _CallbackState
 ) -> ServerCallback:
@@ -313,20 +319,26 @@ class _AsyncCoordinator:
             raise CallCancelledError("callback has already selected a terminal result")
         if self._terminated:
             raise self._terminal_failure or CallCancelledError("callback connection is closed")
+        try:
+            result = response.to_dict()  # type: ignore[attr-defined]
+        except Exception:
+            raise JsonRpcValidationError("callback response could not be serialized") from None
+        line = self._engine._prepare_callback_result(state.request_id, result)
         state.status = "responding"
-        state.response_task = asyncio.create_task(self._run_callback_response(state, response))
+        state.response_task = asyncio.create_task(self._run_callback_response(state, line))
         state.response_task.add_done_callback(_consume_task_exception)
         try:
             await asyncio.shield(state.response_task)
         except asyncio.CancelledError:
+            if state.response_task.done():
+                _consume_current_cancellation()
+                state.response_task.result()
+                return
             raise CallCancelledError("callback response waiter was cancelled") from None
 
-    async def _run_callback_response(self, state: _CallbackState, response: object) -> None:
+    async def _run_callback_response(self, state: _CallbackState, line: bytes) -> None:
         try:
-            await self._engine._send_callback_result(
-                state.request_id,
-                response.to_dict(),  # type: ignore[attr-defined]
-            )
+            await self._engine._send_prepared_callback_result(line)
         except AppServerClientError as error:
             state.status = "failed"
             state.failure = error

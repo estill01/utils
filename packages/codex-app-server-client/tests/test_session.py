@@ -26,8 +26,11 @@ from codex_app_server_client import (
     FileChangeRequestApprovalResponse,
     InitializationError,
     InjectedTransport,
+    JsonRpcFramingError,
     JsonRpcValidationError,
+    MessageTooLargeError,
     NotificationCapability,
+    RemoteRpcError,
     RequestCapability,
     RequestLimitError,
     SchemaRootMismatchError,
@@ -45,6 +48,7 @@ from codex_app_server_client.models import (
     _PUBLIC_MODEL_NAMES,
     FrozenJsonObject,
     _collect_model_specs,
+    _decode,
     _ModelValidationError,
 )
 
@@ -128,12 +132,16 @@ class ScriptedSessionPeer:
         self.notification_after_initialized: dict[str, object] | None = None
         self.notifications_before_response: set[str] = set()
         self.result_overrides: dict[str, object] = {}
+        self.error_overrides: dict[str, dict[str, object]] = {}
         self.deferred_methods: set[str] = set()
         self.deferred_requests: list[dict[str, object]] = []
         self.callback_response_gate: asyncio.Event | None = None
         self.callback_response_started = asyncio.Event()
         self.request_write_gate: asyncio.Event | None = None
         self.request_write_started = asyncio.Event()
+        self.request_write_return_gate: asyncio.Event | None = None
+        self.request_response_queued = asyncio.Event()
+        self.request_write_returned = asyncio.Event()
         self.closed = False
         self.responses = {
             operation: model_fixture(response)
@@ -164,6 +172,8 @@ class ScriptedSessionPeer:
         ):
             self.request_write_started.set()
             await self.request_write_gate.wait()
+            if self.closed:
+                raise RuntimeError("peer closed")
         self.writes.append(value)
         if "method" not in value:
             self.callback_response_started.set()
@@ -185,10 +195,21 @@ class ScriptedSessionPeer:
             if method == "initialize"
             else self.result_overrides.get(method, self.responses[method])
         )
-        response = {"id": value["id"], "result": result}
+        response = (
+            {"id": value["id"], "error": self.error_overrides[method]}
+            if method in self.error_overrides
+            else {"id": value["id"], "result": result}
+        )
         if method in self.notifications_before_response:
             self._queue_notification({"method": "warning", "params": {"message": "server-warning"}})
         self.incoming.put_nowait(json.dumps(response).encode("utf-8") + b"\n")
+        if method != "initialize":
+            self.request_response_queued.set()
+            if self.request_write_return_gate is not None:
+                await self.request_write_return_gate.wait()
+                if self.closed:
+                    raise RuntimeError("peer closed")
+            self.request_write_returned.set()
 
     def _queue_notification(self, value: dict[str, object]) -> None:
         self.incoming.put_nowait(json.dumps(value).encode("utf-8") + b"\n")
@@ -250,6 +271,43 @@ class FrozenModelTests(unittest.TestCase):
         second = {"title": "Conflict", "type": "object", "properties": {"b": {"type": "string"}}}
         with self.assertRaises(_ModelValidationError):
             _collect_model_specs({"first.json": first, "second.json": second})
+
+    def test_every_retained_integer_format_enforces_its_exact_range(self) -> None:
+        bounds = {
+            "int32": (-(2**31), 2**31 - 1),
+            "int64": (-(2**63), 2**63 - 1),
+            "uint": (0, 2**64 - 1),
+            "uint16": (0, 2**16 - 1),
+            "uint32": (0, 2**32 - 1),
+            "uint64": (0, 2**64 - 1),
+        }
+        for integer_format, (lower, upper) in bounds.items():
+            schema = {"type": "integer", "format": integer_format}
+            with self.subTest(integer_format=integer_format):
+                self.assertEqual(_decode(schema, {}, lower, "integer"), lower)
+                self.assertEqual(_decode(schema, {}, upper, "integer"), upper)
+                with self.assertRaises(_ModelValidationError):
+                    _decode(schema, {}, lower - 1, "integer")
+                with self.assertRaises(_ModelValidationError):
+                    _decode(schema, {}, upper + 1, "integer")
+
+    def test_event_and_callback_models_reject_formatted_integer_overflow(self) -> None:
+        import codex_app_server_client as client_api
+
+        cases = (
+            ("ItemStartedNotification", "startedAtMs", 2**63),
+            ("ReasoningSummaryTextDeltaNotification", "summaryIndex", 2**63),
+            ("FileChangeRequestApprovalParams", "startedAtMs", 2**63),
+            ("ToolRequestUserInputParams", "autoResolutionMs", 2**64),
+        )
+        for model_name, field_name, overflow in cases:
+            with self.subTest(model=model_name, field=field_name):
+                value = model_fixture(model_name)
+                assert isinstance(value, dict)
+                value[field_name] = overflow
+                with self.assertRaises(_ModelValidationError) as raised:
+                    getattr(client_api, model_name).from_dict(value)
+                self.assertNotIn(str(overflow), str(raised.exception))
 
 
 class TypedSessionTests(unittest.IsolatedAsyncioTestCase):
@@ -640,6 +698,63 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("private", str(raised.exception))
         self.assertNotIn("notification-content", repr(vars(raised.exception)))
 
+    async def test_composed_transport_preserves_framing_and_size_failures(self) -> None:
+        cases = (
+            (b"x" * 65_536 + b"\n", MessageTooLargeError),
+            (b"{}", JsonRpcFramingError),
+        )
+        for line, expected_error in cases:
+            with self.subTest(expected_error=expected_error.__name__):
+                peer = ScriptedSessionPeer()
+                client, session = await self.initialize(
+                    peer, limits=ClientLimits(max_message_bytes=65_536)
+                )
+                peer.incoming.put_nowait(line)
+                await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+                with self.assertRaises(expected_error):
+                    await anext(session.events())
+                self.assertEqual(peer.close_count, 1)
+
+    async def test_formatted_integer_overflow_in_notification_fails_closed(self) -> None:
+        peer = ScriptedSessionPeer()
+        client, session = await self.initialize(peer)
+        params = model_fixture("ItemStartedNotification")
+        assert isinstance(params, dict)
+        params["startedAtMs"] = 2**63
+        peer._queue_notification({"method": "item/started", "params": params})
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        with self.assertRaises(JsonRpcValidationError) as raised:
+            await anext(session.events())
+        self.assertNotIn(str(2**63), str(raised.exception))
+
+    async def test_formatted_integer_overflow_in_callbacks_fails_closed(self) -> None:
+        cases = (
+            (
+                "item/fileChange/requestApproval",
+                "FileChangeRequestApprovalParams",
+                "startedAtMs",
+                2**63,
+            ),
+            (
+                "item/tool/requestUserInput",
+                "ToolRequestUserInputParams",
+                "autoResolutionMs",
+                2**64,
+            ),
+        )
+        for method, model_name, field_name, overflow in cases:
+            with self.subTest(method=method):
+                peer = ScriptedSessionPeer()
+                client, session = await self.initialize(peer)
+                params = model_fixture(model_name)
+                assert isinstance(params, dict)
+                params[field_name] = overflow
+                peer.queue_callback("overflow", method, params)
+                await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+                with self.assertRaises(JsonRpcValidationError) as raised:
+                    await anext(session.callbacks())
+                self.assertNotIn(str(overflow), str(raised.exception))
+
     async def test_all_callback_families_echo_string_and_signed_int64_ids(self) -> None:
         peer = ScriptedSessionPeer()
         _, session = await self.initialize(peer)
@@ -681,6 +796,51 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
             1,
         )
         await session.close()
+
+    async def test_selected_callback_success_wins_outer_waiter_cancellation(self) -> None:
+        peer = ScriptedSessionPeer()
+        peer.callback_response_gate = asyncio.Event()
+        _, session = await self.initialize(peer)
+        params = model_fixture("CommandExecutionRequestApprovalParams")
+        response_value = model_fixture("CommandExecutionRequestApprovalResponse")
+        assert isinstance(params, dict)
+        assert isinstance(response_value, dict)
+        peer.queue_callback("approval", "item/commandExecution/requestApproval", params)
+        callback = await asyncio.wait_for(anext(session.callbacks()), 1.0)
+        response = CommandExecutionRequestApprovalResponse.from_dict(response_value)
+        waiter = asyncio.create_task(callback.respond(response))
+        await peer.callback_response_started.wait()
+        response_task = callback._state.response_task
+        assert response_task is not None
+        response_task.add_done_callback(lambda _task: waiter.cancel())
+        peer.callback_response_gate.set()
+        await waiter
+        self.assertEqual(waiter.cancelling(), 0)
+        self.assertEqual(callback._state.status, "resolved")
+        await session.close()
+
+    async def test_selected_callback_write_failure_wins_outer_waiter_cancellation(self) -> None:
+        peer = ScriptedSessionPeer()
+        peer.callback_response_gate = asyncio.Event()
+        _, session = await self.initialize(peer)
+        params = model_fixture("CommandExecutionRequestApprovalParams")
+        response_value = model_fixture("CommandExecutionRequestApprovalResponse")
+        assert isinstance(params, dict)
+        assert isinstance(response_value, dict)
+        peer.queue_callback("approval", "item/commandExecution/requestApproval", params)
+        callback = await asyncio.wait_for(anext(session.callbacks()), 1.0)
+        response = CommandExecutionRequestApprovalResponse.from_dict(response_value)
+        waiter = asyncio.create_task(callback.respond(response))
+        await peer.callback_response_started.wait()
+        response_task = callback._state.response_task
+        assert response_task is not None
+        response_task.add_done_callback(lambda _task: waiter.cancel())
+        peer.closed = True
+        peer.callback_response_gate.set()
+        with self.assertRaises(DisconnectedError):
+            await waiter
+        self.assertEqual(waiter.cancelling(), 0)
+        self.assertEqual(callback._state.status, "failed")
 
     async def test_callback_envelopes_are_privately_constructed(self) -> None:
         for callback_type in (
@@ -835,6 +995,128 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(result, client_api.ThreadReadResponse)
         await session.close()
 
+    async def test_timeout_during_write_retains_late_success_and_error_safely(self) -> None:
+        import codex_app_server_client as client_api
+
+        for remote_error in (False, True):
+            with self.subTest(remote_error=remote_error):
+                peer = ScriptedSessionPeer()
+                _, session = await self.initialize(peer)
+                peer.request_write_gate = asyncio.Event()
+                if remote_error:
+                    peer.error_overrides["thread/read"] = {
+                        "code": -32_000,
+                        "message": "private-late-error",
+                    }
+                operation = asyncio.create_task(
+                    session.read_thread(
+                        client_api.ThreadReadParams(threadId="thread"), timeout=0.01
+                    )
+                )
+                await peer.request_write_started.wait()
+                with self.assertRaises(CallTimeoutError):
+                    await operation
+                peer.request_write_gate.set()
+                for _ in range(100):
+                    if any(write.get("method") == "thread/read" for write in peer.writes):
+                        break
+                    await asyncio.sleep(0)
+                await asyncio.sleep(0)
+                peer.error_overrides.clear()
+                result = await session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                self.assertIsInstance(result, client_api.ThreadReadResponse)
+                self.assertIsNone(session._client._engine.failure)
+                await session.close()
+
+    async def test_timeout_during_write_then_write_loss_closes_connection(self) -> None:
+        import codex_app_server_client as client_api
+
+        peer = ScriptedSessionPeer()
+        client, session = await self.initialize(peer)
+        peer.request_write_gate = asyncio.Event()
+        operation = asyncio.create_task(
+            session.read_thread(client_api.ThreadReadParams(threadId="thread"), timeout=0.01)
+        )
+        await peer.request_write_started.wait()
+        with self.assertRaises(CallTimeoutError):
+            await operation
+        peer.closed = True
+        peer.request_write_gate.set()
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        self.assertIsInstance(client._engine.failure, DisconnectedError)
+        with self.assertRaises(DisconnectedError):
+            await anext(session.events())
+
+    async def test_selected_call_response_wins_cancellation_before_waiter_resumes(self) -> None:
+        import codex_app_server_client as client_api
+
+        for remote_error in (False, True):
+            with self.subTest(remote_error=remote_error):
+                peer = ScriptedSessionPeer()
+                peer.deferred_methods.add("thread/read")
+                client, session = await self.initialize(peer)
+                operation = asyncio.create_task(
+                    session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                )
+                request = await self.wait_for_deferred(peer)
+                response = (
+                    {
+                        "id": request["id"],
+                        "error": {"code": -32_000, "message": "private-selected-error"},
+                    }
+                    if remote_error
+                    else {
+                        "id": request["id"],
+                        "result": model_fixture("ThreadReadResponse"),
+                    }
+                )
+                client._engine._accept_message(json.dumps(response).encode("utf-8") + b"\n")
+                self.assertEqual(client._engine.pending_count, 0)
+                operation.cancel()
+                if remote_error:
+                    with self.assertRaises(RemoteRpcError):
+                        await operation
+                else:
+                    result = await operation
+                    self.assertIsInstance(result, client_api.ThreadReadResponse)
+                self.assertEqual(operation.cancelling(), 0)
+                await session.close()
+
+    async def test_selected_call_response_wins_cancellation_during_retained_write(self) -> None:
+        import codex_app_server_client as client_api
+
+        for remote_error in (False, True):
+            with self.subTest(remote_error=remote_error):
+                peer = ScriptedSessionPeer()
+                peer.request_write_return_gate = asyncio.Event()
+                if remote_error:
+                    peer.error_overrides["thread/read"] = {
+                        "code": -32_000,
+                        "message": "private-selected-error",
+                    }
+                client, session = await self.initialize(peer)
+                operation = asyncio.create_task(
+                    session.read_thread(client_api.ThreadReadParams(threadId="thread"))
+                )
+                await peer.request_response_queued.wait()
+                for _ in range(100):
+                    if client._engine.pending_count == 0:
+                        break
+                    await asyncio.sleep(0)
+                self.assertEqual(client._engine.pending_count, 0)
+                operation.cancel()
+                if remote_error:
+                    with self.assertRaises(RemoteRpcError):
+                        await operation
+                else:
+                    result = await operation
+                    self.assertIsInstance(result, client_api.ThreadReadResponse)
+                self.assertEqual(operation.cancelling(), 0)
+                peer.request_write_return_gate.set()
+                await peer.request_write_returned.wait()
+                await asyncio.sleep(0)
+                await session.close()
+
     async def test_task_cancellation_propagates_and_late_response_is_ignored(self) -> None:
         import codex_app_server_client as client_api
 
@@ -964,6 +1246,39 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
             1,
         )
 
+    async def test_callback_response_preflight_failure_allows_one_corrected_retry(self) -> None:
+        for invalid_answer, expected_error in (
+            ("x" * 70_000, MessageTooLargeError),
+            ("\ud800", JsonRpcValidationError),
+        ):
+            with self.subTest(expected_error=expected_error.__name__):
+                peer = ScriptedSessionPeer()
+                client, session = await self.initialize(
+                    peer, limits=ClientLimits(max_message_bytes=65_536)
+                )
+                params = model_fixture("ToolRequestUserInputParams")
+                assert isinstance(params, dict)
+                peer.queue_callback("question", "item/tool/requestUserInput", params)
+                callback = await asyncio.wait_for(anext(session.callbacks()), 1.0)
+                invalid = ToolRequestUserInputResponse.from_dict(
+                    {"answers": {"question": {"answers": [invalid_answer]}}}
+                )
+                before = len(peer.writes)
+                with self.assertRaises(expected_error):
+                    await callback.respond(invalid)
+                self.assertIsNone(client._engine.failure)
+                self.assertEqual(callback._state.status, "pending")
+                self.assertEqual(len(client._coordinator._callback_states), 1)
+                self.assertEqual(len(peer.writes), before)
+                corrected = ToolRequestUserInputResponse.from_dict(
+                    {"answers": {"question": {"answers": ["corrected"]}}}
+                )
+                await callback.respond(corrected)
+                self.assertEqual(callback._state.status, "resolved")
+                self.assertEqual(len(client._coordinator._callback_states), 0)
+                self.assertEqual(len(peer.writes), before + 1)
+                await session.close()
+
     async def test_only_one_event_iterator_can_be_active(self) -> None:
         peer = ScriptedSessionPeer()
         _, session = await self.initialize(peer)
@@ -976,6 +1291,80 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         first_waiter.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await first_waiter
+        await session.close()
+
+    async def test_event_iterator_aclose_after_yield_releases_claim(self) -> None:
+        peer = ScriptedSessionPeer()
+        _, session = await self.initialize(peer)
+        peer._queue_notification({"method": "warning", "params": {"message": "first"}})
+        first = session.events()
+        self.assertEqual((await anext(first)).message, "first")
+        await first.aclose()
+        peer._queue_notification({"method": "warning", "params": {"message": "second"}})
+        successor = session.events()
+        self.assertEqual((await asyncio.wait_for(anext(successor), 1.0)).message, "second")
+        await successor.aclose()
+        await session.close()
+
+    async def test_event_iterator_cancellation_after_yield_releases_claim(self) -> None:
+        peer = ScriptedSessionPeer()
+        _, session = await self.initialize(peer)
+        peer._queue_notification({"method": "warning", "params": {"message": "first"}})
+        first = session.events()
+        await anext(first)
+        waiter = asyncio.create_task(anext(first))
+        await asyncio.sleep(0)
+        waiter.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await waiter
+        peer._queue_notification({"method": "warning", "params": {"message": "second"}})
+        successor = session.events()
+        self.assertEqual((await asyncio.wait_for(anext(successor), 1.0)).message, "second")
+        await successor.aclose()
+        await session.close()
+
+    async def test_callback_iterator_aclose_after_yield_releases_claim(self) -> None:
+        peer = ScriptedSessionPeer()
+        _, session = await self.initialize(peer)
+        params = model_fixture("FileChangeRequestApprovalParams")
+        response_value = model_fixture("FileChangeRequestApprovalResponse")
+        assert isinstance(params, dict)
+        assert isinstance(response_value, dict)
+        peer.queue_callback(1, "item/fileChange/requestApproval", params)
+        first = session.callbacks()
+        first_callback = await asyncio.wait_for(anext(first), 1.0)
+        await first.aclose()
+        peer.queue_callback(2, "item/fileChange/requestApproval", params)
+        successor = session.callbacks()
+        second_callback = await asyncio.wait_for(anext(successor), 1.0)
+        response = FileChangeRequestApprovalResponse.from_dict(response_value)
+        await first_callback.respond(response)
+        await second_callback.respond(response)
+        await successor.aclose()
+        await session.close()
+
+    async def test_callback_iterator_cancellation_after_yield_releases_claim(self) -> None:
+        peer = ScriptedSessionPeer()
+        _, session = await self.initialize(peer)
+        params = model_fixture("FileChangeRequestApprovalParams")
+        response_value = model_fixture("FileChangeRequestApprovalResponse")
+        assert isinstance(params, dict)
+        assert isinstance(response_value, dict)
+        peer.queue_callback(1, "item/fileChange/requestApproval", params)
+        first = session.callbacks()
+        first_callback = await asyncio.wait_for(anext(first), 1.0)
+        waiter = asyncio.create_task(anext(first))
+        await asyncio.sleep(0)
+        waiter.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await waiter
+        peer.queue_callback(2, "item/fileChange/requestApproval", params)
+        successor = session.callbacks()
+        second_callback = await asyncio.wait_for(anext(successor), 1.0)
+        response = FileChangeRequestApprovalResponse.from_dict(response_value)
+        await first_callback.respond(response)
+        await second_callback.respond(response)
+        await successor.aclose()
         await session.close()
 
     async def test_cancelled_callback_waiter_does_not_cancel_selected_response(self) -> None:

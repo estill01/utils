@@ -184,25 +184,29 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
         self.assertIsNone(engine.failure)
 
-    async def test_ready_success_response_racing_cancellation_keeps_engine_healthy(self) -> None:
+    async def test_selected_success_response_wins_cancellation_and_keeps_engine_healthy(
+        self,
+    ) -> None:
         engine, peer = self.engine()
         call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
         request = await peer.request()
-        peer.incoming.put_nowait(
+        engine._accept_message(
             json.dumps({"id": request["id"], "result": {"ready": True}}).encode() + b"\n"
         )
+        self.assertEqual(engine.pending_count, 0)
         call.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await call
-        await asyncio.sleep(0)
+        self.assertEqual(await call, {"ready": True})
+        self.assertEqual(call.cancelling(), 0)
         self.assertIsNone(engine.failure)
         self.assertEqual(engine.pending_count, 0)
 
-    async def test_ready_remote_error_racing_cancellation_keeps_engine_healthy(self) -> None:
+    async def test_selected_remote_error_wins_cancellation_and_keeps_engine_healthy(
+        self,
+    ) -> None:
         engine, peer = self.engine()
         call = asyncio.create_task(engine.call(RequestCapability.THREAD_READ, {}))
         request = await peer.request()
-        peer.incoming.put_nowait(
+        engine._accept_message(
             json.dumps(
                 {
                     "id": request["id"],
@@ -211,10 +215,11 @@ class RpcEngineTests(unittest.IsolatedAsyncioTestCase):
             ).encode()
             + b"\n"
         )
+        self.assertEqual(engine.pending_count, 0)
         call.cancel()
-        with self.assertRaises(asyncio.CancelledError):
+        with self.assertRaises(RemoteRpcError):
             await call
-        await asyncio.sleep(0)
+        self.assertEqual(call.cancelling(), 0)
         self.assertIsNone(engine.failure)
         self.assertEqual(engine.pending_count, 0)
 
