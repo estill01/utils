@@ -305,7 +305,7 @@ govern execution.
 | 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `completed` |
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `completed` |
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `completed` |
-| 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `in-progress` |
+| 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `completed` |
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `not-started` |
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `not-started` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `not-started` |
@@ -1433,7 +1433,7 @@ Stop before automatic restart, backoff, or cross-generation state replacement.
 
 ## Block 8 — Implement generation-bound restart safety
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -1502,7 +1502,70 @@ cleanup, retry-policy separation, and exact forced schedules.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed repository commit
+  `ee429fcb99c6e75bd0ba0e327e86a87fde5d9b9d`, tree
+  `0f7f6a69dc5f0e004387daa4ea6ad4904d39145e`; `HEAD`, `main`, and
+  `origin/main` matched with a clean worktree after exact-revision review.
+- Distribution/version and artifact root: `codex-app-server-client==0.1.0` at
+  `packages/codex-app-server-client`, import root
+  `codex_app_server_client`. Both isolated builds produced
+  `codex_app_server_client-0.1.0-py3-none-any.whl` with identical SHA-256
+  `6998c5c0427ddd4f5c44f8b9b587686ec008fe641a9a433f89b602cbe56e1bc4`;
+  the frozen root remains exactly 92 exports and the `ClientLimits` and
+  `replace` signatures remain exact.
+- Generation and ownership behavior: replacement retires and quiesces the old
+  engine before claiming a new owner, assigns one immutable integer generation
+  per attempt, and gates calls, writes, responses, notifications, callbacks,
+  cancellation, timeout, close, and publication against that generation.
+  Replacement accepts only exact package-owned stdio/socket transports and
+  cleanup-proven owned injected transport on a lifetime that began with a
+  cleanup-provable package transport. Structural and borrowed injected wrapper
+  reuse reject before claim, including fresh-wrapper identities over one
+  buffered wire. Declared and actual weak lineage identities are independently
+  checked, capacity-reserved, recorded before acceptance or cleanup, pruned,
+  and privately bounded.
+- Cancellation and cleanup behavior: component-originated zero-count
+  cancellation at hook, lineage, start, initialization, raw read, or raw close
+  boundaries becomes a content-free typed failure. Genuine caller cancellation
+  remains cancellation after retained cleanup; cancellation after transport
+  claim leaves terminal `cleanup-failed`, prevents a successor claim, and makes
+  close return the retained typed diagnostic rather than imply cleanup.
+  Backoff remains one caller-supplied bounded synchronous delay decision, not a
+  package retry loop or retry policy. Public request capacity now rejects any
+  value whose derived request history is not representable before transport
+  claim.
+- Focused, full-source, quality, and artifact proof: all 88 session tests and
+  all 160 client source tests passed on Python 3.11 and 3.14 with asyncio debug
+  and runtime-warning enforcement. The full maintained repository quality and
+  protocol mutation checks passed after one targeted formatting pass over only
+  touched Python files. Isolated installed-wheel suites passed on both
+  interpreters with the identical artifact hash above.
+- Compatibility inputs and roots: official Codex `0.147.0`, source commit
+  `be6e8eac029b183056b7e4402879f15d2c85f61b`, retained byte root
+  `eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa`,
+  public API root
+  `11e02c9c460821ebd5dd08f80b6544eb45b2217a53b90918ca472c26d14e1a21`,
+  and selected-surface root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`.
+  No retained protocol, official-binary input, or selected capability changed,
+  so the accepted Block 6 official-binary smoke remains valid.
+- Independent review: distinct reviewer `/root/block0_reviewer` returned
+  `ACCEPT` for the exact pushed commit after independently reproducing the 160
+  tests on both interpreters, full quality/protocol checks, both installed-wheel
+  suites, the 92-export surface, exact signatures, scope, and clean remote
+  revision. No material finding remained.
+- Currentness and qualification posture: current and accepted for the Block 8
+  generation-bound recovery layer over accepted Blocks 3–7. Complete client
+  distribution conformance, internal combined-package compatibility, and final
+  current package-set qualification remain pending Blocks 9, 13, and 14. This
+  evidence is an internal source/artifact handoff only; it is not a publication,
+  release, or public reuse claim.
+- Downstream and Stop audit: the exact diff is limited to restart documentation,
+  client RPC/session implementation, and client tests. It imports, invokes,
+  mutates, or validates no downstream consumer, adapter, pin, repository,
+  fixture, test, cutover, or acceptance. No license, publication, release,
+  automatic retry loop, retry budget, provider selection, process pool, remote
+  failover, durable event ledger, supervision policy, or Block 9 work was added.
 
 ### Stop
 
