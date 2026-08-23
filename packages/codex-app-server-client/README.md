@@ -21,5 +21,7 @@ Block 6's exact initialize handshake, immutable schema-model graph, and eight
 typed request methods are in `docs/session.md`.
 Block 7's bounded event/callback streams and exact call-termination behavior
 are in `docs/coordination.md`.
+Block 8's generation-bound connection replacement and caller-owned bounded
+backoff hook are in `docs/restart.md`.
 
 This distribution is currently unlicensed and unpublished.

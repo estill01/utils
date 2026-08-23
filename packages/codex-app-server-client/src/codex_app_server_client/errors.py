@@ -107,3 +107,34 @@ class CallbackCapacityError(AppServerClientError):
 
 class DisconnectedError(AppServerClientError):
     """The peer connection ended before pending asynchronous work completed."""
+
+
+class StaleGenerationError(AppServerClientError):
+    """An operation belongs to a connection generation that is no longer current."""
+
+    def __init__(self, *, generation: int, current_generation: int) -> None:
+        super().__init__(
+            f"connection generation {generation} is stale; current generation is "
+            f"{current_generation}"
+        )
+        self.generation = generation
+        self.current_generation = current_generation
+
+
+class RestartError(AppServerClientError):
+    """A bounded replacement attempt could not establish one current generation."""
+
+    def __init__(
+        self,
+        *,
+        failed_generation: int,
+        replacement_generation: int,
+        phase: str,
+    ) -> None:
+        super().__init__(
+            f"generation {failed_generation} replacement {replacement_generation} "
+            f"failed during {phase}"
+        )
+        self.failed_generation = failed_generation
+        self.replacement_generation = replacement_generation
+        self.phase = phase

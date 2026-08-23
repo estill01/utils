@@ -33,8 +33,11 @@ from codex_app_server_client import (
     RemoteRpcError,
     RequestCapability,
     RequestLimitError,
+    RestartContext,
+    RestartError,
     SchemaRootMismatchError,
     SessionStateError,
+    StaleGenerationError,
     ToolRequestUserInputResponse,
     TransportCapability,
     TransportCleanupError,
@@ -142,6 +145,8 @@ class ScriptedSessionPeer:
         self.request_write_return_gate: asyncio.Event | None = None
         self.request_response_queued = asyncio.Event()
         self.request_write_returned = asyncio.Event()
+        self.initialize_gate: asyncio.Event | None = None
+        self.initialize_started = asyncio.Event()
         self.closed = False
         self.responses = {
             operation: model_fixture(response)
@@ -187,6 +192,11 @@ class ScriptedSessionPeer:
                 self._queue_notification(self.notification_after_initialized)
             return
         method = value["method"]
+        if method == "initialize" and self.initialize_gate is not None:
+            self.initialize_started.set()
+            await self.initialize_gate.wait()
+            if self.closed:
+                raise RuntimeError("peer closed")
         if method in self.deferred_methods:
             self.deferred_requests.append(value)
             return
@@ -229,6 +239,8 @@ class ScriptedSessionPeer:
         self.close_started.set()
         if self.callback_response_gate is not None:
             self.callback_response_gate.set()
+        if self.initialize_gate is not None:
+            self.initialize_gate.set()
         if self.close_gate is not None:
             await self.close_gate.wait()
         if self.close_error is not None:
@@ -343,6 +355,8 @@ class TypedSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(selected.isdisjoint(opted_out))
         self.assertEqual(len(selected | opted_out), 70)
         self.assertEqual(session.generation, 1)
+        self.assertEqual(client._engine._generation, 1)
+        self.assertEqual(client._coordinator._generation, 1)
         self.assertEqual(
             session.capabilities.transports,
             frozenset({TransportCapability.INJECTED_BYTE_CHANNEL}),
@@ -1713,3 +1727,336 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(client._coordinator._callback_states), 0)
                 await callbacks.aclose()
                 await session.close()
+
+    def test_restart_contract_is_frozen_and_content_free(self) -> None:
+        import codex_app_server_client as client_api
+
+        cause = DisconnectedError("connection generation failed")
+        context = RestartContext(1, 2, cause)
+        self.assertEqual(context.failed_generation, 1)
+        self.assertEqual(context.replacement_generation, 2)
+        self.assertIs(context.cause, cause)
+        with self.assertRaises(FrozenInstanceError):
+            context.failed_generation = 2  # type: ignore[misc]
+        for values, expected_error in (
+            ((True, 2, cause), ValueError),
+            ((0, 1, cause), ValueError),
+            ((1, 3, cause), ValueError),
+            ((1, 2, RuntimeError("private")), TypeError),
+        ):
+            with self.subTest(values=values[:2]), self.assertRaises(expected_error):
+                RestartContext(*values)  # type: ignore[arg-type]
+        self.assertEqual(
+            str(inspect.signature(AppServerClient.replace)),
+            "(self, transport: 'ClientTransport', *, backoff: 'BackoffHook | None' = None) "
+            "-> 'AppServerSession'",
+        )
+        self.assertIsNotNone(client_api.BackoffHook)
+        self.assertIs(client_api.RestartContext, RestartContext)
+        self.assertIs(client_api.RestartError, RestartError)
+        self.assertIs(client_api.StaleGenerationError, StaleGenerationError)
+        self.assertEqual(len(client_api.__all__), 92)
+
+    async def test_backoff_hook_is_bounded_before_replacement_transport_claim(self) -> None:
+        peer = ScriptedSessionPeer()
+        client, session = await self.initialize(peer)
+        peer.disconnect()
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        replacement_peer = ScriptedSessionPeer()
+        transport = InjectedTransport(replacement_peer, ownership=TransportOwnership.OWNED)
+        contexts: list[RestartContext] = []
+
+        def invalid_hook(context: RestartContext, value: object) -> object:
+            contexts.append(context)
+            return value
+
+        for value in (True, -1, float("inf"), float("nan"), 31.0, "private"):
+            with self.subTest(value=value):
+                with self.assertRaises(RestartError) as raised:
+                    await client.replace(
+                        transport,
+                        backoff=lambda context, value=value: invalid_hook(context, value),
+                    )
+                self.assertEqual(raised.exception.phase, "backoff-bound")
+                self.assertEqual(replacement_peer.writes, [])
+                self.assertEqual(replacement_peer.close_count, 0)
+
+        def failed_hook(context: RestartContext) -> float:
+            contexts.append(context)
+            raise RuntimeError("private-backoff-content")
+
+        with self.assertRaises(RestartError) as raised:
+            await client.replace(transport, backoff=failed_hook)
+        self.assertEqual(raised.exception.phase, "backoff-hook")
+        self.assertIsNone(raised.exception.__cause__)
+        self.assertIsNone(raised.exception.__context__)
+        self.assertNotIn("private", repr(vars(raised.exception)))
+        self.assertTrue(contexts)
+        self.assertTrue(all(context.failed_generation == 1 for context in contexts))
+        self.assertTrue(all(context.replacement_generation == 2 for context in contexts))
+        self.assertTrue(all(isinstance(context.cause, DisconnectedError) for context in contexts))
+
+        async def async_hook(_context: RestartContext) -> float:
+            return 0.0
+
+        with self.assertRaises(RestartError) as raised:
+            await client.replace(transport, backoff=async_hook)  # type: ignore[arg-type]
+        self.assertEqual(raised.exception.phase, "backoff-bound")
+        self.assertEqual(replacement_peer.writes, [])
+        replacement = await client.replace(transport, backoff=lambda context: 0.0)
+        self.assertEqual(replacement.generation, 2)
+        with self.assertRaises(StaleGenerationError):
+            await session.close()
+        await replacement.close()
+
+    async def test_replace_discards_old_event_callback_and_close_effects(self) -> None:
+        import codex_app_server_client as client_api
+
+        peer = ScriptedSessionPeer()
+        client, session = await self.initialize(peer)
+        peer._queue_notification(
+            {"method": "warning", "params": {"message": "old-generation-event"}}
+        )
+        callback_params = model_fixture("CommandExecutionRequestApprovalParams")
+        assert isinstance(callback_params, dict)
+        peer.queue_callback(
+            "old-callback", "item/commandExecution/requestApproval", callback_params
+        )
+        for _ in range(100):
+            if client._coordinator._events and client._coordinator._callbacks:
+                break
+            await asyncio.sleep(0)
+        self.assertEqual(len(client._coordinator._events), 1)
+        old_callback = client._coordinator._callbacks[0]
+        self.assertEqual(old_callback._state.generation, 1)
+        client._engine._begin_failure(DisconnectedError("connection generation failed"))
+        replacement_peer = ScriptedSessionPeer()
+        replacement = await client.replace(
+            InjectedTransport(replacement_peer, ownership=TransportOwnership.OWNED)
+        )
+        self.assertEqual(replacement.generation, 2)
+        self.assertEqual(client._engine._generation, 2)
+        self.assertEqual(client._coordinator._generation, 2)
+        self.assertEqual(len(session._coordinator._events), 0)
+        self.assertEqual(len(session._coordinator._callbacks), 0)
+        with self.assertRaises(StaleGenerationError) as event_error:
+            await anext(session.events())
+        self.assertEqual(event_error.exception.generation, 1)
+        with self.assertRaises(StaleGenerationError):
+            await anext(session.callbacks())
+        response_value = model_fixture("CommandExecutionRequestApprovalResponse")
+        assert isinstance(response_value, dict)
+        with self.assertRaises(StaleGenerationError):
+            await old_callback.respond(
+                CommandExecutionRequestApprovalResponse.from_dict(response_value)
+            )
+        with self.assertRaises(StaleGenerationError):
+            await session.close()
+        result = await replacement.read_thread(client_api.ThreadReadParams(threadId="replacement"))
+        self.assertIsInstance(result, client_api.ThreadReadResponse)
+        self.assertFalse(replacement_peer.closed)
+        await replacement.close()
+
+    async def test_selected_old_response_cannot_publish_after_replacement(self) -> None:
+        import codex_app_server_client as client_api
+
+        peer = ScriptedSessionPeer()
+        peer.deferred_methods.add("thread/read")
+        client, session = await self.initialize(peer)
+        operation = asyncio.create_task(
+            session.read_thread(client_api.ThreadReadParams(threadId="old"))
+        )
+        request = await self.wait_for_deferred(peer)
+        client._engine._accept_message(
+            json.dumps({"id": request["id"], "result": model_fixture("ThreadReadResponse")}).encode(
+                "utf-8"
+            )
+            + b"\n"
+        )
+        client._engine._begin_failure(DisconnectedError("connection generation failed"))
+        replacement_peer = ScriptedSessionPeer()
+        replacement = await client.replace(
+            InjectedTransport(replacement_peer, ownership=TransportOwnership.OWNED)
+        )
+        with self.assertRaises(StaleGenerationError):
+            await operation
+        result = await replacement.read_thread(client_api.ThreadReadParams(threadId="replacement"))
+        self.assertIsInstance(result, client_api.ThreadReadResponse)
+        self.assertEqual(
+            sum(write.get("method") == "thread/read" for write in replacement_peer.writes),
+            1,
+        )
+        await replacement.close()
+
+    async def test_old_prewrite_cancellation_and_timeout_cannot_touch_replacement(
+        self,
+    ) -> None:
+        import codex_app_server_client as client_api
+
+        for terminal in ("cancellation", "timeout"):
+            with self.subTest(terminal=terminal):
+                peer = ScriptedSessionPeer()
+                client, session = await self.initialize(peer)
+                peer.request_write_gate = asyncio.Event()
+                operation = asyncio.create_task(
+                    session.read_thread(
+                        client_api.ThreadReadParams(threadId="old"),
+                        timeout=0.01 if terminal == "timeout" else None,
+                    )
+                )
+                await peer.request_write_started.wait()
+                if terminal == "cancellation":
+                    operation.cancel()
+                else:
+                    with self.assertRaises(CallTimeoutError):
+                        await operation
+                client._engine._begin_failure(DisconnectedError("connection generation failed"))
+                replacement_peer = ScriptedSessionPeer()
+                replacement = await client.replace(
+                    InjectedTransport(replacement_peer, ownership=TransportOwnership.OWNED)
+                )
+                if terminal == "cancellation":
+                    with self.assertRaises(StaleGenerationError):
+                        await operation
+                self.assertEqual(
+                    sum(write.get("method") == "thread/read" for write in peer.writes),
+                    0,
+                )
+                result = await replacement.read_thread(
+                    client_api.ThreadReadParams(threadId="replacement"), timeout=1.0
+                )
+                self.assertIsInstance(result, client_api.ThreadReadResponse)
+                self.assertIsNone(client._engine.failure)
+                await replacement.close()
+
+    async def test_inflight_old_callback_write_terminates_stale_before_new_owner(
+        self,
+    ) -> None:
+        import codex_app_server_client as client_api
+
+        peer = ScriptedSessionPeer()
+        peer.callback_response_gate = asyncio.Event()
+        client, session = await self.initialize(peer)
+        params = model_fixture("CommandExecutionRequestApprovalParams")
+        response_value = model_fixture("CommandExecutionRequestApprovalResponse")
+        assert isinstance(params, dict)
+        assert isinstance(response_value, dict)
+        peer.queue_callback("old-callback", "item/commandExecution/requestApproval", params)
+        callback = await asyncio.wait_for(anext(session.callbacks()), 1.0)
+        response = CommandExecutionRequestApprovalResponse.from_dict(response_value)
+        response_waiter = asyncio.create_task(callback.respond(response))
+        await peer.callback_response_started.wait()
+        client._engine._begin_failure(DisconnectedError("connection generation failed"))
+        replacement_peer = ScriptedSessionPeer()
+        replacement = await client.replace(
+            InjectedTransport(replacement_peer, ownership=TransportOwnership.OWNED)
+        )
+        with self.assertRaises(StaleGenerationError):
+            await response_waiter
+        self.assertEqual(
+            sum(write.get("id") == "old-callback" and "result" in write for write in peer.writes),
+            1,
+        )
+        self.assertEqual(
+            sum(
+                write.get("id") == "old-callback" and "result" in write
+                for write in replacement_peer.writes
+            ),
+            0,
+        )
+        result = await replacement.read_thread(client_api.ThreadReadParams(threadId="replacement"))
+        self.assertIsInstance(result, client_api.ThreadReadResponse)
+        await replacement.close()
+
+    async def test_concurrent_replace_claims_exactly_one_new_transport(self) -> None:
+        import codex_app_server_client as client_api
+
+        peer = ScriptedSessionPeer()
+        client, _ = await self.initialize(peer)
+        peer.disconnect()
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        first_peer = ScriptedSessionPeer()
+        first_peer.initialize_gate = asyncio.Event()
+        first = asyncio.create_task(
+            client.replace(InjectedTransport(first_peer, ownership=TransportOwnership.OWNED))
+        )
+        await first_peer.initialize_started.wait()
+        second_peer = ScriptedSessionPeer()
+        second_transport = InjectedTransport(second_peer, ownership=TransportOwnership.OWNED)
+        second = asyncio.create_task(client.replace(second_transport))
+        await asyncio.sleep(0)
+        self.assertFalse(second.done())
+        self.assertEqual(second_peer.writes, [])
+        first_peer.initialize_gate.set()
+        replacement = await first
+        with self.assertRaises(RestartError) as raised:
+            await second
+        self.assertEqual(raised.exception.phase, "precondition")
+        self.assertEqual(second_peer.writes, [])
+        result = await replacement.read_thread(client_api.ThreadReadParams(threadId="replacement"))
+        self.assertIsInstance(result, client_api.ThreadReadResponse)
+        await replacement.close()
+
+    async def test_old_close_racing_replace_cannot_close_new_generation(self) -> None:
+        import codex_app_server_client as client_api
+
+        peer = ScriptedSessionPeer()
+        client, session = await self.initialize(peer)
+        peer.disconnect()
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        replacement_peer = ScriptedSessionPeer()
+        replacement_peer.initialize_gate = asyncio.Event()
+        replacement_task = asyncio.create_task(
+            client.replace(InjectedTransport(replacement_peer, ownership=TransportOwnership.OWNED))
+        )
+        await replacement_peer.initialize_started.wait()
+        stale_close = asyncio.create_task(session.close())
+        await asyncio.sleep(0)
+        self.assertFalse(stale_close.done())
+        replacement_peer.initialize_gate.set()
+        replacement = await replacement_task
+        with self.assertRaises(StaleGenerationError):
+            await stale_close
+        self.assertFalse(replacement_peer.closed)
+        result = await replacement.read_thread(client_api.ThreadReadParams(threadId="replacement"))
+        self.assertIsInstance(result, client_api.ThreadReadResponse)
+        await replacement.close()
+
+    async def test_cancelled_and_failed_replacements_advance_attempt_generation_once(
+        self,
+    ) -> None:
+        peer = ScriptedSessionPeer()
+        client, session = await self.initialize(peer)
+        peer.disconnect()
+        await asyncio.wait_for(client._engine.wait_closed(), 1.0)
+        cancelled_peer = ScriptedSessionPeer()
+        cancelled_peer.initialize_gate = asyncio.Event()
+        cancelled = asyncio.create_task(
+            client.replace(InjectedTransport(cancelled_peer, ownership=TransportOwnership.OWNED))
+        )
+        await cancelled_peer.initialize_started.wait()
+        cancelled.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await cancelled
+        self.assertEqual(client._generation, 2)
+        self.assertEqual(cancelled_peer.close_count, 1)
+        self.assertEqual(client._state, "failed")
+        with self.assertRaises(StaleGenerationError):
+            await session.close()
+        failed_peer = ScriptedSessionPeer()
+        failed_peer.initialize_result = {"private": "replacement-content"}
+        with self.assertRaises(RestartError) as raised:
+            await client.replace(InjectedTransport(failed_peer, ownership=TransportOwnership.OWNED))
+        self.assertEqual(raised.exception.failed_generation, 2)
+        self.assertEqual(raised.exception.replacement_generation, 3)
+        self.assertEqual(raised.exception.phase, "initialization")
+        self.assertIsNone(raised.exception.__cause__)
+        self.assertIsNone(raised.exception.__context__)
+        self.assertNotIn("private", repr(vars(raised.exception)))
+        self.assertEqual(failed_peer.close_count, 1)
+        final_peer = ScriptedSessionPeer()
+        final = await client.replace(
+            InjectedTransport(final_peer, ownership=TransportOwnership.OWNED)
+        )
+        self.assertEqual(final.generation, 4)
+        await final.close()

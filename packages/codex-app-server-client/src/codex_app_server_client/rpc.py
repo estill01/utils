@@ -281,13 +281,18 @@ class _RpcEngine:
         compatibility: CompatibilityResult,
         *,
         limits: _RpcLimits | None = None,
+        generation: int = 1,
     ) -> None:
+        if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
+            raise ValueError("generation must be a positive integer")
         self._channel = channel
         self._compatibility = compatibility
         self._limits = limits or _RpcLimits()
+        self._generation = generation
         self._validator = _EnvelopeValidator(compatibility)
         self._pending: dict[int, _PendingCall] = {}
         self._request_writes: set[int] = set()
+        self._request_write_tasks: set[asyncio.Task[None]] = set()
         history_size = max(2, self._limits.max_pending_calls * 2)
         self._settled_order: deque[int] = deque(maxlen=history_size)
         self._settled: set[int] = set()
@@ -392,6 +397,7 @@ class _RpcEngine:
             raise
         write_task = asyncio.create_task(self._write_request(line, request_id))
         self._request_writes.add(request_id)
+        self._request_write_tasks.add(write_task)
         write_task.add_done_callback(partial(self._finish_request_write, request_id))
         try:
             await _await_first_before_deadline((write_task, future), deadline)
@@ -445,10 +451,15 @@ class _RpcEngine:
 
     def _finish_request_write(self, request_id: int, task: asyncio.Task[None]) -> None:
         self._request_writes.discard(request_id)
+        self._request_write_tasks.discard(task)
         _consume_task_exception(task)
 
     async def wait_closed(self) -> None:
         await self._closed.wait()
+
+    async def wait_quiescent(self) -> None:
+        while self._request_write_tasks:
+            await asyncio.gather(*tuple(self._request_write_tasks), return_exceptions=True)
 
     async def close(self, failure: AppServerClientError | None = None) -> None:
         if self._failure is None:

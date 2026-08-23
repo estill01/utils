@@ -31,10 +31,12 @@ from .errors import (
     MessageTooLargeError,
     RemoteRpcError,
     RequestLimitError,
+    RestartError,
     SchemaMalformedError,
     SchemaMissingError,
     SchemaRootMismatchError,
     SessionStateError,
+    StaleGenerationError,
     TransportCleanupError,
     TransportClosedError,
     TransportOwnershipError,
@@ -81,6 +83,7 @@ from .models import (
     TurnSteerResponse,
     WarningNotification,
 )
+from .restart import BackoffHook, RestartContext
 from .rpc import ByteChannel
 from .session import AppServerClient, AppServerSession, ClientLimits
 from .surface import (
@@ -107,6 +110,7 @@ __all__ = [
     "AgentMessageDeltaNotification",
     "AppServerClientError",
     "BinaryIdentity",
+    "BackoffHook",
     "CallbackCapability",
     "CallbackCapacityError",
     "ByteChannel",
@@ -143,6 +147,8 @@ __all__ = [
     "ReasoningSummaryTextDeltaNotification",
     "RemoteRpcError",
     "RequestLimitError",
+    "RestartContext",
+    "RestartError",
     "ReviewStartParams",
     "ReviewStartResponse",
     "SchemaMalformedError",
@@ -150,6 +156,7 @@ __all__ = [
     "SchemaRootMismatchError",
     "StdioTransport",
     "SessionStateError",
+    "StaleGenerationError",
     "ServerCallback",
     "ServerEvent",
     "AppServerClient",

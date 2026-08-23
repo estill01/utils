@@ -71,6 +71,7 @@ ServerEvent: TypeAlias = (
 @dataclass(slots=True)
 class _CallbackState:
     owner: _AsyncCoordinator
+    generation: int
     request_id: str | int
     method: str
     status: str = "pending"
@@ -197,8 +198,12 @@ class _AsyncCoordinator:
         *,
         max_events: int,
         max_callbacks: int,
+        generation: int,
     ) -> None:
+        if generation != engine._generation:
+            raise SessionStateError("coordinator generation must match its RPC engine")
         self._engine = engine
+        self._generation = generation
         self._features = features
         self._max_events = max_events
         self._max_callbacks = max_callbacks
@@ -209,10 +214,14 @@ class _AsyncCoordinator:
         self._callback_ready = asyncio.Event()
         self._event_consumer = False
         self._callback_consumer = False
+        self._response_tasks: set[asyncio.Task[None]] = set()
         self._terminated = False
         self._terminal_failure: AppServerClientError | None = None
+        self._retired_failure: AppServerClientError | None = None
 
     def accept_notification(self, method: str, params: object) -> None:
+        if self._retired_failure is not None:
+            raise self._retired_failure
         unselected = False
         try:
             capability = NotificationCapability(method)
@@ -232,6 +241,8 @@ class _AsyncCoordinator:
         self._event_ready.set()
 
     def accept_callback(self, request_id: str | int, method: str, params: object) -> None:
+        if self._retired_failure is not None:
+            raise self._retired_failure
         unselected = False
         try:
             capability = CallbackCapability(method)
@@ -250,7 +261,12 @@ class _AsyncCoordinator:
             raise CallbackCapacityError(f"callback capacity reached: {self._max_callbacks}")
         params_type, _, callback_type = spec
         typed_params = self._decode(params_type, params, "server callback")
-        state = _CallbackState(owner=self, request_id=request_id, method=method)
+        state = _CallbackState(
+            owner=self,
+            generation=self._generation,
+            request_id=request_id,
+            method=method,
+        )
         callback = _construct_callback(callback_type, typed_params, state)
         self._callback_states[request_id] = state
         self._callbacks.append(callback)
@@ -313,6 +329,8 @@ class _AsyncCoordinator:
             raise TypeError("callback response requires its exact frozen response model")
         if state.owner is not self:
             raise SessionStateError("callback belongs to a different coordinator")
+        if self._retired_failure is not None:
+            raise self._retired_failure
         if state.status == "failed" and state.failure is not None:
             raise state.failure
         if state.status != "pending":
@@ -326,7 +344,8 @@ class _AsyncCoordinator:
         line = self._engine._prepare_callback_result(state.request_id, result)
         state.status = "responding"
         state.response_task = asyncio.create_task(self._run_callback_response(state, line))
-        state.response_task.add_done_callback(_consume_task_exception)
+        self._response_tasks.add(state.response_task)
+        state.response_task.add_done_callback(self._finish_response_task)
         try:
             await asyncio.shield(state.response_task)
         except asyncio.CancelledError:
@@ -337,22 +356,50 @@ class _AsyncCoordinator:
             _consume_current_cancellation()
             raise CallCancelledError("callback response waiter was cancelled") from None
 
+    def _finish_response_task(self, task: asyncio.Task[None]) -> None:
+        self._response_tasks.discard(task)
+        _consume_task_exception(task)
+
     async def _run_callback_response(self, state: _CallbackState, line: bytes) -> None:
+        response_failure: AppServerClientError | None = None
         try:
             await self._engine._send_prepared_callback_result(line)
+            if self._retired_failure is not None:
+                raise self._retired_failure
         except AppServerClientError as error:
+            response_failure = self._retired_failure or error
             state.status = "failed"
-            state.failure = error
+            state.failure = response_failure
             self._callback_states.pop(state.request_id, None)
-            raise
         except Exception:
             failure = DisconnectedError("callback response could not reach the peer")
             state.status = "failed"
             state.failure = failure
             self._callback_states.pop(state.request_id, None)
             raise failure from None
+        if response_failure is not None:
+            raise response_failure
         state.status = "resolved"
         self._callback_states.pop(state.request_id, None)
+
+    async def wait_quiescent(self) -> None:
+        while self._response_tasks:
+            await asyncio.gather(*tuple(self._response_tasks), return_exceptions=True)
+
+    def retire(self, failure: AppServerClientError) -> None:
+        if self._retired_failure is not None:
+            return
+        self._retired_failure = failure
+        self._terminated = True
+        self._terminal_failure = failure
+        self._events.clear()
+        self._callbacks.clear()
+        for state in tuple(self._callback_states.values()):
+            state.status = "failed"
+            state.failure = failure
+            self._callback_states.pop(state.request_id, None)
+        self._event_ready.set()
+        self._callback_ready.set()
 
     def terminate(self, failure: AppServerClientError | None) -> None:
         if self._terminated:
