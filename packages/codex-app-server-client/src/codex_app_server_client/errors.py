@@ -83,3 +83,11 @@ class TransportOwnershipError(AppServerClientError):
 
 class TransportCleanupError(AppServerClientError):
     """A transport could not prove that its owned resources were closed."""
+
+
+class InitializationError(AppServerClientError):
+    """The one initialize/initialized handshake failed or was invalid."""
+
+
+class SessionStateError(AppServerClientError):
+    """A typed session operation was attempted in an invalid lifecycle state."""

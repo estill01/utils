@@ -24,6 +24,7 @@ from .errors import (
     RemoteRpcError,
     RequestLimitError,
     SchemaRootMismatchError,
+    TransportCleanupError,
     UnsupportedFeatureError,
 )
 from .surface import RequestCapability
@@ -66,7 +67,7 @@ class _RpcLimits:
 
 @dataclass(slots=True)
 class _PendingCall:
-    capability: RequestCapability
+    capability: RequestCapability | None
     future: asyncio.Future[Any]
 
 
@@ -97,6 +98,9 @@ class _EnvelopeValidator:
             raise SchemaRootMismatchError("RPC compatibility result has the wrong semantic root")
         schema_root = protocol_root.joinpath("upstream", PINNED_PROTOCOL.codex_version)
         self._request = _load_json(schema_root.joinpath("JSONRPCRequest.json"), "JSONRPCRequest")
+        self._notification = _load_json(
+            schema_root.joinpath("JSONRPCNotification.json"), "JSONRPCNotification"
+        )
         self._response = _load_json(schema_root.joinpath("JSONRPCResponse.json"), "JSONRPCResponse")
         self._error = _load_json(schema_root.joinpath("JSONRPCError.json"), "JSONRPCError")
 
@@ -119,6 +123,11 @@ class _EnvelopeValidator:
         self._validate(value, schema, schema, "response")
         request_id = self._integer_id(value["id"], "response.id")
         return request_id, has_error
+
+    def initialized_notification(self, value: object) -> None:
+        self._validate(value, self._notification, self._notification, "notification")
+        if value != {"method": "initialized"}:
+            raise JsonRpcValidationError("initialized notification changed during validation")
 
     @staticmethod
     def _integer_id(value: object, path: str) -> int:
@@ -239,6 +248,7 @@ class _RpcEngine:
         self._closed = asyncio.Event()
         self._failure: BaseException | None = None
         self._channel_closed = False
+        self._cleanup_failure: TransportCleanupError | None = None
 
     @property
     def pending_count(self) -> int:
@@ -267,9 +277,46 @@ class _RpcEngine:
             raise TypeError("capability must be RequestCapability")
         if not self._compatibility.features.supports(capability):
             raise UnsupportedFeatureError(f"request capability is unavailable: {capability.value}")
+        return await self._call_method(
+            capability.value,
+            params,
+            capability=capability,
+            timeout=timeout,
+        )
+
+    async def _initialize(self, params: object) -> Any:
+        return await self._call_method("initialize", params, capability=None, timeout=None)
+
+    async def _send_initialized(self) -> None:
+        if self._failure is not None:
+            raise self._failure
+        notification = {"method": "initialized"}
+        self._validator.initialized_notification(notification)
+        line = self._encode_value(notification, "initialized notification")
+        write_failed = False
+        try:
+            async with self._write_lock:
+                await self._channel.write_line(line)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            write_failed = True
+        if write_failed:
+            failure = JsonRpcFramingError("byte-channel write failed for initialized notification")
+            await self._fail(failure)
+            raise failure
+
+    async def _call_method(
+        self,
+        method: str,
+        params: object,
+        *,
+        capability: RequestCapability | None,
+        timeout: float | None,
+    ) -> Any:
         await self.start()
         request_id, future = self._register(capability)
-        request = {"id": request_id, "method": capability.value, "params": params}
+        request = {"id": request_id, "method": method, "params": params}
         write_failed = False
         try:
             line = self._encode_request(request, request_id=request_id)
@@ -313,8 +360,10 @@ class _RpcEngine:
             with suppress(asyncio.CancelledError):
                 await reader
         self._closed.set()
+        if self._cleanup_failure is not None:
+            raise self._cleanup_failure
 
-    def _register(self, capability: RequestCapability) -> tuple[int, asyncio.Future[Any]]:
+    def _register(self, capability: RequestCapability | None) -> tuple[int, asyncio.Future[Any]]:
         if self._failure is not None:
             raise self._failure
         if len(self._pending) >= self._limits.max_pending_calls:
@@ -342,9 +391,12 @@ class _RpcEngine:
 
     def _encode_request(self, request: dict[str, object], *, request_id: int) -> bytes:
         self._validator.request(request, request_id=request_id)
+        return self._encode_value(request, f"request {request_id}")
+
+    def _encode_value(self, value: object, label: str) -> bytes:
         try:
             payload = json.dumps(
-                request,
+                value,
                 allow_nan=False,
                 ensure_ascii=False,
                 separators=(",", ":"),
@@ -352,12 +404,11 @@ class _RpcEngine:
         except (TypeError, ValueError, UnicodeEncodeError):
             payload = None
         if payload is None:
-            raise JsonRpcValidationError(f"request {request_id} contains a non-JSON value")
+            raise JsonRpcValidationError(f"{label} contains a non-JSON value")
         line = payload + b"\n"
         if len(line) > self._limits.max_message_bytes:
             raise MessageTooLargeError(
-                f"request {request_id} is {len(line)} bytes; "
-                f"limit is {self._limits.max_message_bytes}"
+                f"{label} is {len(line)} bytes; limit is {self._limits.max_message_bytes}"
             )
         return line
 
@@ -478,8 +529,12 @@ class _RpcEngine:
         if self._channel_closed:
             return
         self._channel_closed = True
-        with suppress(Exception):
+        try:
             await self._channel.close()
+        except TransportCleanupError as error:
+            self._cleanup_failure = error
+        except Exception:
+            self._cleanup_failure = TransportCleanupError("byte-channel cleanup failed")
 
 
 _APP_RPC_ERRORS = (

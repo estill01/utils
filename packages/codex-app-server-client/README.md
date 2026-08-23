@@ -17,5 +17,7 @@ Block 4's transport-independent request-state behavior and injected-channel
 contract are documented in `docs/rpc.md`.
 Block 5's explicit local transport and resource-ownership behavior is in
 `docs/transports.md`.
+Block 6's exact initialize handshake, immutable schema-model graph, and eight
+typed request methods are in `docs/session.md`.
 
 This distribution is currently unlicensed and unpublished.
