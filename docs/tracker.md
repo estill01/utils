@@ -302,7 +302,7 @@ govern execution.
 | 2 | Freeze the exact official Codex app-server protocol surface and public client contract | 1 | `completed` |
 | 3 | Implement exact binary/version resolution and schema compatibility | 2 | `completed` |
 | 4 | Implement bounded JSON-RPC framing, correlation, pending-call state, and protocol errors | 3 | `completed` |
-| 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `in-progress` |
+| 5 | Implement owned stdio, Unix-socket, and injected transport composition | 4 | `completed` |
 | 6 | Implement initialization, feature negotiation, and the narrowed typed operation surface | 5 | `not-started` |
 | 7 | Implement notifications, server callbacks, cancellation, timeouts, and disconnect coordination | 6 | `not-started` |
 | 8 | Implement generation-bound restart safety and single-process-owner recovery | 7 | `not-started` |
@@ -1021,7 +1021,7 @@ Stop before starting a subprocess or opening a Unix socket.
 
 ## Block 5 — Implement local transports and explicit process ownership
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -1091,7 +1091,67 @@ serialized writes, socket bounds, and no hidden singleton.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed commit
+  `793a7d591a8b351f6ea771dd6591f1abc52316ba`, tree
+  `02dc5491359ef4a6f777644af67ab0bb44bd2e83`; `origin/main` matched the
+  independently reviewed candidate and the worktree was clean.
+- Distribution/version and artifact root: `codex-app-server-client==0.1.0` at
+  `packages/codex-app-server-client`, import root `codex_app_server_client`.
+  The root exports only `ClientTransport`, `StdioTransport`,
+  `UnixSocketTransport`, `InjectedTransport`, exact `TransportOwnership`, the
+  Block 4 `ByteChannel`, and discriminating transport errors; channel engines,
+  subprocess ownership, and cleanup state remain private.
+- Transport contract: owned stdio uses exact argv
+  `<resolved-binary> app-server --listen stdio://` through
+  `create_subprocess_exec`, with no shell or ambient singleton. Unix sockets
+  require an absolute, NUL-free, parent-traversal-free path within the portable
+  byte bound. Injected channels require explicit `owned` or `borrowed`
+  ownership. Every transport is single-claim, serializes writes, bounds reads,
+  and fails closed after partial write, EOF, or close.
+- Ownership and cleanup proof: stdio revalidates the accepted Block 3 binary
+  path, version `0.147.0`, and SHA-256 immediately before and after spawn. On
+  POSIX it owns a new process group, closes the pipe, waits for EOF, escalates
+  through bounded TERM/KILL, verifies direct-process reap, and proves the group
+  absent. Unix and injected cleanup cancel and retrieve pending reads/writes;
+  owned injected resources close exactly once while borrowed resources remain
+  caller-owned.
+- Cancellation and diagnostic proof: retained completion events keep stream,
+  injected, and process-wait cleanup running when a caller is cancelled without
+  abandoning a failing shield future. A retry observes the one retained typed
+  result. Forced cleanup and process-wait failures expose no private byte,
+  request, path, or subprocess content through exception causes, contexts,
+  attributes, or the Python 3.14 event-loop exception handler.
+- Focused and negative validation: 28 transport tests cover exact stdio argv,
+  stale/unresolved identity, real echo and stubborn process/group teardown,
+  safe Unix-socket paths and real local connection closure, single ownership,
+  serialized and partial writes, bounded reads, EOF/post-close behavior,
+  cancelled close continuation, failed cleanup, `ProcessLookupError` without
+  reap proof, timeout-then-wait failure, and absence of shell, TCP listener, or
+  singleton behavior. The full client source suite passes 72 tests.
+- Artifact and repository proof: full maintained repository quality passed;
+  isolated installed-wheel tests passed on Python 3.11 and 3.14 with identical
+  wheel SHA-256
+  `8fe58194d1b347581ab2d10197d97ddc55c7e13318cba47606d4494ebffac777`.
+  The compatibility input remains the accepted official Codex `0.147.0`
+  selected-surface root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for the exact pushed source after three remediation cycles.
+  The reviewer independently reproduced cancellation, partial-write,
+  process-group, reap-proof, Python 3.14 cleanup-failure, and
+  timeout-then-process-wait-failure schedules; reran all 28 focused and 72
+  source tests, full quality, both installed wheels, and the scope audit; and
+  found no remaining material issue.
+- Currentness and qualification posture: current and accepted for the Block 5
+  local-transport layer over Blocks 3–4. Initialization, typed operations,
+  asynchronous coordination, restart safety, complete client conformance, and
+  final package qualification remain pending Blocks 6–9 and 14.
+- Downstream and Stop audit: source, tests, fixtures, docs, and proof remain
+  repository-local and domain-neutral. No consumer repository, adapter, pin,
+  fixture, test, process, or acceptance was imported, invoked, changed, or
+  claimed. No app-server initialization, typed operation, callback,
+  notification, retry, restart, public listener, or service runtime is present.
+- License/release posture: `no-license-selected/unpublished`.
 
 ### Stop
 
