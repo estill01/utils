@@ -313,7 +313,7 @@ govern execution.
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `completed` |
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `completed` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `completed` |
-| 16 | Record the no-license/unpublished posture and close without external effects | 15 | `in-progress` |
+| 16 | Record the no-license/unpublished posture and close without external effects | 15 | `completed` |
 
 Required order:
 
@@ -2623,7 +2623,7 @@ adoption.
 
 ## Block 16 — Record no-license/unpublished posture and close the program
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -2690,13 +2690,13 @@ remain truthful, no external effect occurred, and the Stop is explicit.
 
 ### Completion evidence
 
-- Exact terminal candidate: pushed revision
-  `fdf9953ea99dbcdbede553ee058a1d1911eb07ac`, tree
-  `389a8f48ad180682a3ed769d1f87627402c99413`; local `HEAD`, local
+- Exact reviewed terminal candidate: pushed revision
+  `fb97344bdccec2b05bc6ea4d158c1ac5b4b4e83e`, tree
+  `239c8fde8887acde81933c252ff8d3ae909a5dad`; local `HEAD`, local
   `main`, `origin/main`, and GitHub `refs/heads/main` matched and the worktree
-  was clean. Its delta from accepted Block 15 changes only tracker status; the
-  exact qualification/currentness check passed and no technical proof was
-  invalidated or rerun.
+  was clean. Its delta from accepted Block 15 is confined to tracker status
+  and terminal evidence; the exact qualification/currentness and maintained
+  quality checks passed and no package or artifact byte changed.
 - Final internal completion manifest: this canonical tracker retains all Block
   0–15 package, conformance, documentation, authority, review, and exact Git
   evidence. `tools/qualification_matrix.json` retains technical candidate
@@ -2760,9 +2760,10 @@ remain truthful, no external effect occurred, and the Stop is explicit.
 - Terminal review: distinct reviewer `/root/block0_reviewer` independently
   confirmed the exact package metadata/artifacts, qualification posture,
   license inventory, read-only CI, empty tag/Release state, registry facts,
-  downstream boundary, and Git currentness. The review required the explicit
-  registry-collision and successor-activation record above before terminal
-  acceptance; the corrected exact candidate is pending final readback.
+  downstream boundary, and Git currentness. The reviewer rejected predecessor
+  `fdf9953...` until the registry collision and successor-activation conditions
+  were explicit, then returned `ACCEPT` for exact pushed candidate
+  `fb97344...`. No terminal finding remains open.
 
 ### Stop
 
