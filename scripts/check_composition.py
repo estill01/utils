@@ -23,8 +23,36 @@ PACKAGE_MODULES = {
     "embedded_service_contract.testing",
     "runtime_manifest",
 }
+PACKAGE_IMPORT_ALIASES = {
+    "codex_app_server_client": "client_api",
+    "embedded_service_contract": "lifecycle_api",
+    "embedded_service_contract.testing": "lifecycle_testing",
+    "runtime_manifest": "manifest_api",
+}
+EXPECTED_IMPORT_STATEMENTS = (
+    "from __future__ import annotations",
+    "import asyncio",
+    "import hashlib",
+    "import json",
+    "import sys",
+    "from pathlib import Path",
+    "import codex_app_server_client as client_api",
+    "import embedded_service_contract as lifecycle_api",
+    "import embedded_service_contract.testing as lifecycle_testing",
+    "import runtime_manifest as manifest_api",
+)
 FORBIDDEN_DYNAMIC_IMPORT_ROOTS = {"importlib", "pkgutil"}
-FORBIDDEN_REFLECTION_CALLS = {"delattr", "dir", "getattr", "hasattr", "setattr", "vars"}
+FORBIDDEN_REFLECTION_CALLS = {
+    "compile",
+    "delattr",
+    "dir",
+    "eval",
+    "exec",
+    "getattr",
+    "hasattr",
+    "setattr",
+    "vars",
+}
 ALLOWED_STDLIB_MODULES = {"__future__", "asyncio", "hashlib", "json", "pathlib", "sys"}
 PUBLIC_MODULE_ATTRIBUTES = {
     "codex_app_server_client": {
@@ -161,6 +189,7 @@ def validate_contract(
 ) -> None:
     if type(contract) is not dict or set(contract) != {
         "schema_version",
+        "fixture_sha256",
         "manifest_sha256",
         "packages",
         "protocol",
@@ -194,6 +223,10 @@ def validate_contract(
         raise RuntimeError("composition contract protocol version is invalid")
     require_exact_sha256(protocol["schema_root_sha256"], "protocol schema root")
     require_exact_sha256(protocol["selected_surface_root_sha256"], "protocol surface root")
+    require_exact_sha256(contract["fixture_sha256"], "neutral composition fixture")
+    fixture_sha256 = hashlib.sha256(FIXTURE_PATH.read_bytes()).hexdigest()
+    if contract["fixture_sha256"] != fixture_sha256:
+        raise RuntimeError("neutral composition fixture source differs")
     require_exact_sha256(contract["manifest_sha256"], "canonical manifest")
     if contract["manifest_sha256"] != canonical_manifest_sha256(contract):
         raise RuntimeError("composition contract canonical manifest shape differs")
@@ -201,6 +234,19 @@ def validate_contract(
 
 def validate_fixture_imports(path: Path) -> None:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    import_nodes = [
+        node for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom))
+    ]
+    if any(not isinstance(parents.get(node), ast.Module) for node in import_nodes):
+        raise RuntimeError("composition fixture contains a non-top-level import")
+    observed_imports = tuple(
+        ast.unparse(node) for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))
+    )
+    if observed_imports != EXPECTED_IMPORT_STATEMENTS or len(import_nodes) != len(
+        EXPECTED_IMPORT_STATEMENTS
+    ):
+        raise RuntimeError("composition fixture import statements or aliases differ")
     imported_package_modules: set[str] = set()
     package_aliases: dict[str, str] = {}
     for node in ast.walk(tree):
@@ -243,29 +289,42 @@ def validate_fixture_imports(path: Path) -> None:
             "composition fixture does not reach the exact installed public module set: "
             f"{sorted(imported_package_modules)}"
         )
+    if package_aliases != {alias: module for module, alias in PACKAGE_IMPORT_ALIASES.items()}:
+        raise RuntimeError("composition fixture package import aliases differ")
+    observed_attributes: dict[str, set[str]] = {module: set() for module in PACKAGE_MODULES}
     for node in ast.walk(tree):
         if not isinstance(node, ast.Attribute) or not isinstance(node.value, ast.Name):
             continue
         module = package_aliases.get(node.value.id)
         if module is None:
             continue
+        parent = parents.get(node)
+        if isinstance(parent, ast.Attribute) and parent.value is node:
+            raise RuntimeError("composition fixture nests access from a package module")
         if node.attr not in PUBLIC_MODULE_ATTRIBUTES[module]:
             raise RuntimeError(
                 f"composition fixture reaches a non-public package attribute: {module}.{node.attr}"
             )
+        observed_attributes[module].add(node.attr)
+    if observed_attributes != PUBLIC_MODULE_ATTRIBUTES:
+        raise RuntimeError("composition fixture does not reach the exact public attribute set")
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Name) or node.id not in package_aliases:
+            continue
+        parent = parents.get(node)
+        if not (
+            isinstance(parent, ast.Attribute)
+            and parent.value is node
+            and parent.attr in PUBLIC_MODULE_ATTRIBUTES[package_aliases[node.id]]
+        ):
+            raise RuntimeError("composition fixture lets a package module object escape")
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         if isinstance(node.func, ast.Name) and node.func.id == "__import__":
             raise RuntimeError("composition fixture uses dynamic package import")
-        if (
-            isinstance(node.func, ast.Name)
-            and node.func.id in FORBIDDEN_REFLECTION_CALLS
-            and node.args
-            and isinstance(node.args[0], ast.Name)
-            and node.args[0].id in package_aliases
-        ):
-            raise RuntimeError("composition fixture uses reflective package access")
+        if isinstance(node.func, ast.Name) and node.func.id in FORBIDDEN_REFLECTION_CALLS:
+            raise RuntimeError("composition fixture uses dynamic evaluation or reflection")
         if isinstance(node.func, ast.Name) and node.func.id in {"globals", "locals"}:
             raise RuntimeError("composition fixture uses dynamic namespace access")
         if (

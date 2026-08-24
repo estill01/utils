@@ -14,6 +14,42 @@ import embedded_service_contract as lifecycle_api
 import embedded_service_contract.testing as lifecycle_testing
 import runtime_manifest as manifest_api
 
+APP_SERVER_CLIENT = client_api.AppServerClient
+BINARY_IDENTITY = client_api.BinaryIdentity
+CLIENT_IDENTITY = client_api.ClientIdentity
+CLIENT_INJECTED_TRANSPORT = client_api.InjectedTransport
+CLIENT_PINNED_PROTOCOL = client_api.PINNED_PROTOCOL
+CLIENT_THREAD_LIST_PARAMS = client_api.ThreadListParams
+CLIENT_TRANSPORT_OWNERSHIP = client_api.TransportOwnership
+CLIENT_EXPORTS = client_api.__all__
+CLIENT_MODULE = client_api.__name__
+CLIENT_VERSION = client_api.__version__
+INSPECT_CLIENT_COMPATIBILITY = client_api.inspect_compatibility
+
+HOST_SHAPE = lifecycle_api.HostShape
+LIFECYCLE_EXPORTS = lifecycle_api.__all__
+LIFECYCLE_MODULE = lifecycle_api.__name__
+LIFECYCLE_VERSION = lifecycle_api.__version__
+ASSERT_LIFECYCLE_CONFORMANCE = lifecycle_api.assert_lifecycle_conformance
+
+LIFECYCLE_TESTING_EXPORTS = lifecycle_testing.__all__
+LIFECYCLE_TESTING_MODULE = lifecycle_testing.__name__
+EMBEDDED_FIXTURE = lifecycle_testing.embedded_fixture
+SERVICE_FIXTURE = lifecycle_testing.service_fixture
+
+MANIFEST_CAPABILITY = manifest_api.Capability
+MANIFEST_COMPONENT = manifest_api.Component
+MANIFEST_PROTOCOL = manifest_api.Protocol
+RUNTIME_MANIFEST = manifest_api.RuntimeManifest
+SHA256_ROOT = manifest_api.Sha256Root
+UNAVAILABLE_KIND = manifest_api.UnavailableKind
+MANIFEST_EXPORTS = manifest_api.__all__
+MANIFEST_MODULE = manifest_api.__name__
+MANIFEST_VERSION = manifest_api.__version__
+CANONICAL_JSON = manifest_api.canonical_json
+COMPARE_MANIFESTS = manifest_api.compare_manifests
+PARSE_MANIFEST = manifest_api.parse_manifest
+
 PACKAGE_NAMES = (
     "codex-app-server-client",
     "embedded-service-contract",
@@ -72,7 +108,8 @@ def load_inputs(path: Path) -> dict[str, object]:
 def require_public_surface() -> tuple[str, ...]:
     requirements = (
         (
-            client_api,
+            CLIENT_MODULE,
+            CLIENT_EXPORTS,
             {
                 "AppServerClient",
                 "BinaryIdentity",
@@ -85,15 +122,18 @@ def require_public_surface() -> tuple[str, ...]:
             },
         ),
         (
-            lifecycle_api,
+            LIFECYCLE_MODULE,
+            LIFECYCLE_EXPORTS,
             {"HostShape", "assert_lifecycle_conformance"},
         ),
         (
-            lifecycle_testing,
+            LIFECYCLE_TESTING_MODULE,
+            LIFECYCLE_TESTING_EXPORTS,
             {"embedded_fixture", "service_fixture"},
         ),
         (
-            manifest_api,
+            MANIFEST_MODULE,
+            MANIFEST_EXPORTS,
             {
                 "Capability",
                 "Component",
@@ -108,12 +148,11 @@ def require_public_surface() -> tuple[str, ...]:
         ),
     )
     reached: list[str] = []
-    for module, names in requirements:
-        exports = getattr(module, "__all__", ())
+    for module_name, exports, names in requirements:
         missing = sorted(names - set(exports))
         if missing:
             raise RuntimeError(f"installed public surface is missing names: {missing}")
-        reached.append(module.__name__)
+        reached.append(module_name)
     return tuple(reached)
 
 
@@ -171,10 +210,10 @@ def package_component(inputs: dict[str, object], name: str) -> object:
     assert isinstance(packages, dict)
     record = packages[name]
     assert isinstance(record, dict)
-    return manifest_api.Component(
+    return MANIFEST_COMPONENT(
         name,
         str(record["version"]),
-        manifest_api.Sha256Root(str(record["wheel_content_root_sha256"])),
+        SHA256_ROOT(str(record["wheel_content_root_sha256"])),
     )
 
 
@@ -191,34 +230,34 @@ def runtime_manifest(inputs: dict[str, object], *, mismatch: str | None = None) 
     elif mismatch == "dependency-root":
         embedded = dependencies[0]
         dependencies = (
-            manifest_api.Component(
+            MANIFEST_COMPONENT(
                 embedded.name,
                 embedded.version,
-                manifest_api.Sha256Root("0" * 64),
+                SHA256_ROOT("0" * 64),
             ),
             dependencies[1],
         )
     elif mismatch is not None:
         raise RuntimeError(f"unknown neutral mismatch fixture: {mismatch}")
-    return manifest_api.RuntimeManifest(
+    return RUNTIME_MANIFEST(
         component=package_component(inputs, "codex-app-server-client"),
         protocols=(
-            manifest_api.Protocol(
+            MANIFEST_PROTOCOL(
                 "codex-app-server-schema",
                 str(protocol["version"]),
-                manifest_api.Sha256Root(str(protocol["schema_root_sha256"])),
+                SHA256_ROOT(str(protocol["schema_root_sha256"])),
             ),
-            manifest_api.Protocol(
+            MANIFEST_PROTOCOL(
                 "codex-app-server-surface",
                 str(protocol["version"]),
-                manifest_api.Sha256Root(surface_root),
+                SHA256_ROOT(surface_root),
                 ("typed-session",),
             ),
         ),
         capabilities=(
-            manifest_api.Capability("embedded-lifecycle", "1"),
-            manifest_api.Capability("injected-byte-channel", "1"),
-            manifest_api.Capability("service-lifecycle", "1"),
+            MANIFEST_CAPABILITY("embedded-lifecycle", "1"),
+            MANIFEST_CAPABILITY("injected-byte-channel", "1"),
+            MANIFEST_CAPABILITY("service-lifecycle", "1"),
         ),
         dependencies=dependencies,
     )
@@ -229,36 +268,38 @@ async def run_client(inputs: dict[str, object]) -> dict[str, object]:
     protocol = inputs["protocol"]
     assert isinstance(packages, dict)
     assert isinstance(protocol, dict)
-    if {
-        "codex-app-server-client": client_api.__version__,
-        "embedded-service-contract": lifecycle_api.__version__,
-        "runtime-manifest": manifest_api.__version__,
-    } != {name: record["version"] for name, record in packages.items()}:
+    installed_versions = {
+        "codex-app-server-client": CLIENT_VERSION,
+        "embedded-service-contract": LIFECYCLE_VERSION,
+        "runtime-manifest": MANIFEST_VERSION,
+    }
+    expected_versions = {name: record["version"] for name, record in packages.items()}
+    if installed_versions != expected_versions:
         raise RuntimeError("installed package versions differ from composition inputs")
-    target = client_api.PINNED_PROTOCOL
+    target = CLIENT_PINNED_PROTOCOL
     if (
         target.codex_version != protocol["version"]
         or target.schema_tree_root_sha256 != protocol["schema_root_sha256"]
         or target.selected_surface_root_sha256 != protocol["selected_surface_root_sha256"]
     ):
         raise RuntimeError("installed app-server protocol roots differ from composition inputs")
-    compatibility = client_api.inspect_compatibility(
-        client_api.BinaryIdentity(
+    compatibility = INSPECT_CLIENT_COMPATIBILITY(
+        BINARY_IDENTITY(
             path=Path("/neutral/non-executed-codex"),
             reported_version=target.codex_version,
             sha256="0" * 64,
         )
     )
     channel = DeterministicChannel()
-    client = await client_api.AppServerClient.connect(
-        client_api.InjectedTransport(
+    client = await APP_SERVER_CLIENT.connect(
+        CLIENT_INJECTED_TRANSPORT(
             channel,
-            ownership=client_api.TransportOwnership.OWNED,
+            ownership=CLIENT_TRANSPORT_OWNERSHIP.OWNED,
         ),
         compatibility,
     )
-    session = await client.initialize(client_api.ClientIdentity("neutral-composition", "1"))
-    listed = await session.list_threads(client_api.ThreadListParams(), timeout=1.0)
+    session = await client.initialize(CLIENT_IDENTITY("neutral-composition", "1"))
+    listed = await session.list_threads(CLIENT_THREAD_LIST_PARAMS(), timeout=1.0)
     await session.close()
     if not channel.initialized or channel.close_count != 1:
         raise RuntimeError("deterministic channel lifecycle did not close exactly once")
@@ -272,34 +313,31 @@ async def run_client(inputs: dict[str, object]) -> dict[str, object]:
 
 async def compose(inputs: dict[str, object]) -> dict[str, object]:
     public_modules = require_public_surface()
-    embedded_fixture = lifecycle_testing.embedded_fixture()
-    service_fixture = lifecycle_testing.service_fixture()
-    embedded = lifecycle_api.assert_lifecycle_conformance(embedded_fixture)
-    service = lifecycle_api.assert_lifecycle_conformance(service_fixture)
+    embedded_fixture = EMBEDDED_FIXTURE()
+    service_fixture = SERVICE_FIXTURE()
+    embedded = ASSERT_LIFECYCLE_CONFORMANCE(embedded_fixture)
+    service = ASSERT_LIFECYCLE_CONFORMANCE(service_fixture)
     embedded_contract = embedded_fixture.host_factory("owner-audit").contract
     service_contract = service_fixture.host_factory("owner-audit").contract
     if embedded_contract.process_owner_count + service_contract.process_owner_count != 1:
         raise RuntimeError("neutral composition must declare exactly one process owner")
-    if (
-        embedded.shape is not lifecycle_api.HostShape.EMBEDDED
-        or service.shape is not lifecycle_api.HostShape.SERVICE
-    ):
+    if embedded.shape is not HOST_SHAPE.EMBEDDED or service.shape is not HOST_SHAPE.SERVICE:
         raise RuntimeError("neutral lifecycle shapes differ")
 
     expected = runtime_manifest(inputs)
-    encoded = manifest_api.canonical_json(expected)
+    encoded = CANONICAL_JSON(expected)
     manifest_sha256 = hashlib.sha256(encoded.encode()).hexdigest()
     if manifest_sha256 != inputs["manifest_sha256"]:
         raise RuntimeError("canonical neutral manifest shape differs from composition inputs")
-    observed = manifest_api.parse_manifest(encoded)
-    compatible = manifest_api.compare_manifests(expected, observed)
+    observed = PARSE_MANIFEST(encoded)
+    compatible = COMPARE_MANIFESTS(expected, observed)
     if not compatible.compatible:
         raise RuntimeError("exact neutral composition manifest is incompatible")
-    dependency_incompatible = manifest_api.compare_manifests(
+    dependency_incompatible = COMPARE_MANIFESTS(
         expected,
         runtime_manifest(inputs, mismatch="dependency-root"),
     )
-    protocol_incompatible = manifest_api.compare_manifests(
+    protocol_incompatible = COMPARE_MANIFESTS(
         expected,
         runtime_manifest(inputs, mismatch="protocol-schema"),
     )
@@ -327,7 +365,7 @@ async def compose(inputs: dict[str, object]) -> dict[str, object]:
     if dependency_diagnostics != [
         {
             "expected": f"sha256:{embedded_record['wheel_content_root_sha256']}",
-            "kind": manifest_api.UnavailableKind.DEPENDENCY_ROOT.value,
+            "kind": UNAVAILABLE_KIND.DEPENDENCY_ROOT.value,
             "observed": f"sha256:{'0' * 64}",
             "subject": "embedded-service-contract",
         }
@@ -336,7 +374,7 @@ async def compose(inputs: dict[str, object]) -> dict[str, object]:
     if protocol_diagnostics != [
         {
             "expected": f"sha256:{protocol['selected_surface_root_sha256']}",
-            "kind": manifest_api.UnavailableKind.PROTOCOL_SCHEMA.value,
+            "kind": UNAVAILABLE_KIND.PROTOCOL_SCHEMA.value,
             "observed": f"sha256:{'0' * 64}",
             "subject": "codex-app-server-surface",
         }
