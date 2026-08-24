@@ -310,7 +310,7 @@ govern execution.
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `completed` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `completed` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `completed` |
-| 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `not-started` |
+| 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `in-progress` |
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `not-started` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `not-started` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `not-started` |
@@ -2189,7 +2189,7 @@ Stop before installing all distributions together or testing composition.
 
 ## Block 13 — Prove neutral cross-package composition
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
