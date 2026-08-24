@@ -12,6 +12,10 @@ python3 scripts/check_composition.py --python 3.11
 python3 scripts/check_composition.py --python 3.14
 ```
 
+Block 14's frozen package-set record and static reconciliation are documented
+in `docs/qualification.md`. The maintained quality command validates that
+record before the interpreter-specific isolation and composition jobs run.
+
 `scripts/check_package.py` resolves the repository root from its own location,
 uses the configured `uv` executable, copies each distribution into an isolated
 package-only snapshot, and builds each wheel independently. It audits wheel
