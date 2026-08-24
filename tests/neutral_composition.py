@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+"""One test-only, domain-neutral composition of the three installed wheels."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+import codex_app_server_client as client_api
+import embedded_service_contract as lifecycle_api
+import embedded_service_contract.testing as lifecycle_testing
+import runtime_manifest as manifest_api
+
+PACKAGE_NAMES = (
+    "codex-app-server-client",
+    "embedded-service-contract",
+    "runtime-manifest",
+)
+ROOT_FIELDS = {"version", "wheel_content_root_sha256"}
+PROTOCOL_FIELDS = {
+    "version",
+    "schema_root_sha256",
+    "selected_surface_root_sha256",
+}
+
+
+def require_sha256(value: object, label: str) -> str:
+    if (
+        type(value) is not str
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise RuntimeError(f"{label} must be an exact lowercase SHA-256 value")
+    return value
+
+
+def load_inputs(path: Path) -> dict[str, object]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if type(value) is not dict or set(value) != {"schema_version", "packages", "protocol"}:
+        raise RuntimeError("composition input has an unexpected top-level shape")
+    if value["schema_version"] != 1:
+        raise RuntimeError("composition input has an unsupported schema version")
+    packages = value["packages"]
+    if type(packages) is not dict or set(packages) != set(PACKAGE_NAMES):
+        raise RuntimeError("composition input package set is not exact")
+    for name in PACKAGE_NAMES:
+        record = packages[name]
+        if type(record) is not dict or set(record) != ROOT_FIELDS:
+            raise RuntimeError(f"composition input package record is not exact: {name}")
+        if type(record["version"]) is not str or not record["version"]:
+            raise RuntimeError(f"composition input package version is invalid: {name}")
+        require_sha256(record["wheel_content_root_sha256"], f"{name} content root")
+    protocol = value["protocol"]
+    if type(protocol) is not dict or set(protocol) != PROTOCOL_FIELDS:
+        raise RuntimeError("composition input protocol record is not exact")
+    if type(protocol["version"]) is not str or not protocol["version"]:
+        raise RuntimeError("composition input protocol version is invalid")
+    require_sha256(protocol["schema_root_sha256"], "protocol schema root")
+    require_sha256(protocol["selected_surface_root_sha256"], "protocol surface root")
+    return value
+
+
+def require_public_surface() -> tuple[str, ...]:
+    requirements = (
+        (
+            client_api,
+            {
+                "AppServerClient",
+                "BinaryIdentity",
+                "ClientIdentity",
+                "InjectedTransport",
+                "PINNED_PROTOCOL",
+                "ThreadListParams",
+                "TransportOwnership",
+                "inspect_compatibility",
+            },
+        ),
+        (
+            lifecycle_api,
+            {"HostShape", "assert_lifecycle_conformance"},
+        ),
+        (
+            lifecycle_testing,
+            {"embedded_fixture", "service_fixture"},
+        ),
+        (
+            manifest_api,
+            {
+                "Capability",
+                "Component",
+                "Protocol",
+                "RuntimeManifest",
+                "Sha256Root",
+                "UnavailableKind",
+                "canonical_json",
+                "compare_manifests",
+                "parse_manifest",
+            },
+        ),
+    )
+    reached: list[str] = []
+    for module, names in requirements:
+        exports = getattr(module, "__all__", ())
+        missing = sorted(names - set(exports))
+        if missing:
+            raise RuntimeError(f"installed public surface is missing names: {missing}")
+        reached.append(module.__name__)
+    return tuple(reached)
+
+
+class DeterministicChannel:
+    """A test-only injected JSON-lines peer with no process or network owner."""
+
+    def __init__(self) -> None:
+        self.incoming: asyncio.Queue[bytes] = asyncio.Queue()
+        self.initialized = False
+        self.close_count = 0
+
+    def queue(self, value: dict[str, object]) -> None:
+        self.incoming.put_nowait(
+            json.dumps(value, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+        )
+
+    async def read_line(self, *, max_bytes: int) -> bytes:
+        value = await self.incoming.get()
+        if len(value) > max_bytes:
+            raise RuntimeError("deterministic channel response exceeded the client limit")
+        return value
+
+    async def write_line(self, data: bytes) -> None:
+        value = json.loads(data)
+        if type(value) is not dict:
+            raise RuntimeError("deterministic channel received a non-object envelope")
+        method = value.get("method")
+        if method == "initialize" and "id" in value:
+            self.queue(
+                {
+                    "id": value["id"],
+                    "result": {
+                        "codexHome": "/neutral/codex-home",
+                        "platformFamily": "unix",
+                        "platformOs": "macos",
+                        "userAgent": "utils-neutral-composition",
+                    },
+                }
+            )
+            return
+        if method == "initialized" and "id" not in value:
+            self.initialized = True
+            return
+        if method == "thread/list" and "id" in value:
+            self.queue({"id": value["id"], "result": {"data": []}})
+            return
+        raise RuntimeError("deterministic channel received an unsupported envelope")
+
+    async def close(self) -> None:
+        self.close_count += 1
+
+
+def package_component(inputs: dict[str, object], name: str) -> object:
+    packages = inputs["packages"]
+    assert isinstance(packages, dict)
+    record = packages[name]
+    assert isinstance(record, dict)
+    return manifest_api.Component(
+        name,
+        str(record["version"]),
+        manifest_api.Sha256Root(str(record["wheel_content_root_sha256"])),
+    )
+
+
+def runtime_manifest(inputs: dict[str, object], *, incompatible: bool = False) -> object:
+    protocol = inputs["protocol"]
+    assert isinstance(protocol, dict)
+    dependencies = (
+        package_component(inputs, "embedded-service-contract"),
+        package_component(inputs, "runtime-manifest"),
+    )
+    surface_root = str(protocol["selected_surface_root_sha256"])
+    if incompatible:
+        surface_root = "0" * 64
+        embedded = dependencies[0]
+        dependencies = (
+            manifest_api.Component(
+                embedded.name,
+                embedded.version,
+                manifest_api.Sha256Root("0" * 64),
+            ),
+            dependencies[1],
+        )
+    return manifest_api.RuntimeManifest(
+        component=package_component(inputs, "codex-app-server-client"),
+        protocols=(
+            manifest_api.Protocol(
+                "codex-app-server-schema",
+                str(protocol["version"]),
+                manifest_api.Sha256Root(str(protocol["schema_root_sha256"])),
+            ),
+            manifest_api.Protocol(
+                "codex-app-server-surface",
+                str(protocol["version"]),
+                manifest_api.Sha256Root(surface_root),
+                ("typed-session",),
+            ),
+        ),
+        capabilities=(
+            manifest_api.Capability("embedded-lifecycle", "1"),
+            manifest_api.Capability("injected-byte-channel", "1"),
+            manifest_api.Capability("service-lifecycle", "1"),
+        ),
+        dependencies=dependencies,
+    )
+
+
+async def run_client(inputs: dict[str, object]) -> dict[str, object]:
+    packages = inputs["packages"]
+    protocol = inputs["protocol"]
+    assert isinstance(packages, dict)
+    assert isinstance(protocol, dict)
+    if {
+        "codex-app-server-client": client_api.__version__,
+        "embedded-service-contract": lifecycle_api.__version__,
+        "runtime-manifest": manifest_api.__version__,
+    } != {name: record["version"] for name, record in packages.items()}:
+        raise RuntimeError("installed package versions differ from composition inputs")
+    target = client_api.PINNED_PROTOCOL
+    if (
+        target.codex_version != protocol["version"]
+        or target.schema_tree_root_sha256 != protocol["schema_root_sha256"]
+        or target.selected_surface_root_sha256 != protocol["selected_surface_root_sha256"]
+    ):
+        raise RuntimeError("installed app-server protocol roots differ from composition inputs")
+    compatibility = client_api.inspect_compatibility(
+        client_api.BinaryIdentity(
+            path=Path("/neutral/non-executed-codex"),
+            reported_version=target.codex_version,
+            sha256="0" * 64,
+        )
+    )
+    channel = DeterministicChannel()
+    client = await client_api.AppServerClient.connect(
+        client_api.InjectedTransport(
+            channel,
+            ownership=client_api.TransportOwnership.OWNED,
+        ),
+        compatibility,
+    )
+    session = await client.initialize(client_api.ClientIdentity("neutral-composition", "1"))
+    listed = await session.list_threads(client_api.ThreadListParams(), timeout=1.0)
+    await session.close()
+    if not channel.initialized or channel.close_count != 1:
+        raise RuntimeError("deterministic channel lifecycle did not close exactly once")
+    return {
+        "channel_close_count": channel.close_count,
+        "generation": session.generation,
+        "listed_threads": len(listed.data),
+        "transport": "injected-byte-channel",
+    }
+
+
+async def compose(inputs: dict[str, object]) -> dict[str, object]:
+    public_modules = require_public_surface()
+    embedded_fixture = lifecycle_testing.embedded_fixture()
+    service_fixture = lifecycle_testing.service_fixture()
+    embedded = lifecycle_api.assert_lifecycle_conformance(embedded_fixture)
+    service = lifecycle_api.assert_lifecycle_conformance(service_fixture)
+    embedded_contract = embedded_fixture.host_factory("owner-audit").contract
+    service_contract = service_fixture.host_factory("owner-audit").contract
+    if embedded_contract.process_owner_count + service_contract.process_owner_count != 1:
+        raise RuntimeError("neutral composition must declare exactly one process owner")
+    if (
+        embedded.shape is not lifecycle_api.HostShape.EMBEDDED
+        or service.shape is not lifecycle_api.HostShape.SERVICE
+    ):
+        raise RuntimeError("neutral lifecycle shapes differ")
+
+    expected = runtime_manifest(inputs)
+    encoded = manifest_api.canonical_json(expected)
+    observed = manifest_api.parse_manifest(encoded)
+    compatible = manifest_api.compare_manifests(expected, observed)
+    if not compatible.compatible:
+        raise RuntimeError("exact neutral composition manifest is incompatible")
+    incompatible = manifest_api.compare_manifests(
+        expected, runtime_manifest(inputs, incompatible=True)
+    )
+    incompatible_kinds = [reason.kind.value for reason in incompatible.unavailable_reasons]
+    required_mismatches = {
+        manifest_api.UnavailableKind.DEPENDENCY_ROOT.value,
+        manifest_api.UnavailableKind.PROTOCOL_SCHEMA.value,
+    }
+    if set(incompatible_kinds) != required_mismatches:
+        raise RuntimeError("incompatible roots did not produce exact typed diagnostics")
+
+    packages = inputs["packages"]
+    protocol = inputs["protocol"]
+    assert isinstance(packages, dict)
+    assert isinstance(protocol, dict)
+    return {
+        "client": await run_client(inputs),
+        "incompatible_root_kinds": incompatible_kinds,
+        "lifecycle": {
+            "embedded": {
+                "events": embedded.observed_events,
+                "scenarios": embedded.scenarios,
+                "shape": embedded.shape.value,
+            },
+            "process_owner_count": (
+                embedded_contract.process_owner_count + service_contract.process_owner_count
+            ),
+            "service": {
+                "events": service.observed_events,
+                "scenarios": service.scenarios,
+                "shape": service.shape.value,
+            },
+        },
+        "manifest_compatible": compatible.compatible,
+        "manifest_sha256": hashlib.sha256(encoded.encode()).hexdigest(),
+        "packages": {name: record["version"] for name, record in packages.items()},
+        "protocol": protocol,
+        "public_modules": list(public_modules),
+        "schema_version": 1,
+    }
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        raise RuntimeError("neutral composition requires one exact input file")
+    result = asyncio.run(compose(load_inputs(Path(sys.argv[1]))))
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

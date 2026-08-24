@@ -8,6 +8,8 @@ The repository-owned checks are:
 python3 scripts/check_quality.py
 python3 scripts/check_package.py --all --python 3.11 --tests
 python3 scripts/check_package.py --all --python 3.14 --tests
+python3 scripts/check_composition.py --python 3.11
+python3 scripts/check_composition.py --python 3.14
 ```
 
 `scripts/check_package.py` resolves the repository root from its own location,
@@ -31,6 +33,16 @@ package-local test directory is missing, contains no `test_*.py` files, or
 executes zero tests.
 `scripts/check_quality.py` runs the repository contract plus the exact uv/Ruff
 versions pinned in `tools/toolchain.json`; CI invokes the same envelope.
+
+`scripts/check_composition.py` is the separate combined-install envelope. It
+rebuilds the three independently accepted wheels, requires their complete byte
+and content roots to equal `tools/composition_matrix.json`, and installs only
+those local artifacts together into one clean environment. It then runs the
+test-only `tests/neutral_composition.py` fixture under isolated Python. The
+fixture reaches only installed public modules and proves one injected-channel
+client session, both neutral lifecycle shapes, exactly one declared process
+owner, exact descriptive package/protocol roots, and typed incompatible-root
+diagnostics. It defines no production facade, runtime, adapter, or authority.
 
 ## Version policy
 

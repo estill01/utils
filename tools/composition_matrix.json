@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "packages": {
+    "codex-app-server-client": {
+      "version": "0.1.0",
+      "wheel_sha256": "1e9dc5b9c7f2edb9676b5a47eb2c9b96498f1b429acec474cd26702fe8e3fdb9",
+      "wheel_content_root_sha256": "6ecc26e75197d06682fe9d8d0612edb1e56ead6d04c3a41cde1132e2618efd8f"
+    },
+    "embedded-service-contract": {
+      "version": "0.1.0",
+      "wheel_sha256": "2b36d7307c08cd6d7d95bfb86d4a240b6ab2a69de5b2c61bf75a54507c7ea18d",
+      "wheel_content_root_sha256": "c53432ff83c6b80483a95384af3c9058a3cd82c56ac774126f123a93dbff7113"
+    },
+    "runtime-manifest": {
+      "version": "0.1.0",
+      "wheel_sha256": "f2e601d542272187998296f09d33b2235002d108fe07c0b3c89a678ea1d010ac",
+      "wheel_content_root_sha256": "db8f7f7d0b0105361f9b1380ff1d1cc432e720be02def65880a9ef484ad112a2"
+    }
+  },
+  "protocol": {
+    "version": "0.147.0",
+    "schema_root_sha256": "eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa",
+    "selected_surface_root_sha256": "9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f"
+  }
+}

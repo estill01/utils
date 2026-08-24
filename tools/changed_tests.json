@@ -7,6 +7,7 @@
     "docs/",
     "pyproject.toml",
     "scripts/",
+    "tests/",
     "tools/"
   ],
   "package_paths": {

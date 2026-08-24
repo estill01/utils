@@ -44,3 +44,20 @@ jobs:
           --package ${{ matrix.package }}
           --python ${{ matrix.python }}
           --tests
+
+  neutral-composition:
+    needs: package-isolation
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.9"
+      - run: python scripts/check_composition.py --python ${{ matrix.python }}
