@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,48 +15,67 @@ import check_composition
 
 def packages() -> dict[str, dict[str, object]]:
     return {
-        "alpha": {
-            "path": "packages/alpha",
-            "import": "alpha",
-            "version": "1",
+        name: {
+            "path": f"packages/{name}",
+            "import": name.replace("-", "_"),
+            "version": "0.1.0",
             "runtime_dependencies": (),
         }
+        for name in (
+            "codex-app-server-client",
+            "embedded-service-contract",
+            "runtime-manifest",
+        )
     }
 
 
 def contract() -> dict[str, object]:
-    return {
+    value = {
         "schema_version": 1,
+        "manifest_sha256": "0" * 64,
         "packages": {
-            "alpha": {
-                "version": "1",
-                "wheel_sha256": "a" * 64,
-                "wheel_content_root_sha256": "b" * 64,
+            name: {
+                "version": "0.1.0",
+                "wheel_sha256": wheel * 64,
+                "wheel_content_root_sha256": content * 64,
             }
+            for name, wheel, content in (
+                ("codex-app-server-client", "a", "b"),
+                ("embedded-service-contract", "c", "d"),
+                ("runtime-manifest", "e", "f"),
+            )
         },
         "protocol": {
-            "version": "1",
-            "schema_root_sha256": "c" * 64,
-            "selected_surface_root_sha256": "d" * 64,
+            "version": "0.147.0",
+            "schema_root_sha256": "1" * 64,
+            "selected_surface_root_sha256": "2" * 64,
         },
     }
+    value["manifest_sha256"] = check_composition.canonical_manifest_sha256(value)
+    return value
 
 
 class CompositionAuditTests(unittest.TestCase):
     def test_contract_requires_exact_packages_versions_roots_and_fields(self) -> None:
         mutations = []
         missing = contract()
-        del missing["packages"]["alpha"]
+        del missing["packages"]["embedded-service-contract"]
         mutations.append(missing)
         version = contract()
-        version["packages"]["alpha"]["version"] = "2"
+        version["packages"]["codex-app-server-client"]["version"] = "2"
         mutations.append(version)
         root = contract()
-        root["packages"]["alpha"]["wheel_sha256"] = "A" * 64
+        root["packages"]["runtime-manifest"]["wheel_sha256"] = "A" * 64
         mutations.append(root)
         hidden = contract()
         hidden["protocol"]["authority"] = True
         mutations.append(hidden)
+        boolean_schema = contract()
+        boolean_schema["schema_version"] = True
+        mutations.append(boolean_schema)
+        changed_manifest = contract()
+        changed_manifest["manifest_sha256"] = "0" * 64
+        mutations.append(changed_manifest)
         for value in mutations:
             with self.subTest(value=value), self.assertRaises(RuntimeError):
                 check_composition.validate_contract(value, packages())
@@ -66,6 +87,8 @@ class CompositionAuditTests(unittest.TestCase):
                 "import codex_app_server_client.compatibility\n",
                 "import third_party\n",
                 "import codex_app_server_client\n",
+                "import subprocess\n",
+                "import socket\n",
             ):
                 with self.subTest(source=source):
                     path.write_text(source, encoding="utf-8")
@@ -81,57 +104,48 @@ class CompositionAuditTests(unittest.TestCase):
             path.write_text(exact_imports + "client_api.compatibility\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "non-public package attribute"):
                 check_composition.validate_fixture_imports(path)
+            path.write_text(
+                exact_imports
+                + "import importlib\n"
+                + "importlib.import_module('codex_app_server_client.compatibility')\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "dynamic import"):
+                check_composition.validate_fixture_imports(path)
+            path.write_text(
+                exact_imports + "getattr(client_api, '_private', None)\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "reflective package access"):
+                check_composition.validate_fixture_imports(path)
 
     def test_artifact_bytes_and_content_root_are_independent_exact_inputs(self) -> None:
-        expected = contract()["packages"]["alpha"]
+        expected = contract()["packages"]["codex-app-server-client"]
         check_composition.verify_artifact(
-            "alpha",
+            "codex-app-server-client",
             wheel_sha256="a" * 64,
             content_root_sha256="b" * 64,
             expected=expected,
         )
         with self.assertRaisesRegex(RuntimeError, "wheel bytes differ"):
             check_composition.verify_artifact(
-                "alpha",
+                "codex-app-server-client",
                 wheel_sha256="0" * 64,
                 content_root_sha256="b" * 64,
                 expected=expected,
             )
         with self.assertRaisesRegex(RuntimeError, "content root differs"):
             check_composition.verify_artifact(
-                "alpha",
+                "codex-app-server-client",
                 wheel_sha256="a" * 64,
                 content_root_sha256="0" * 64,
                 expected=expected,
             )
 
     def test_result_rejects_hidden_fields_and_root_or_scenario_drift(self) -> None:
-        full_contract = {
-            "schema_version": 1,
-            "packages": {
-                name: {
-                    "version": "0.1.0",
-                    "wheel_sha256": character * 64,
-                    "wheel_content_root_sha256": character * 64,
-                }
-                for name, character in zip(
-                    sorted(
-                        {
-                            "codex-app-server-client",
-                            "embedded-service-contract",
-                            "runtime-manifest",
-                        }
-                    ),
-                    "abc",
-                    strict=True,
-                )
-            },
-            "protocol": {
-                "version": "0.147.0",
-                "schema_root_sha256": "d" * 64,
-                "selected_surface_root_sha256": "e" * 64,
-            },
-        }
+        full_contract = contract()
+        embedded = full_contract["packages"]["embedded-service-contract"]
+        protocol = full_contract["protocol"]
         result = {
             "client": {
                 "channel_close_count": 1,
@@ -139,14 +153,27 @@ class CompositionAuditTests(unittest.TestCase):
                 "listed_threads": 0,
                 "transport": "injected-byte-channel",
             },
-            "incompatible_root_kinds": ["dependency-root", "protocol-schema"],
+            "incompatible_root_diagnostics": [
+                {
+                    "expected": f"sha256:{embedded['wheel_content_root_sha256']}",
+                    "kind": "dependency-root",
+                    "observed": f"sha256:{'0' * 64}",
+                    "subject": "embedded-service-contract",
+                },
+                {
+                    "expected": f"sha256:{protocol['selected_surface_root_sha256']}",
+                    "kind": "protocol-schema",
+                    "observed": f"sha256:{'0' * 64}",
+                    "subject": "codex-app-server-surface",
+                },
+            ],
             "lifecycle": {
                 "embedded": {"events": 6, "scenarios": 3, "shape": "embedded"},
                 "process_owner_count": 1,
                 "service": {"events": 6, "scenarios": 3, "shape": "service"},
             },
             "manifest_compatible": True,
-            "manifest_sha256": "f" * 64,
+            "manifest_sha256": full_contract["manifest_sha256"],
             "packages": {
                 name: record["version"] for name, record in full_contract["packages"].items()
             },
@@ -155,14 +182,40 @@ class CompositionAuditTests(unittest.TestCase):
             "schema_version": 1,
         }
         check_composition.validate_result(result, full_contract)
-        for mutation in ("hidden", "protocol", "owner"):
+        for mutation in (
+            "hidden",
+            "protocol",
+            "owner",
+            "boolean-schema",
+            "duplicate-diagnostic",
+            "hidden-capability",
+        ):
             changed = copy.deepcopy(result)
             if mutation == "hidden":
                 changed["authority"] = "approved"
             elif mutation == "protocol":
                 changed["protocol"]["schema_root_sha256"] = "0" * 64
-            else:
+            elif mutation == "owner":
                 changed["lifecycle"]["process_owner_count"] = 2
+            elif mutation == "boolean-schema":
+                changed["schema_version"] = True
+            elif mutation == "duplicate-diagnostic":
+                changed["incompatible_root_diagnostics"].append(
+                    changed["incompatible_root_diagnostics"][0]
+                )
+            else:
+                document = json.loads(check_composition.canonical_manifest_document(full_contract))
+                document["capabilities"].append({"name": "implicit-authority", "version": "1"})
+                payload = (
+                    json.dumps(
+                        document,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+                changed["manifest_sha256"] = hashlib.sha256(payload.encode()).hexdigest()
             with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
                 check_composition.validate_result(changed, full_contract)
 

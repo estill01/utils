@@ -7,6 +7,7 @@ import argparse
 import ast
 import hashlib
 import json
+import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
@@ -22,6 +23,9 @@ PACKAGE_MODULES = {
     "embedded_service_contract.testing",
     "runtime_manifest",
 }
+FORBIDDEN_DYNAMIC_IMPORT_ROOTS = {"importlib", "pkgutil"}
+FORBIDDEN_REFLECTION_CALLS = {"delattr", "dir", "getattr", "hasattr", "setattr", "vars"}
+ALLOWED_STDLIB_MODULES = {"__future__", "asyncio", "hashlib", "json", "pathlib", "sys"}
 PUBLIC_MODULE_ATTRIBUTES = {
     "codex_app_server_client": {
         "AppServerClient",
@@ -66,7 +70,7 @@ PUBLIC_MODULE_ATTRIBUTES = {
 }
 RESULT_KEYS = {
     "client",
-    "incompatible_root_kinds",
+    "incompatible_root_diagnostics",
     "lifecycle",
     "manifest_compatible",
     "manifest_sha256",
@@ -93,13 +97,76 @@ def load_contract(packages: dict[str, dict[str, object]]) -> dict[str, object]:
     return contract
 
 
+def canonical_manifest_document(contract: dict[str, object]) -> str:
+    records = contract["packages"]
+    protocol = contract["protocol"]
+    assert isinstance(records, dict)
+    assert isinstance(protocol, dict)
+
+    def component(name: str) -> dict[str, str]:
+        record = records[name]
+        assert isinstance(record, dict)
+        return {
+            "content_root": f"sha256:{record['wheel_content_root_sha256']}",
+            "name": name,
+            "version": str(record["version"]),
+        }
+
+    document = {
+        "capabilities": [
+            {"name": "embedded-lifecycle", "version": "1"},
+            {"name": "injected-byte-channel", "version": "1"},
+            {"name": "service-lifecycle", "version": "1"},
+        ],
+        "component": component("codex-app-server-client"),
+        "dependencies": [
+            component("embedded-service-contract"),
+            component("runtime-manifest"),
+        ],
+        "protocols": [
+            {
+                "features": [],
+                "name": "codex-app-server-schema",
+                "schema_root": f"sha256:{protocol['schema_root_sha256']}",
+                "version": str(protocol["version"]),
+            },
+            {
+                "features": ["typed-session"],
+                "name": "codex-app-server-surface",
+                "schema_root": f"sha256:{protocol['selected_surface_root_sha256']}",
+                "version": str(protocol["version"]),
+            },
+        ],
+        "schema_version": 1,
+    }
+    return (
+        json.dumps(
+            document,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+
+def canonical_manifest_sha256(contract: dict[str, object]) -> str:
+    return hashlib.sha256(canonical_manifest_document(contract).encode()).hexdigest()
+
+
 def validate_contract(
     contract: object,
     packages: dict[str, dict[str, object]],
 ) -> None:
-    if type(contract) is not dict or set(contract) != {"schema_version", "packages", "protocol"}:
+    if type(contract) is not dict or set(contract) != {
+        "schema_version",
+        "manifest_sha256",
+        "packages",
+        "protocol",
+    }:
         raise RuntimeError("composition contract has an unexpected top-level shape")
-    if contract["schema_version"] != 1:
+    if type(contract["schema_version"]) is not int or contract["schema_version"] != 1:
         raise RuntimeError("composition contract has an unsupported schema version")
     records = contract["packages"]
     if type(records) is not dict or set(records) != set(packages):
@@ -127,6 +194,9 @@ def validate_contract(
         raise RuntimeError("composition contract protocol version is invalid")
     require_exact_sha256(protocol["schema_root_sha256"], "protocol schema root")
     require_exact_sha256(protocol["selected_surface_root_sha256"], "protocol surface root")
+    require_exact_sha256(contract["manifest_sha256"], "canonical manifest")
+    if contract["manifest_sha256"] != canonical_manifest_sha256(contract):
+        raise RuntimeError("composition contract canonical manifest shape differs")
 
 
 def validate_fixture_imports(path: Path) -> None:
@@ -146,9 +216,13 @@ def validate_fixture_imports(path: Path) -> None:
                         )
                     imported_package_modules.add(candidate)
                     package_aliases[alias.asname or candidate.partition(".")[0]] = candidate
-                elif root not in __import__("sys").stdlib_module_names:
+                elif root in FORBIDDEN_DYNAMIC_IMPORT_ROOTS:
                     raise RuntimeError(
-                        f"composition fixture imports an external module: {candidate}"
+                        f"composition fixture imports a dynamic import facility: {candidate}"
+                    )
+                elif root not in ALLOWED_STDLIB_MODULES:
+                    raise RuntimeError(
+                        f"composition fixture imports a non-admitted module: {candidate}"
                     )
         elif isinstance(node, ast.ImportFrom):
             if node.level:
@@ -162,8 +236,8 @@ def validate_fixture_imports(path: Path) -> None:
                     "composition fixture must import public package modules, not attributes: "
                     f"{module}"
                 )
-            elif root not in __import__("sys").stdlib_module_names:
-                raise RuntimeError(f"composition fixture imports an external module: {module}")
+            elif root not in ALLOWED_STDLIB_MODULES:
+                raise RuntimeError(f"composition fixture imports a non-admitted module: {module}")
     if imported_package_modules != PACKAGE_MODULES:
         raise RuntimeError(
             "composition fixture does not reach the exact installed public module set: "
@@ -179,6 +253,35 @@ def validate_fixture_imports(path: Path) -> None:
             raise RuntimeError(
                 f"composition fixture reaches a non-public package attribute: {module}.{node.attr}"
             )
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name) and node.func.id == "__import__":
+            raise RuntimeError("composition fixture uses dynamic package import")
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in FORBIDDEN_REFLECTION_CALLS
+            and node.args
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id in package_aliases
+        ):
+            raise RuntimeError("composition fixture uses reflective package access")
+        if isinstance(node.func, ast.Name) and node.func.id in {"globals", "locals"}:
+            raise RuntimeError("composition fixture uses dynamic namespace access")
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "importlib"
+        ):
+            raise RuntimeError("composition fixture uses dynamic package import")
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "sys"
+            and node.attr == "modules"
+        ):
+            raise RuntimeError("composition fixture uses dynamic module registry access")
 
 
 def verify_artifact(
@@ -194,6 +297,21 @@ def verify_artifact(
         raise RuntimeError(f"combined wheel content root differs from Block 12: {distribution}")
 
 
+def require_fixture_rejection(command: list[str], *, cwd: Path, diagnostic: str) -> None:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if completed.returncode == 0 or diagnostic not in completed.stdout:
+        raise RuntimeError(
+            "neutral composition fixture negative did not fail with the expected diagnostic"
+        )
+
+
 def validate_result(
     result: object,
     contract: dict[str, object],
@@ -202,7 +320,7 @@ def validate_result(
         raise RuntimeError("neutral composition result has an unexpected shape")
     records = contract["packages"]
     assert isinstance(records, dict)
-    if result["schema_version"] != 1:
+    if type(result["schema_version"]) is not int or result["schema_version"] != 1:
         raise RuntimeError("neutral composition result schema version differs")
     if result["packages"] != {name: record["version"] for name, record in records.items()}:
         raise RuntimeError("neutral composition result package versions differ")
@@ -212,8 +330,26 @@ def validate_result(
         raise RuntimeError("neutral composition did not reach the exact public module set")
     if result["manifest_compatible"] is not True:
         raise RuntimeError("neutral composition manifest did not compare compatible")
-    require_exact_sha256(result["manifest_sha256"], "composition manifest")
-    if set(result["incompatible_root_kinds"]) != {"dependency-root", "protocol-schema"}:
+    if result["manifest_sha256"] != contract["manifest_sha256"]:
+        raise RuntimeError("neutral composition canonical manifest shape differs")
+    embedded = records["embedded-service-contract"]
+    assert isinstance(embedded, dict)
+    protocol = contract["protocol"]
+    assert isinstance(protocol, dict)
+    if result["incompatible_root_diagnostics"] != [
+        {
+            "expected": f"sha256:{embedded['wheel_content_root_sha256']}",
+            "kind": "dependency-root",
+            "observed": f"sha256:{'0' * 64}",
+            "subject": "embedded-service-contract",
+        },
+        {
+            "expected": f"sha256:{protocol['selected_surface_root_sha256']}",
+            "kind": "protocol-schema",
+            "observed": f"sha256:{'0' * 64}",
+            "subject": "codex-app-server-surface",
+        },
+    ]:
         raise RuntimeError("neutral composition root diagnostics differ")
     if result["client"] != {
         "channel_close_count": 1,
@@ -356,6 +492,7 @@ def main() -> int:
             json.dumps(
                 {
                     "schema_version": 1,
+                    "manifest_sha256": contract["manifest_sha256"],
                     "packages": {
                         name: {
                             "version": record["version"],
@@ -370,6 +507,18 @@ def main() -> int:
             + "\n",
             encoding="utf-8",
         )
+        invalid_input = temporary_root / "invalid-composition-input.json"
+        invalid_document = json.loads(fixture_input.read_text(encoding="utf-8"))
+        invalid_document["schema_version"] = True
+        invalid_input.write_text(
+            json.dumps(invalid_document, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        require_fixture_rejection(
+            [str(interpreter), "-I", str(FIXTURE_PATH), str(invalid_input)],
+            cwd=temporary_root,
+            diagnostic="unsupported schema version",
+        )
         completed = check_package.run(
             [str(interpreter), "-I", str(FIXTURE_PATH), str(fixture_input)],
             cwd=temporary_root,
@@ -380,6 +529,7 @@ def main() -> int:
         json.dumps(
             {
                 "composition": result,
+                "fixture_input_negatives": 1,
                 "python": args.python_spec,
                 "wheels": wheel_records,
             },

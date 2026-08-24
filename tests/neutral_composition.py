@@ -39,10 +39,16 @@ def require_sha256(value: object, label: str) -> str:
 
 def load_inputs(path: Path) -> dict[str, object]:
     value = json.loads(path.read_text(encoding="utf-8"))
-    if type(value) is not dict or set(value) != {"schema_version", "packages", "protocol"}:
+    if type(value) is not dict or set(value) != {
+        "schema_version",
+        "manifest_sha256",
+        "packages",
+        "protocol",
+    }:
         raise RuntimeError("composition input has an unexpected top-level shape")
-    if value["schema_version"] != 1:
+    if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         raise RuntimeError("composition input has an unsupported schema version")
+    require_sha256(value["manifest_sha256"], "canonical manifest")
     packages = value["packages"]
     if type(packages) is not dict or set(packages) != set(PACKAGE_NAMES):
         raise RuntimeError("composition input package set is not exact")
@@ -172,7 +178,7 @@ def package_component(inputs: dict[str, object], name: str) -> object:
     )
 
 
-def runtime_manifest(inputs: dict[str, object], *, incompatible: bool = False) -> object:
+def runtime_manifest(inputs: dict[str, object], *, mismatch: str | None = None) -> object:
     protocol = inputs["protocol"]
     assert isinstance(protocol, dict)
     dependencies = (
@@ -180,8 +186,9 @@ def runtime_manifest(inputs: dict[str, object], *, incompatible: bool = False) -
         package_component(inputs, "runtime-manifest"),
     )
     surface_root = str(protocol["selected_surface_root_sha256"])
-    if incompatible:
+    if mismatch == "protocol-schema":
         surface_root = "0" * 64
+    elif mismatch == "dependency-root":
         embedded = dependencies[0]
         dependencies = (
             manifest_api.Component(
@@ -191,6 +198,8 @@ def runtime_manifest(inputs: dict[str, object], *, incompatible: bool = False) -
             ),
             dependencies[1],
         )
+    elif mismatch is not None:
+        raise RuntimeError(f"unknown neutral mismatch fixture: {mismatch}")
     return manifest_api.RuntimeManifest(
         component=package_component(inputs, "codex-app-server-client"),
         protocols=(
@@ -279,28 +288,63 @@ async def compose(inputs: dict[str, object]) -> dict[str, object]:
 
     expected = runtime_manifest(inputs)
     encoded = manifest_api.canonical_json(expected)
+    manifest_sha256 = hashlib.sha256(encoded.encode()).hexdigest()
+    if manifest_sha256 != inputs["manifest_sha256"]:
+        raise RuntimeError("canonical neutral manifest shape differs from composition inputs")
     observed = manifest_api.parse_manifest(encoded)
     compatible = manifest_api.compare_manifests(expected, observed)
     if not compatible.compatible:
         raise RuntimeError("exact neutral composition manifest is incompatible")
-    incompatible = manifest_api.compare_manifests(
-        expected, runtime_manifest(inputs, incompatible=True)
+    dependency_incompatible = manifest_api.compare_manifests(
+        expected,
+        runtime_manifest(inputs, mismatch="dependency-root"),
     )
-    incompatible_kinds = [reason.kind.value for reason in incompatible.unavailable_reasons]
-    required_mismatches = {
-        manifest_api.UnavailableKind.DEPENDENCY_ROOT.value,
-        manifest_api.UnavailableKind.PROTOCOL_SCHEMA.value,
-    }
-    if set(incompatible_kinds) != required_mismatches:
-        raise RuntimeError("incompatible roots did not produce exact typed diagnostics")
+    protocol_incompatible = manifest_api.compare_manifests(
+        expected,
+        runtime_manifest(inputs, mismatch="protocol-schema"),
+    )
 
+    def diagnostic(reason: object) -> dict[str, object]:
+        return {
+            "expected": reason.expected,
+            "kind": reason.kind.value,
+            "observed": reason.observed,
+            "subject": reason.subject,
+        }
+
+    dependency_diagnostics = [
+        diagnostic(reason) for reason in dependency_incompatible.unavailable_reasons
+    ]
+    protocol_diagnostics = [
+        diagnostic(reason) for reason in protocol_incompatible.unavailable_reasons
+    ]
     packages = inputs["packages"]
     protocol = inputs["protocol"]
     assert isinstance(packages, dict)
     assert isinstance(protocol, dict)
+    embedded_record = packages["embedded-service-contract"]
+    assert isinstance(embedded_record, dict)
+    if dependency_diagnostics != [
+        {
+            "expected": f"sha256:{embedded_record['wheel_content_root_sha256']}",
+            "kind": manifest_api.UnavailableKind.DEPENDENCY_ROOT.value,
+            "observed": f"sha256:{'0' * 64}",
+            "subject": "embedded-service-contract",
+        }
+    ]:
+        raise RuntimeError("dependency-root mismatch did not produce one exact typed diagnostic")
+    if protocol_diagnostics != [
+        {
+            "expected": f"sha256:{protocol['selected_surface_root_sha256']}",
+            "kind": manifest_api.UnavailableKind.PROTOCOL_SCHEMA.value,
+            "observed": f"sha256:{'0' * 64}",
+            "subject": "codex-app-server-surface",
+        }
+    ]:
+        raise RuntimeError("protocol-root mismatch did not produce one exact typed diagnostic")
     return {
         "client": await run_client(inputs),
-        "incompatible_root_kinds": incompatible_kinds,
+        "incompatible_root_diagnostics": dependency_diagnostics + protocol_diagnostics,
         "lifecycle": {
             "embedded": {
                 "events": embedded.observed_events,
@@ -317,7 +361,7 @@ async def compose(inputs: dict[str, object]) -> dict[str, object]:
             },
         },
         "manifest_compatible": compatible.compatible,
-        "manifest_sha256": hashlib.sha256(encoded.encode()).hexdigest(),
+        "manifest_sha256": manifest_sha256,
         "packages": {name: record["version"] for name, record in packages.items()},
         "protocol": protocol,
         "public_modules": list(public_modules),

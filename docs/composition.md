@@ -19,9 +19,9 @@ The fixture has one bounded purpose:
   names the exact installed package content roots plus the frozen app-server
   schema and selected-surface roots.
 
-The same manifest comparison is repeated with one altered package root and one
-altered protocol root. It must return exactly the typed `dependency-root` and
-`protocol-schema` reasons. The runner rejects private package modules or
+Separate manifest comparisons alter one package root and one protocol root.
+Each must return one exact typed reason, including its subject and expected and
+observed `sha256:` roots. The runner rejects private package modules or
 attributes, extra result fields, altered artifact roots, mixed versions,
 unexpected lifecycle results, and package/protocol input drift.
 

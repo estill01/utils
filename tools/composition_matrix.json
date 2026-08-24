@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "manifest_sha256": "ebf1ec63705d7731adb7ec19501cdb33cf36ace5a11475fa2f2499bea00bc51f",
   "packages": {
     "codex-app-server-client": {
       "version": "0.1.0",
