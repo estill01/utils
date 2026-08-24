@@ -310,7 +310,7 @@ govern execution.
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `completed` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `completed` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `completed` |
-| 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `in-progress` |
+| 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `completed` |
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `not-started` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `not-started` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `not-started` |
@@ -2189,7 +2189,7 @@ Stop before installing all distributions together or testing composition.
 
 ## Block 13 — Prove neutral cross-package composition
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -2250,7 +2250,74 @@ absence of test-only architecture, and no new package coupling.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed commit
+  `0261d9ede7ef458b9a8ecf57461ee6449c6f5147`, tree
+  `0dde0408e65a65a214e1b6558d70a936a1dc7262`; `HEAD`, `main`,
+  `origin/main`, and the independently reviewed immutable candidate matched and
+  the worktrees were clean.
+- Combined-install owner: `scripts/check_composition.py` rebuilds the three
+  accepted package snapshots separately, requires their exact Block 12 wheel
+  byte and content roots from `tools/composition_matrix.json`, installs only
+  those local wheels together without dependency resolution into one clean
+  environment, and runs the test-only `tests/neutral_composition.py` fixture
+  under isolated Python. CI exercises the same job on Python 3.11 and 3.14.
+- Exact unchanged artifacts: `codex-app-server-client==0.1.0` wheel SHA-256
+  `1e9dc5b9c7f2edb9676b5a47eb2c9b96498f1b429acec474cd26702fe8e3fdb9`
+  and content root
+  `6ecc26e75197d06682fe9d8d0612edb1e56ead6d04c3a41cde1132e2618efd8f`;
+  `embedded-service-contract==0.1.0` wheel SHA-256
+  `2b36d7307c08cd6d7d95bfb86d4a240b6ab2a69de5b2c61bf75a54507c7ea18d`
+  and content root
+  `c53432ff83c6b80483a95384af3c9058a3cd82c56ac774126f123a93dbff7113`;
+  and `runtime-manifest==0.1.0` wheel SHA-256
+  `f2e601d542272187998296f09d33b2235002d108fe07c0b3c89a678ea1d010ac`
+  and content root
+  `db8f7f7d0b0105361f9b1380ff1d1cc432e720be02def65880a9ef484ad112a2`.
+  Both interpreter runs reproduced every value exactly.
+- Public-only fixture proof: the formatted fixture is frozen at SHA-256
+  `7a7a112b345d1f7aa979b1627a6a9d90b76f3548953cafb97f45e2d3ff3e9f49`.
+  Its exact ordered imports, aliases, complete documented root-module attribute
+  sets, and non-escaping module-object uses are statically enforced. Private or
+  nested package access, alias/reflection bypass, dynamic import/evaluation,
+  module-registry access, effectful stdlib imports, external imports, and
+  incomplete public reachability all reject.
+- Neutral scenario result: the installed app-server client validates the
+  packaged Codex `0.147.0` schema and selected surface, initializes generation
+  1 over one owned in-memory injected channel, performs one typed empty thread
+  list, and closes the channel exactly once. Installed embedded and service
+  reference fixtures each pass three structural scenarios with six observed
+  events; their combined declared process-owner count is exactly one.
+- Manifest and incompatibility proof: the exact three package content roots,
+  app-server schema root
+  `eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa`,
+  and selected-surface root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`
+  produce canonical manifest SHA-256
+  `ebf1ec63705d7731adb7ec19501cdb33cf36ace5a11475fa2f2499bea00bc51f`.
+  Independent single-root mutations return one exact full diagnostic each:
+  `dependency-root` for `embedded-service-contract` and `protocol-schema` for
+  `codex-app-server-surface`, with exact accepted and zeroed `sha256:` values.
+  Boolean schema versions, hidden capability/field drift, reordered or
+  duplicate diagnostics, mixed roots, and changed package/protocol versions
+  fail closed.
+- Validation and independent review: both complete `UV_OFFLINE=1` Python 3.11
+  and 3.14 combined jobs passed with identical outputs, as did all four focused
+  composition-audit groups and the maintained quality, Ruff, protocol,
+  protocol-mutation, repository-boundary, and Block 12 isolation checks.
+  Distinct reviewer `/root/block0_reviewer` returned `ACCEPT` after four
+  remediation cycles and independently reproduced the exact artifacts,
+  manifest, diagnostics, lifecycle/client results, and scope audit.
+- Currentness and qualification posture: current and accepted for the one
+  frozen neutral installed-wheel composition over Blocks 9–12. This is an
+  internal test boundary only; complete technical package-set qualification
+  remains Block 14.
+- Downstream and Stop audit: the accepted delta contains only repository
+  tooling, CI, documentation, frozen matrix inputs, and a test-only fixture. No
+  package source or public API changed; no production facade, service, adapter,
+  product field, downstream identifier, checkout, process, fixture, test,
+  cutover, pin, or acceptance was added or invoked. Posture remains
+  `no-license-selected/unpublished`; no license, publication, release,
+  redistribution authority, or public reuse claim was added.
 
 ### Stop
 
