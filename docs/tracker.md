@@ -312,7 +312,7 @@ govern execution.
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `completed` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `completed` |
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `completed` |
-| 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `not-started` |
+| 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `in-progress` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `not-started` |
 
 Required order:
@@ -2486,7 +2486,7 @@ Stop before authority/downstream audit, license action, publication, or release.
 
 ## Block 15 — Audit authority and downstream non-interaction
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
