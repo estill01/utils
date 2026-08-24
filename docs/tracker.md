@@ -311,7 +311,7 @@ govern execution.
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `completed` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `completed` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `completed` |
-| 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `not-started` |
+| 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `in-progress` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `not-started` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `not-started` |
 
@@ -2327,7 +2327,7 @@ Stop before terminal qualification, authority audit, or release posture.
 
 ## Block 14 — Qualify the frozen technical package set
 
-Status: `not-started`
+Status: `in-progress`
 
 ### Objective
 
