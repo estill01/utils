@@ -312,7 +312,7 @@ govern execution.
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `completed` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `completed` |
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `completed` |
-| 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `in-progress` |
+| 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `completed` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `not-started` |
 
 Required order:
@@ -2486,7 +2486,7 @@ Stop before authority/downstream audit, license action, publication, or release.
 
 ## Block 15 — Audit authority and downstream non-interaction
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -2548,7 +2548,63 @@ passing tests or populated manifests cannot substitute for this judgment.
 
 ### Completion evidence
 
-Pending.
+- Exact reviewed candidate: pushed revision
+  `4d6658e103180320fb8d2a1faab6051a57ccd4cc`, tree
+  `d9f68a953b18d3a65fd108f761c2f8b9113d5297`; local `HEAD`, local
+  `main`, `origin/main`, and GitHub `refs/heads/main` matched and the worktree
+  was clean. Its delta from accepted Block 14 changes only tracker status, so
+  the accepted technical proof remained current without rerunning the complete
+  matrix.
+- Downstream-interaction audit: no package source, test, fixture, artifact
+  input, composition input, tool command, qualification record, or CI runtime
+  path imports, names, opens, invokes, mutates, or validates Software Factory,
+  libRSI, Patent Studio, or another downstream consumer. Their names occur
+  only in repository-level admission/boundary documentation and negative
+  import checks; no consumer pin, handoff operation, adapter, or acceptance
+  state exists.
+- Authority/import matrix:
+
+  | Surface | Imports or effects | Authority boundary | Result |
+  | --- | --- | --- | --- |
+  | `codex-app-server-client` | Standard library; explicit official Codex binary, local socket, or caller-injected channel | Caller supplies identity, transport, backoff, requests, configuration values, and approval responses; Codex supplies protocol results/events | clean |
+  | `embedded-service-contract` | Standard library; starts no process and owns no server, runner, scheduler, or persistence | Host owns execution and request/event/result/failure meaning; package checks structural lifecycle invariants only | clean |
+  | `runtime-manifest` | Standard library; no discovery, credential lookup, installation inference, or mutation | Caller supplies every descriptive component, version, root, protocol, feature, capability, and dependency | clean |
+  | tests, composition, CI | Package-local fakes, temporary local process/socket fixtures, isolated wheels, and public-only neutral composition | Internal conformance only; no product, downstream, or release authority | clean |
+  | release surface | Read-only CI permissions; no credentials, publish/upload/release job, tag, license file, or license metadata | No release authority exists in this repository | clean |
+
+- Exported-authority audit: the client has 92 exact root exports, the lifecycle
+  contract 19, and the manifest 16; none is authority-named or imports an
+  external distribution. Approval callbacks carry typed requests and require
+  caller-supplied responses; they never choose approval or policy. Lifecycle
+  terminal states are structural observations, not product outcomes or QA
+  acceptance. Manifest `compatible` means only that no exact descriptive
+  mismatch was found and cannot authorize execution, adoption, or release.
+- Retained upstream limitation: the exact 285-file official Codex schema
+  snapshot includes passive account, authentication, API-key,
+  configuration-write, marketplace, plugin, and MCP-management definitions.
+  None overlaps the closed selected surface or generated public model graph;
+  there is no raw-call API, sensitive method export, or credential owner, and
+  unselected traffic fails closed. Selected thread operations may transport
+  caller-provided configuration, sandbox, or approval values, but this package
+  supplies no defaults or policy meaning.
+- Finding closure: targeted searches, AST import/export inspection,
+  dependency metadata, retained contract/schema inspection, exact
+  qualification currentness, CI permissions/effects, Git tags, and license
+  inventory all passed. Every apparent authority term was either explicit
+  negative exclusion metadata, neutral protocol terminology, or passive
+  unselected upstream compatibility data; no corrective code change or
+  technical-proof invalidation was required.
+- Independent semantic review: distinct reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for exact revision `4d6658e...` after independently
+  inspecting package source, retained schemas, public APIs, tests, fixtures,
+  examples, commands, artifact composition evidence, and CI paths. The review
+  confirmed the matrix and retained limitations above and found no open
+  authority or downstream-interaction issue.
+- Scope and posture: the audit was entirely inward-facing and read-only. No
+  downstream repository was opened or tested; no license, publication,
+  release, credential, announcement, adoption, or external mutation occurred.
+  All package records remain `program-qualified` and
+  `no-license-selected/unpublished`.
 
 ### Stop
 
