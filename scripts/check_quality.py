@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import subprocess
@@ -18,6 +19,9 @@ def run(command: list[str]) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--expected-head", required=True)
+    args = parser.parse_args()
     uv = shutil.which("uv")
     if uv is None:
         raise RuntimeError("uv is required for the maintained quality envelope")
@@ -66,7 +70,14 @@ def main() -> int:
     run([sys.executable, "scripts/test_check_package.py"])
     run([sys.executable, "scripts/test_check_composition.py"])
     run([sys.executable, "scripts/test_check_qualification.py"])
-    run([sys.executable, "scripts/check_qualification.py"])
+    run(
+        [
+            sys.executable,
+            "scripts/check_qualification.py",
+            "--expected-head",
+            args.expected_head,
+        ]
+    )
     ruff = f"ruff=={TOOLCHAIN['ruff']}"
     run([uv, "tool", "run", "--from", ruff, "ruff", "check", "."])
     run([uv, "tool", "run", "--from", ruff, "ruff", "format", "--check", "."])

@@ -26,7 +26,7 @@ python3 scripts/check_qualification.py
 Then run the complete frozen matrix exactly once for a candidate:
 
 ```bash
-python3 scripts/check_quality.py
+python3 scripts/check_quality.py --expected-head <exact-pushed-revision>
 python3 scripts/check_package.py --all --python 3.11 --tests
 python3 scripts/check_package.py --all --python 3.14 --tests
 python3 scripts/check_composition.py --python 3.11

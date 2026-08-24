@@ -199,7 +199,7 @@ def validate_contract(
     if qualification["python_matrix"] != ["3.11", "3.14"]:
         raise RuntimeError("qualification Python matrix is incomplete")
     expected_commands = [
-        "python3 scripts/check_quality.py",
+        "python3 scripts/check_quality.py --expected-head <exact-pushed-revision>",
         "python3 scripts/check_package.py --all --python 3.11 --tests",
         "python3 scripts/check_package.py --all --python 3.14 --tests",
         "python3 scripts/check_composition.py --python 3.11",

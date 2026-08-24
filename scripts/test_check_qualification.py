@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -107,6 +108,19 @@ class QualificationContractTests(unittest.TestCase):
         record = self.validate()
         with self.assertRaisesRegex(RuntimeError, "qualification HEAD differs"):
             check_qualification.validate_current_candidate(record, REPOSITORY_ROOT, "0" * 40)
+
+    def test_maintained_quality_requires_expected_head(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, str(REPOSITORY_ROOT / "scripts" / "check_quality.py")],
+            cwd=REPOSITORY_ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("--expected-head", completed.stdout)
+        self.assertIn("required", completed.stdout)
 
     def test_rejects_contract_path_escape(self) -> None:
         changed = copy.deepcopy(self.record)

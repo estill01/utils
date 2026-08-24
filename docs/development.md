@@ -5,7 +5,7 @@
 The repository-owned checks are:
 
 ```bash
-python3 scripts/check_quality.py
+python3 scripts/check_quality.py --expected-head <exact-pushed-revision>
 python3 scripts/check_package.py --all --python 3.11 --tests
 python3 scripts/check_package.py --all --python 3.14 --tests
 python3 scripts/check_composition.py --python 3.11
@@ -35,8 +35,11 @@ The `--all` jobs execute in parallel but never share an environment or install
 another distribution. The isolation command requires `--tests` and fails if a
 package-local test directory is missing, contains no `test_*.py` files, or
 executes zero tests.
-`scripts/check_quality.py` runs the repository contract plus the exact uv/Ruff
-versions pinned in `tools/toolchain.json`; CI invokes the same envelope.
+`scripts/check_quality.py` requires the exact pushed candidate revision and
+runs the repository contract plus the exact uv/Ruff versions pinned in
+`tools/toolchain.json`; CI passes its immutable checkout revision to the same
+envelope. A different `HEAD` or any added, removed, changed, or mode-changed
+tracked technical file fails before technical proof can be reused.
 
 `scripts/check_composition.py` is the separate combined-install envelope. It
 rebuilds the three independently accepted wheels, requires their complete byte
