@@ -309,7 +309,7 @@ govern execution.
 | 9 | Complete and freeze the app-server client distribution and deterministic conformance matrix | 8 | `completed` |
 | 10 | Implement neutral embedded-versus-service lifecycle protocols and fixtures | 1 | `completed` |
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `completed` |
-| 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `in-progress` |
+| 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `completed` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `not-started` |
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `not-started` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `not-started` |
@@ -2047,7 +2047,7 @@ Stop before cross-package composition or downstream manifest adoption.
 
 ## Block 12 — Prove independent distribution isolation
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -2106,7 +2106,80 @@ CI isolation, and absence of repository-layout assumptions.
 
 ### Completion evidence
 
-Pending.
+- Exact accepted source: pushed commit
+  `dbdc63a2f678980f1834555410541afaefc1e967`, tree
+  `6633cdaa7c1f73950aefa8383b40b1a4bcc37968`; `HEAD`, `main`,
+  `origin/main`, and the remote branch matched the independently reviewed
+  candidate and the worktree was clean.
+- Maintained isolation owner: `scripts/check_package.py`, its 22-test negative
+  audit contract in `scripts/test_check_package.py`, the frozen distribution
+  and dependency input in `tools/package_matrix.json`, package-isolation CI in
+  `.github/workflows/ci.yml`, and the operator contract in
+  `docs/development.md`. The command requires package-local tests and builds
+  each wheel into its own clean environment with no other admitted package
+  installed.
+- Frozen-input and wheel-boundary proof: every package is copied into separate
+  pristine-acceptance and PEP 517 build snapshots. Exact whole-file snapshot
+  records are verified before and after build; metadata, retained resources,
+  source members/bytes, and tests are read only from the pristine snapshot.
+  The audit rejects source injection or mutation, build/test/resource
+  rewriting, duplicate or unsafe ZIP members including directories,
+  file/directory collisions, unexpected top-level roots, missing wheel
+  metadata, and source/package-data divergence.
+- Exact declared-dependency proof: each source `pyproject.toml` and built wheel
+  has the frozen ordered empty runtime-requirement tuple. Observed wheel imports
+  have no external roots. Unadmitted, undeclared, unobserved, circular, and
+  source-self-authorized dependencies fail with explicit diagnostics; no
+  package is admitted implicitly from mutable source metadata.
+- Exact distribution artifacts on Python 3.11 and 3.14:
+  `codex-app-server-client==0.1.0` at
+  `packages/codex-app-server-client`, import root
+  `codex_app_server_client`, wheel SHA-256
+  `1e9dc5b9c7f2edb9676b5a47eb2c9b96498f1b429acec474cd26702fe8e3fdb9`,
+  content root
+  `6ecc26e75197d06682fe9d8d0612edb1e56ead6d04c3a41cde1132e2618efd8f`,
+  pristine snapshot root
+  `00e12d1bc4c9828219973936c1101da7d0e19488a5c683e99f7eb6b635fa6f4b`,
+  and 167 tests;
+  `embedded-service-contract==0.1.0` at
+  `packages/embedded-service-contract`, import root
+  `embedded_service_contract`, wheel SHA-256
+  `2b36d7307c08cd6d7d95bfb86d4a240b6ab2a69de5b2c61bf75a54507c7ea18d`,
+  content root
+  `c53432ff83c6b80483a95384af3c9058a3cd82c56ac774126f123a93dbff7113`,
+  pristine snapshot root
+  `44c22f3efda218b3f4873b1772a00dcf60530e121613f36c3651ec80c73fb9ba`,
+  and 13 tests; and `runtime-manifest==0.1.0` at
+  `packages/runtime-manifest`, import root `runtime_manifest`, wheel SHA-256
+  `f2e601d542272187998296f09d33b2235002d108fe07c0b3c89a678ea1d010ac`,
+  content root
+  `db8f7f7d0b0105361f9b1380ff1d1cc432e720be02def65880a9ef484ad112a2`,
+  pristine snapshot root
+  `94b073384b23c41b9b7a1c8b26ae1e4baaddbe6d35477f7c3b1e8f644f884b72`,
+  and 24 tests. All artifact values were byte-identical across interpreters.
+- Validation: both complete `UV_OFFLINE=1` Python 3.11 and Python 3.14
+  isolated-wheel matrices passed, as did all 22 focused verifier tests, the
+  maintained repository quality command, Ruff, the exact protocol checks, and
+  all five protocol-mutation negatives. Child command failures retain bounded
+  output and exact exit diagnostics.
+- Independent review: distinct read-only reviewer `/root/block0_reviewer`
+  returned `ACCEPT` for the exact pushed candidate after closing pristine-build
+  separation and ZIP-entry type/path findings. The reviewer independently
+  reproduced both interpreters, the full isolated matrices, all focused and
+  maintained quality checks, exact wheel/content/resource counts and roots,
+  and the repository-scope audit, and found no remaining material issue.
+- Currentness and qualification posture: current and accepted for independent
+  distribution isolation over the frozen Block 9–11 package sources. This is
+  an internal technical verification boundary only; combined installation and
+  composition remain Block 13, and final package-set qualification remains
+  Block 14.
+- Downstream and Stop audit: the accepted delta is confined to repository
+  tooling, tests, CI, matrix metadata, and documentation. It imports, installs,
+  invokes, discovers, mutates, or validates no downstream consumer, adapter,
+  repository, fixture, test, cutover, or acceptance; it did not install all
+  three distributions together or implement Block 13 composition. Posture
+  remains `no-license-selected/unpublished`; no license, publication, release,
+  redistribution authority, or public reuse claim was added.
 
 ### Stop
 
