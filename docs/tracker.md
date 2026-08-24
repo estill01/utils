@@ -1719,7 +1719,15 @@ currentness, package isolation, and absence of product behavior.
   Posture remains `no-license-selected/unpublished`. This is the first exact
   internal package handoff for a consumer adapter, but it does not claim any
   consumer pin, adoption, availability, production qualification, or reuse
-  right.
+  right. Registry collision warning: PyPI contains an unrelated third-party
+  `codex-app-server-client==0.1.0` whose wheel SHA-256 is
+  `8e2c9d322beb99702f3661c5366afede7fe89294c571ef5260fd9db23f597593`,
+  not this program's exact wheel SHA-256
+  `1e9dc5b9c7f2edb9676b5a47eb2c9b96498f1b429acec474cd26702fe8e3fdb9`.
+  That publication and its MIT license do not apply here. This internal
+  package record must be resolved by the trusted source revision and artifact
+  hashes above, never by bare public name/version or unconstrained registry
+  installation.
 - Downstream, Stop, and license audit: the accepted implementation is confined
   to this distribution, its repository verifier, and package-local smoke. It
   imports, invokes, mutates, or validates no downstream consumer, adapter, pin,
@@ -2682,7 +2690,79 @@ remain truthful, no external effect occurred, and the Stop is explicit.
 
 ### Completion evidence
 
-Pending.
+- Exact terminal candidate: pushed revision
+  `fdf9953ea99dbcdbede553ee058a1d1911eb07ac`, tree
+  `389a8f48ad180682a3ed769d1f87627402c99413`; local `HEAD`, local
+  `main`, `origin/main`, and GitHub `refs/heads/main` matched and the worktree
+  was clean. Its delta from accepted Block 15 changes only tracker status; the
+  exact qualification/currentness check passed and no technical proof was
+  invalidated or rerun.
+- Final internal completion manifest: this canonical tracker retains all Block
+  0–15 package, conformance, documentation, authority, review, and exact Git
+  evidence. `tools/qualification_matrix.json` retains technical candidate
+  `2150966402474bb633c01d04eca0a1bc8309d941`, source root
+  `9ab96149f63a45429a44ae07e309b68bb4204b4e2e6f4da6a7a93acbd5547068`,
+  the two-interpreter matrix, exact source commits/package trees, empty
+  dependency inventories, and immutable wheel/API/schema/composition roots.
+- Exact repository release posture: within the `estill01/utils` program, all
+  three qualified artifacts remain `no-license-selected/unpublished`. There is
+  no license file, package license field, license classifier, publication
+  configuration, registry credential, publish/upload job, writable CI release
+  permission, Git tag, GitHub Release, announcement, support promise, public
+  reuse grant, or redistribution authority. Public repository visibility and
+  internal technical qualification change none of those facts.
+- Registry-name limitation, checked 2026-08-23: PyPI contains an unrelated
+  third-party `codex-app-server-client==0.1.0` by Paras Doshi under MIT, with
+  wheel SHA-256
+  `8e2c9d322beb99702f3661c5366afede7fe89294c571ef5260fd9db23f597593`.
+  It is not this program's exact internal wheel SHA-256
+  `1e9dc5b9c7f2edb9676b5a47eb2c9b96498f1b429acec474cd26702fe8e3fdb9`;
+  its publication and license apply only to its bytes and cannot be inherited
+  by this package set. The internal client must be identified and consumed
+  only by exact trusted repository revision and artifact hashes, never by bare
+  public distribution name/version or unconstrained registry install.
+  `embedded-service-contract` and `runtime-manifest` returned `404` from PyPI
+  at review time; that neither reserves those names nor promises future
+  availability.
+- Final package records: client source `08c416da...`, embedded-contract source
+  `401f87a...`, and runtime-manifest source `6f7a7ea...` retain their exact
+  Block 14 package trees, wheel/content hashes, public contracts, and
+  `program-qualified` posture. They record internal source/artifact identity
+  only and describe no publicly installable or reusable dependency, consumer
+  pin, downstream availability, adoption, production acceptance, or release.
+- Retained technical and semantic limitations: the client retains the full
+  passive official upstream schema snapshot while exposing only its closed
+  selected surface; explicit Codex operations can cause upstream work and
+  caller-provided approval/configuration values keep caller/upstream meaning.
+  The lifecycle contract owns structure rather than product outcome meaning,
+  and runtime-manifest compatibility remains descriptive rather than
+  authoritative. Block 15's exact semantic audit remains controlling.
+- Separately authorized successor conditions:
+
+  - License selection requires explicit legal/owner authority that names the
+    exact terms, artifacts, and scope.
+  - Registry publication requires separate release authority, registry
+    ownership, a collision-safe distribution identity/version, credentials,
+    fresh artifact qualification, and explicit publication checks.
+  - A Git tag or GitHub Release requires a separately authorized version and
+    release plan plus fresh exact-revision review.
+  - Downstream adoption requires a consumer-owned tracker, exact trusted
+    revision/artifact-hash selection, consumer-side adapters, fixtures, tests,
+    cutover, and acceptance in that consumer repository.
+  - An unrelated utility requires fresh two-consumer admission and its own
+    dependency-ordered tracker work; terminal cleanup cannot admit it.
+
+- Prohibited effects and final Stop: this Block performed metadata,
+  registry-currentness, Git-currentness, and release-surface checks only. It
+  added no license, package metadata, tag, GitHub Release, publication,
+  credential, announcement, consumer handoff, downstream repository action,
+  adapter, pin, fixture, test, cutover, adoption, or unrelated package.
+- Terminal review: distinct reviewer `/root/block0_reviewer` independently
+  confirmed the exact package metadata/artifacts, qualification posture,
+  license inventory, read-only CI, empty tag/Release state, registry facts,
+  downstream boundary, and Git currentness. The review required the explicit
+  registry-collision and successor-activation record above before terminal
+  acceptance; the corrected exact candidate is pending final readback.
 
 ### Stop
 
