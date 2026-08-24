@@ -311,7 +311,7 @@ govern execution.
 | 11 | Implement deterministic non-authoritative runtime/version manifests | 1 | `completed` |
 | 12 | Prove every distribution builds and installs independently with clean dependency direction | 9–11 | `completed` |
 | 13 | Prove all distributions compose through public APIs in one neutral internal scenario | 12 | `completed` |
-| 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `in-progress` |
+| 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `completed` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `not-started` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `not-started` |
 
@@ -1708,12 +1708,18 @@ currentness, package isolation, and absence of product behavior.
   suites, official smoke/currentness, artifact/content-root recomputation,
   API/signature/export checks, remote-currentness, scope, and clean-tree audit.
   No material finding remains.
-- Package qualification posture:
-  `package-accepted/program-qualification-pending`. This is the first exact
+- Package qualification posture: `program-qualified` at exact pushed Block 14
+  qualification revision `7f1674aa31dd64a1621bf1a746ba78e8f4c51305`,
+  over unchanged package source `08c416da4202b7036110e33e43d34ea590054e2e`,
+  package tree `17772f61da62b41d6d3551deebc474792aafe922`, and the
+  immutable wheel/API/protocol roots above. The complete internal matrix and
+  independent exact-revision review passed; currentness is proven through the
+  frozen technical-source root
+  `9ab96149f63a45429a44ae07e309b68bb4204b4e2e6f4da6a7a93acbd5547068`.
+  Posture remains `no-license-selected/unpublished`. This is the first exact
   internal package handoff for a consumer adapter, but it does not claim any
   consumer pin, adoption, availability, production qualification, or reuse
-  right. Internal combined-package compatibility and final package-set
-  qualification remain Blocks 13 and 14.
+  right.
 - Downstream, Stop, and license audit: the accepted implementation is confined
   to this distribution, its repository verifier, and package-local smoke. It
   imports, invokes, mutates, or validates no downstream consumer, adapter, pin,
@@ -1862,13 +1868,18 @@ and absence of runtime or product authority.
   source and installed-wheel interpreter suites, repository quality, artifact
   and content-root computation, resource/API checks, remote-currentness,
   inward-scope, license, and clean-tree audits. No material finding remains.
-- Package qualification posture:
-  `package-accepted/program-qualification-pending`. These immutable values are
+- Package qualification posture: `program-qualified` at exact pushed Block 14
+  qualification revision `7f1674aa31dd64a1621bf1a746ba78e8f4c51305`,
+  over unchanged package source `401f87a64349c636a66be2da656498e7d9cb58e3`,
+  package tree `203c809f3d1ab2588df5ed83c08affde99f8010c`, and the
+  immutable wheel/contract roots above. The complete internal matrix and
+  independent exact-revision review passed; currentness is proven through the
+  frozen technical-source root
+  `9ab96149f63a45429a44ae07e309b68bb4204b4e2e6f4da6a7a93acbd5547068`.
+  Posture remains `no-license-selected/unpublished`. These immutable values are
   the first eligible internal source/package handoff for structural conformance
   consumption, but they record no consumer adapter, pin, adoption,
-  availability, production qualification, or reuse right. Internal
-  combined-package compatibility and final package-set qualification remain
-  Blocks 13 and 14.
+  availability, production qualification, or reuse right.
 - Downstream, Stop, and license audit: the accepted implementation is confined
   to this distribution and repository-owned quality checks. It imports,
   invokes, mutates, or validates no downstream consumer, adapter, repository,
@@ -2024,13 +2035,19 @@ absence of authority states, and absence of consumer identifiers.
   license, and clean-tree audits. No material finding remains; standard JSON
   Schema consumers must honor the documented extension invariants or use the
   strict package parser.
-- Package qualification posture:
-  `package-accepted/program-qualification-pending`. These immutable values are
+- Package qualification posture: `program-qualified` at exact pushed Block 14
+  qualification revision `7f1674aa31dd64a1621bf1a746ba78e8f4c51305`,
+  over unchanged package source `6f7a7ea3c105c7461e6cb4c83944dd094883f187`,
+  package tree `42cb7171d3de021a99f75ac741ea0a0cf97c84ae`, and the
+  immutable wheel/schema/API roots above. The complete internal matrix and
+  independent exact-revision review passed; currentness is proven through the
+  frozen technical-source root
+  `9ab96149f63a45429a44ae07e309b68bb4204b4e2e6f4da6a7a93acbd5547068`.
+  Posture remains `no-license-selected/unpublished`. These immutable values are
   the first eligible internal source/package handoff for descriptive runtime
   metadata consumption, but they record no consumer adapter, pin, adoption,
   availability, authorization, acceptance, production qualification, or reuse
-  right. Internal combined-package compatibility and final package-set
-  qualification remain Blocks 13 and 14.
+  right.
 - Downstream, Stop, and license audit: the accepted implementation is confined
   to this distribution and repository-owned quality checks. It imports,
   invokes, discovers, mutates, or validates no downstream consumer, adapter,
@@ -2327,7 +2344,7 @@ Stop before terminal qualification, authority audit, or release posture.
 
 ## Block 14 — Qualify the frozen technical package set
 
-Status: `in-progress`
+Status: `completed`
 
 ### Objective
 
@@ -2395,7 +2412,71 @@ documentation truth, dependency metadata, and exact candidate currentness.
 
 ### Completion evidence
 
-Pending.
+- Exact frozen revisions: technical candidate
+  `2150966402474bb633c01d04eca0a1bc8309d941` and exact pushed qualification
+  revision `7f1674aa31dd64a1621bf1a746ba78e8f4c51305`, tree
+  `45b097ed4f297ed15238e5d6ef865b4b8a84ebd5`. Local `HEAD`, local `main`,
+  `origin/main`, and GitHub `refs/heads/main` matched the qualification
+  revision and the worktree was clean.
+- Frozen technical source: `tools/qualification_matrix.json` binds all 367
+  tracked files and Git modes at the candidate to SHA-256
+  `9ab96149f63a45429a44ae07e309b68bb4204b4e2e6f4da6a7a93acbd5547068`.
+  Only mutable `docs/tracker.md` evidence and the self-referential
+  qualification JSON are excluded. Maintained quality and CI require an exact
+  externally supplied `HEAD`; new, changed, deleted, or mode-changed tracked
+  technical files reject stale proof.
+- Exact package reconciliation: `codex-app-server-client==0.1.0` preserves
+  source `08c416da4202b7036110e33e43d34ea590054e2e`, package tree
+  `17772f61da62b41d6d3551deebc474792aafe922`, wheel SHA-256
+  `1e9dc5b9c7f2edb9676b5a47eb2c9b96498f1b429acec474cd26702fe8e3fdb9`,
+  and content root
+  `6ecc26e75197d06682fe9d8d0612edb1e56ead6d04c3a41cde1132e2618efd8f`;
+  `embedded-service-contract==0.1.0` preserves source
+  `401f87a64349c636a66be2da656498e7d9cb58e3`, package tree
+  `203c809f3d1ab2588df5ed83c08affde99f8010c`, wheel SHA-256
+  `2b36d7307c08cd6d7d95bfb86d4a240b6ab2a69de5b2c61bf75a54507c7ea18d`,
+  and content root
+  `c53432ff83c6b80483a95384af3c9058a3cd82c56ac774126f123a93dbff7113`;
+  `runtime-manifest==0.1.0` preserves source
+  `6f7a7ea3c105c7461e6cb4c83944dd094883f187`, package tree
+  `42cb7171d3de021a99f75ac741ea0a0cf97c84ae`, wheel SHA-256
+  `f2e601d542272187998296f09d33b2235002d108fe07c0b3c89a678ea1d010ac`,
+  and content root
+  `db8f7f7d0b0105361f9b1380ff1d1cc432e720be02def65880a9ef484ad112a2`.
+  Every runtime-dependency and observed external-import inventory is empty.
+- API, compatibility, and documentation proof: each distribution's exact
+  package-owned API/schema/fixture set is required without additions or
+  omissions; protocol schema root
+  `eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa`,
+  selected-surface root
+  `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`,
+  neutral fixture SHA-256
+  `7a7a112b345d1f7aa979b1627a6a9d90b76f3548953cafb97f45e2d3ff3e9f49`,
+  and canonical manifest SHA-256
+  `ebf1ec63705d7731adb7ec19501cdb33cf36ace5a11475fa2f2499bea00bc51f`
+  remain unchanged. Each exact package README contains and executes its own
+  public-import example; swapped, missing, duplicated, or invalid examples
+  fail qualification.
+- Complete internal matrix: one consolidated offline exact-revision run passed
+  maintained quality, 16 focused qualification negatives, protocol/schema
+  mutations, Ruff lint/format, all-package isolated build/install/import/test
+  on CPython 3.11 and 3.14, and neutral combined composition on both
+  interpreters. Both interpreters produced byte-identical wheels and identical
+  typed composition results.
+- Independent review: distinct reviewer `/root/block0_reviewer` rejected two
+  earlier candidates after directly reproducing loose source ancestry,
+  incomplete contract inventories, misowned examples, incomplete source
+  inventory, and optional-currentness defects. The reviewer returned `ACCEPT`
+  for exact pushed revision `7f1674aa...` only after every prior mutation
+  failed closed, the one consolidated matrix passed, all roots were
+  independently recomputed, and remote currentness and clean-tree state were
+  confirmed. No technical finding remains open.
+- Final technical posture: all three package records are `program-qualified`
+  at exact pushed revision `7f1674aa...` and remain
+  `no-license-selected/unpublished`. This is internal package evidence only;
+  no downstream repository, adapter, pin, fixture, test, cutover, adoption,
+  availability, production acceptance, license, publication, release,
+  redistribution authority, or public reuse claim was touched or inferred.
 
 ### Stop
 
