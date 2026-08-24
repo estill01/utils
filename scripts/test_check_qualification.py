@@ -74,10 +74,44 @@ class QualificationContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "unexpected shape"):
             self.validate(changed)
 
+    def test_rejects_pre_correction_source_commit(self) -> None:
+        changed = copy.deepcopy(self.record)
+        changed["packages"]["runtime-manifest"]["accepted_source_commit"] = (
+            "5e0a84137875740cb3c1ebf73a5f5cbf0525d9d9"
+        )
+        with self.assertRaisesRegex(RuntimeError, "accepted source commit differs"):
+            self.validate(changed)
+
+    def test_rejects_incomplete_public_contract_inventory(self) -> None:
+        changed = copy.deepcopy(self.record)
+        del changed["packages"]["codex-app-server-client"]["public_contracts"][
+            "packages/codex-app-server-client/protocol/compatibility.json"
+        ]
+        with self.assertRaisesRegex(RuntimeError, "public contract inventory differs"):
+            self.validate(changed)
+
+    def test_rejects_changed_package_tree(self) -> None:
+        changed = copy.deepcopy(self.record)
+        changed["packages"]["runtime-manifest"]["package_tree_object"] = "0" * 40
+        with self.assertRaisesRegex(RuntimeError, "accepted package tree differs"):
+            self.validate(changed)
+
+    def test_rejects_swapped_executable_example_ownership(self) -> None:
+        record = copy.deepcopy(self.validate())
+        runtime = record["documentation"]["executable_examples"]["runtime-manifest"]
+        record["documentation"]["executable_examples"]["codex-app-server-client"] = runtime
+        with self.assertRaisesRegex(RuntimeError, "example ownership differs"):
+            check_qualification.validate_documentation(record, REPOSITORY_ROOT)
+
+    def test_rejects_wrong_expected_head(self) -> None:
+        record = self.validate()
+        with self.assertRaisesRegex(RuntimeError, "qualification HEAD differs"):
+            check_qualification.validate_current_candidate(record, REPOSITORY_ROOT, "0" * 40)
+
     def test_rejects_contract_path_escape(self) -> None:
         changed = copy.deepcopy(self.record)
         changed["packages"]["runtime-manifest"]["public_contracts"] = {"../outside.json": "0" * 64}
-        with self.assertRaisesRegex(RuntimeError, "escapes the package"):
+        with self.assertRaisesRegex(RuntimeError, "public contract inventory differs"):
             self.validate(changed)
 
     def test_rejects_changed_documentation(self) -> None:
@@ -99,14 +133,19 @@ class QualificationContractTests(unittest.TestCase):
         record = copy.deepcopy(self.validate())
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            for relative in record["documentation"]["files"]:
+                source = REPOSITORY_ROOT / relative
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
             relative = "packages/runtime-manifest/README.md"
             path = root / relative
-            path.parent.mkdir(parents=True)
             path.write_text("```python executable\nif\n```\n", encoding="utf-8")
             digest = check_qualification.file_sha256(path)
-            record["documentation"]["files"] = {relative: digest}
-            record["documentation"]["executable_examples"] = {
-                name: {"path": relative, "sha256": digest} for name in record["packages"]
+            record["documentation"]["files"][relative] = digest
+            record["documentation"]["executable_examples"]["runtime-manifest"] = {
+                "path": relative,
+                "sha256": digest,
             }
             with self.assertRaises(SyntaxError):
                 check_qualification.validate_documentation(record, root)

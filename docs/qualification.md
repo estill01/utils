@@ -6,6 +6,12 @@ version, wheel bytes, wheel content root, public contract inputs, executable
 README example, Python matrix, protocol roots, composition roots, and empty
 runtime-dependency inventory.
 
+The technical-source root covers every tracked file and its Git mode at the
+recorded candidate revision except the mutable tracker evidence and the
+self-referential qualification JSON. An exact acceptance run additionally
+passes the expected current `HEAD`, so added, removed, changed, or mode-changed
+technical files cannot reuse earlier proof.
+
 The record is technical evidence only. `program-qualified` means that this
 repository's complete internal matrix passed for the frozen package set. It is
 not a consumer pin, installation instruction, availability statement,

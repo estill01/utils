@@ -16,6 +16,7 @@
   "packages": {
     "codex-app-server-client": {
       "accepted_source_commit": "08c416da4202b7036110e33e43d34ea590054e2e",
+      "package_tree_object": "17772f61da62b41d6d3551deebc474792aafe922",
       "path": "packages/codex-app-server-client",
       "import": "codex_app_server_client",
       "version": "0.1.0",
@@ -30,6 +31,7 @@
     },
     "embedded-service-contract": {
       "accepted_source_commit": "401f87a64349c636a66be2da656498e7d9cb58e3",
+      "package_tree_object": "203c809f3d1ab2588df5ed83c08affde99f8010c",
       "path": "packages/embedded-service-contract",
       "import": "embedded_service_contract",
       "version": "0.1.0",
@@ -45,6 +47,7 @@
     },
     "runtime-manifest": {
       "accepted_source_commit": "6f7a7ea3c105c7461e6cb4c83944dd094883f187",
+      "package_tree_object": "42cb7171d3de021a99f75ac741ea0a0cf97c84ae",
       "path": "packages/runtime-manifest",
       "import": "runtime_manifest",
       "version": "0.1.0",
@@ -74,7 +77,7 @@
       "packages/codex-app-server-client/README.md": "e94afb883c8678de31876e427b28b7fdc42322de3aad1bee4c872cb79a64a772",
       "packages/embedded-service-contract/README.md": "6870de7e8b97cb2cad68058699f68ea7d0a8bb59d1d612fbffd74e8bc8b62d5d",
       "packages/runtime-manifest/README.md": "9d7e5c87d3e49fe3b536a0a1e54ee7692da6b4fae6f9e49688e52d6d5ae96373",
-      "docs/qualification.md": "7fc844b118845d26298363c7f9a3578944f90f57306107461cd61df854dc7947"
+      "docs/qualification.md": "e3b99aab4f1c4760e54b0b4ce02c10eaad27d0b36d58b18fe632016bf00ed6af"
     },
     "executable_examples": {
       "codex-app-server-client": {
@@ -92,7 +95,8 @@
     }
   },
   "technical_source": {
-    "root_sha256": "b813b25dc0ea680c16899e3b74fa7a7986ea9ab737f3dee9a22f0d519bf1d35b",
-    "files": 364
+    "candidate_revision": "ca8234266f68f16a889c7df07ddbb566b55fc02e",
+    "root_sha256": "7ece2cd36e4412c223d44f81230194b0013cd890563e248658f846c851906ec4",
+    "files": 367
   }
 }

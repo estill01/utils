@@ -17,34 +17,39 @@ PACKAGE_MATRIX_PATH = REPOSITORY_ROOT / "tools" / "package_matrix.json"
 COMPOSITION_MATRIX_PATH = REPOSITORY_ROOT / "tools" / "composition_matrix.json"
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 EXECUTABLE_EXAMPLE_PATTERN = re.compile(r"```python executable\n(.*?)```", re.DOTALL)
-FROZEN_TOOLING = (
-    ".github/workflows/ci.yml",
-    "README.md",
-    "docs/admission.md",
-    "docs/architecture.md",
-    "docs/composition.md",
-    "docs/development.md",
-    "docs/qualification.md",
-    "pyproject.toml",
-    "scripts/check_app_server_currentness.py",
-    "scripts/check_composition.py",
-    "scripts/check_package.py",
-    "scripts/check_protocol_contract.py",
-    "scripts/check_qualification.py",
-    "scripts/check_repo.py",
-    "scripts/check_quality.py",
-    "scripts/schema_tree.py",
-    "scripts/smoke_app_server_client.py",
-    "scripts/test_check_composition.py",
-    "scripts/test_check_package.py",
-    "scripts/test_check_qualification.py",
-    "scripts/test_protocol_contract.py",
-    "tests/neutral_composition.py",
-    "tools/changed_tests.json",
-    "tools/composition_matrix.json",
-    "tools/package_matrix.json",
-    "tools/toolchain.json",
-)
+TECHNICAL_SOURCE_EXCLUSIONS = {
+    "docs/tracker.md",  # mutable program status/evidence, not package-set input
+    "tools/qualification_matrix.json",  # self-referential qualification record
+}
+EXPECTED_PACKAGE_SOURCES = {
+    "codex-app-server-client": {
+        "accepted_source_commit": "08c416da4202b7036110e33e43d34ea590054e2e",
+        "package_tree_object": "17772f61da62b41d6d3551deebc474792aafe922",
+        "public_contracts": {
+            "packages/codex-app-server-client/protocol/compatibility.json",
+            "packages/codex-app-server-client/protocol/public-api.json",
+        },
+    },
+    "embedded-service-contract": {
+        "accepted_source_commit": "401f87a64349c636a66be2da656498e7d9cb58e3",
+        "package_tree_object": "203c809f3d1ab2588df5ed83c08affde99f8010c",
+        "public_contracts": {
+            "packages/embedded-service-contract/contract/conformance-fixtures.json",
+            "packages/embedded-service-contract/contract/structural-contract.json",
+            "packages/embedded-service-contract/contract/supported-python.json",
+        },
+    },
+    "runtime-manifest": {
+        "accepted_source_commit": "6f7a7ea3c105c7461e6cb4c83944dd094883f187",
+        "package_tree_object": "42cb7171d3de021a99f75ac741ea0a0cf97c84ae",
+        "public_contracts": {
+            "packages/runtime-manifest/contract/compatibility-fixtures.json",
+            "packages/runtime-manifest/contract/manifest-schema.json",
+            "packages/runtime-manifest/contract/public-api.json",
+            "packages/runtime-manifest/contract/supported-python.json",
+        },
+    },
+}
 
 
 def load_json(path: Path) -> object:
@@ -61,34 +66,53 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def frozen_source_record(repository_root: Path) -> tuple[str, int]:
-    package_root = repository_root / "packages"
-    ignored_parts = {"__pycache__", ".pytest_cache", ".ruff_cache", "build", "dist"}
-    paths = sorted(
-        {
-            *(repository_root / relative for relative in FROZEN_TOOLING),
-            *(
-                path
-                for path in package_root.rglob("*")
-                if path.is_file()
-                and not ignored_parts.intersection(path.relative_to(package_root).parts)
-                and path.suffix != ".pyc"
-            ),
-        },
-        key=lambda path: path.relative_to(repository_root).as_posix(),
+def git_inventory(repository_root: Path, revision: str | None) -> list[tuple[str, str]]:
+    command = (
+        ["git", "ls-tree", "-r", "-z", revision]
+        if revision is not None
+        else ["git", "ls-files", "-s", "-z"]
     )
-    missing = [path for path in paths if not path.is_file()]
-    if missing:
-        rendered = ", ".join(str(path.relative_to(repository_root)) for path in missing)
-        raise RuntimeError(f"frozen technical source is missing file(s): {rendered}")
-    rows = [
-        {
-            "path": path.relative_to(repository_root).as_posix(),
-            "sha256": file_sha256(path),
-            "size": path.stat().st_size,
-        }
-        for path in paths
-    ]
+    output = subprocess.run(
+        command,
+        cwd=repository_root,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    inventory: list[tuple[str, str]] = []
+    for raw in output.split(b"\0"):
+        if not raw:
+            continue
+        metadata, raw_path = raw.split(b"\t", 1)
+        fields = metadata.decode("ascii").split()
+        mode = fields[0]
+        relative = raw_path.decode("utf-8")
+        if relative not in TECHNICAL_SOURCE_EXCLUSIONS:
+            inventory.append((relative, mode))
+    return sorted(inventory)
+
+
+def frozen_source_record(repository_root: Path, revision: str | None = None) -> tuple[str, int]:
+    rows: list[dict[str, str | int]] = []
+    for relative, mode in git_inventory(repository_root, revision):
+        if revision is None:
+            path = repository_file(repository_root, relative, "tracked technical source")
+            data = path.read_bytes()
+        else:
+            data = subprocess.run(
+                ["git", "show", f"{revision}:{relative}"],
+                cwd=repository_root,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            ).stdout
+        rows.append(
+            {
+                "mode": mode,
+                "path": relative,
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "size": len(data),
+            }
+        )
     payload = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     return hashlib.sha256(payload).hexdigest(), len(rows)
 
@@ -130,6 +154,11 @@ def validate_documentation(record: dict[str, object], repository_root: Path) -> 
     for distribution, details in examples.items():
         example = validate_exact_shape(details, {"path", "sha256"}, f"{distribution} example")
         relative = example["path"]
+        package = record["packages"][distribution]
+        assert isinstance(package, dict)
+        expected_relative = f"{package['path']}/README.md"
+        if relative != expected_relative or files.get(relative) != example["sha256"]:
+            raise RuntimeError(f"{distribution} executable example ownership differs")
         path = repository_file(repository_root, relative, f"{distribution} example")
         require_exact_sha256(example["sha256"], f"{distribution} example")
         if not path.is_file() or file_sha256(path) != example["sha256"]:
@@ -204,6 +233,7 @@ def validate_contract(
             details,
             {
                 "accepted_source_commit",
+                "package_tree_object",
                 "path",
                 "import",
                 "version",
@@ -219,6 +249,14 @@ def validate_contract(
             r"[0-9a-f]{40}", package["accepted_source_commit"]
         ):
             raise RuntimeError(f"{distribution} accepted source commit is invalid")
+        accepted = EXPECTED_PACKAGE_SOURCES.get(distribution)
+        if (
+            accepted is None
+            or package["accepted_source_commit"] != accepted["accepted_source_commit"]
+        ):
+            raise RuntimeError(f"{distribution} accepted source commit differs")
+        if package["package_tree_object"] != accepted["package_tree_object"]:
+            raise RuntimeError(f"{distribution} accepted package tree differs")
         source = package_inputs[distribution]
         artifact = composition_packages[distribution]
         assert isinstance(source, dict) and isinstance(artifact, dict)
@@ -234,8 +272,8 @@ def validate_contract(
         require_exact_sha256(package["wheel_sha256"], f"{distribution} wheel")
         require_exact_sha256(package["wheel_content_root_sha256"], f"{distribution} content")
         contracts = package["public_contracts"]
-        if type(contracts) is not dict or not contracts:
-            raise RuntimeError(f"{distribution} public contract inventory is empty")
+        if type(contracts) is not dict or set(contracts) != accepted["public_contracts"]:
+            raise RuntimeError(f"{distribution} public contract inventory differs")
         for path, digest in contracts.items():
             if type(path) is not str:
                 raise RuntimeError(f"{distribution} public contract path must be text")
@@ -268,16 +306,47 @@ def validate_files(record: dict[str, object], repository_root: Path) -> None:
                 raise RuntimeError(f"{distribution} public contract differs: {relative}")
     validate_documentation(record, repository_root)
     source = validate_exact_shape(
-        record["technical_source"], {"root_sha256", "files"}, "technical source record"
+        record["technical_source"],
+        {"candidate_revision", "root_sha256", "files"},
+        "technical source record",
     )
+    candidate_revision = source["candidate_revision"]
+    if (
+        type(candidate_revision) is not str
+        or re.fullmatch(r"[0-9a-f]{40}", candidate_revision) is None
+    ):
+        raise RuntimeError("technical candidate revision is invalid")
     expected_root = require_exact_sha256(source["root_sha256"], "technical source root")
-    observed_root, observed_files = frozen_source_record(repository_root)
+    observed_root, observed_files = frozen_source_record(repository_root, candidate_revision)
     if (
         type(source["files"]) is not int
         or source["files"] != observed_files
         or expected_root != observed_root
     ):
         raise RuntimeError("frozen technical source differs from qualification evidence")
+
+
+def validate_current_candidate(
+    record: dict[str, object], repository_root: Path, expected_head: str
+) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", expected_head) is None:
+        raise RuntimeError("expected qualification HEAD is invalid")
+    actual_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository_root,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+    if actual_head != expected_head:
+        raise RuntimeError(
+            f"qualification HEAD differs: expected {expected_head}, observed {actual_head}"
+        )
+    source = record["technical_source"]
+    assert isinstance(source, dict)
+    observed_root, observed_files = frozen_source_record(repository_root)
+    if source["root_sha256"] != observed_root or source["files"] != observed_files:
+        raise RuntimeError("current technical source differs from the frozen candidate")
 
 
 def validate_git_ancestry(record: dict[str, object], repository_root: Path) -> None:
@@ -293,11 +362,25 @@ def validate_git_ancestry(record: dict[str, object], repository_root: Path) -> N
         )
         if completed.returncode != 0:
             raise RuntimeError(f"{distribution} accepted source is not an ancestor of HEAD")
+        package_path = str(details["path"])
+        expected_tree = str(details["package_tree_object"])
+        for revision in (commit, "HEAD"):
+            observed = subprocess.run(
+                ["git", "rev-parse", f"{revision}:{package_path}"],
+                cwd=repository_root,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            ).stdout.strip()
+            if observed != expected_tree:
+                raise RuntimeError(f"{distribution} package tree differs at revision {revision}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-git", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--expected-head")
     args = parser.parse_args()
     record = validate_contract(
         load_json(QUALIFICATION_PATH),
@@ -307,6 +390,8 @@ def main() -> int:
     validate_files(record, REPOSITORY_ROOT)
     if not args.skip_git:
         validate_git_ancestry(record, REPOSITORY_ROOT)
+    if args.expected_head is not None:
+        validate_current_candidate(record, REPOSITORY_ROOT, args.expected_head)
     print(json.dumps(record, indent=2, sort_keys=True))
     return 0
 
