@@ -1,7 +1,8 @@
 # Technical package-set qualification
 
-`tools/qualification_matrix.json` freezes the exact repository-owned package
-set accepted by Block 14. It reconciles each distribution's accepted source,
+`tools/qualification_matrix.json` freezes the current repository-owned package
+set for deterministic CI verification. The unchanged Block 14 record is retained
+in `tools/history/qualification-0.1.0.json` as historical evidence only. It reconciles each distribution's accepted source,
 version, wheel bytes, wheel content root, public contract inputs, executable
 README example, Python matrix, protocol roots, composition roots, and empty
 runtime-dependency inventory.
@@ -12,10 +13,18 @@ self-referential qualification JSON. An exact acceptance run additionally
 passes the expected current `HEAD`, so added, removed, changed, or mode-changed
 technical files cannot reuse earlier proof.
 
-The record is technical evidence only. `program-qualified` means that this
-repository's complete internal matrix passed for the frozen package set. It is
-not a consumer pin, installation instruction, availability statement,
-production acceptance, release, license, or grant of reuse rights.
+The current record is a `candidate`, not a claim that unrun tests passed. CI
+results belong to the exact pushed revision and its actual completed jobs. The
+historical `program-qualified` posture applies only to the old frozen package
+set. Neither record is a production acceptance, release, license, or grant of
+reuse rights.
+
+The current client is `0.2.0`; its Codex protocol remains exactly `0.147.0`.
+The two sibling runtime packages remain unchanged at `0.1.0`. Build-only inputs
+are pinned in `tools/build-constraints.txt`; the maintained runners set
+`SOURCE_DATE_EPOCH=1580601600` and use those constraints for isolated builds.
+Wheel and content roots are newly measured, never relabeled historical proof.
+No official-Codex or model execution is part of this CI qualification.
 
 Run the static reconciliation first:
 

@@ -1,22 +1,22 @@
 {
   "schema_version": 1,
   "fixture_sha256": "7a7a112b345d1f7aa979b1627a6a9d90b76f3548953cafb97f45e2d3ff3e9f49",
-  "manifest_sha256": "ebf1ec63705d7731adb7ec19501cdb33cf36ace5a11475fa2f2499bea00bc51f",
+  "manifest_sha256": "e8ed3523ad1b057bcbc83135afa1472ed26b2c4fe8f68b4e4dc20622c7262f0c",
   "packages": {
     "codex-app-server-client": {
-      "version": "0.1.0",
-      "wheel_sha256": "1e9dc5b9c7f2edb9676b5a47eb2c9b96498f1b429acec474cd26702fe8e3fdb9",
-      "wheel_content_root_sha256": "6ecc26e75197d06682fe9d8d0612edb1e56ead6d04c3a41cde1132e2618efd8f"
+      "version": "0.2.0",
+      "wheel_sha256": "f8659601520e5941156b870a242e1e17c8967474452debce2d3d99a21e3fb97e",
+      "wheel_content_root_sha256": "3e40fc1f27fb0ebc321fae0f5db4e712b46475ed5793b852ee3e58a0b2844d89"
     },
     "embedded-service-contract": {
       "version": "0.1.0",
-      "wheel_sha256": "2b36d7307c08cd6d7d95bfb86d4a240b6ab2a69de5b2c61bf75a54507c7ea18d",
-      "wheel_content_root_sha256": "c53432ff83c6b80483a95384af3c9058a3cd82c56ac774126f123a93dbff7113"
+      "wheel_sha256": "ee27e335f49b3883657a623cfc8c003d5b1dad2269fe193211c8750b69b9859f",
+      "wheel_content_root_sha256": "3587486bbb1651e171954f84e178dba94df4946e4e00ef7c64516d5bc63785d2"
     },
     "runtime-manifest": {
       "version": "0.1.0",
-      "wheel_sha256": "f2e601d542272187998296f09d33b2235002d108fe07c0b3c89a678ea1d010ac",
-      "wheel_content_root_sha256": "db8f7f7d0b0105361f9b1380ff1d1cc432e720be02def65880a9ef484ad112a2"
+      "wheel_sha256": "c42ffee5415710e03a5bfeb9143268e0c0d313ab54cca4be7d6ea48430143c5b",
+      "wheel_content_root_sha256": "66c97400838155df78697e94e9c0817fbf3e7655eb94f0e962e86be3dec767b7"
     }
   },
   "protocol": {

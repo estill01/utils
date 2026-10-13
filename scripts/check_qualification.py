@@ -23,16 +23,16 @@ TECHNICAL_SOURCE_EXCLUSIONS = {
 }
 EXPECTED_PACKAGE_SOURCES = {
     "codex-app-server-client": {
-        "accepted_source_commit": "08c416da4202b7036110e33e43d34ea590054e2e",
-        "package_tree_object": "17772f61da62b41d6d3551deebc474792aafe922",
+        "accepted_source_commit": "a6f20e28ba228ddde91d32f12ca7253c5e2fb7b4",
+        "package_tree_object": "7419364f578291754c389e56e7129c9479d67b4f",
         "public_contracts": {
             "packages/codex-app-server-client/protocol/compatibility.json",
             "packages/codex-app-server-client/protocol/public-api.json",
         },
     },
     "embedded-service-contract": {
-        "accepted_source_commit": "401f87a64349c636a66be2da656498e7d9cb58e3",
-        "package_tree_object": "203c809f3d1ab2588df5ed83c08affde99f8010c",
+        "accepted_source_commit": "a6f20e28ba228ddde91d32f12ca7253c5e2fb7b4",
+        "package_tree_object": "8c5512360bd7f576a780c03af8bd544852c71a9b",
         "public_contracts": {
             "packages/embedded-service-contract/contract/conformance-fixtures.json",
             "packages/embedded-service-contract/contract/structural-contract.json",
@@ -40,8 +40,8 @@ EXPECTED_PACKAGE_SOURCES = {
         },
     },
     "runtime-manifest": {
-        "accepted_source_commit": "6f7a7ea3c105c7461e6cb4c83944dd094883f187",
-        "package_tree_object": "42cb7171d3de021a99f75ac741ea0a0cf97c84ae",
+        "accepted_source_commit": "a6f20e28ba228ddde91d32f12ca7253c5e2fb7b4",
+        "package_tree_object": "a41de632ba7508a4bec9e334c10be723413be9ca",
         "public_contracts": {
             "packages/runtime-manifest/contract/compatibility-fixtures.json",
             "packages/runtime-manifest/contract/manifest-schema.json",
@@ -192,8 +192,8 @@ def validate_contract(
     )
     if type(qualification["schema_version"]) is not int or qualification["schema_version"] != 1:
         raise RuntimeError("qualification schema version differs")
-    if qualification["qualification_posture"] != "program-qualified":
-        raise RuntimeError("technical package set is not program-qualified")
+    if qualification["qualification_posture"] != "candidate":
+        raise RuntimeError("current technical package set must be a candidate")
     if qualification["release_posture"] != "no-license-selected/unpublished":
         raise RuntimeError("qualification record changes the release posture")
     if qualification["python_matrix"] != ["3.11", "3.14"]:
