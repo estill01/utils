@@ -9,6 +9,7 @@ import collections
 import concurrent.futures
 import hashlib
 import json
+import os
 import re
 import shlex
 import shutil
@@ -25,6 +26,8 @@ MATRIX_PATH = REPOSITORY_ROOT / "tools" / "package_matrix.json"
 TOOLCHAIN_PATH = REPOSITORY_ROOT / "tools" / "toolchain.json"
 NAME_PATTERN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 MAX_COMMAND_DIAGNOSTIC_CHARACTERS = 8_000
+BUILD_CONSTRAINTS_PATH = REPOSITORY_ROOT / "tools" / "build-constraints.txt"
+BUILD_SOURCE_DATE_EPOCH = "1580601600"
 
 
 def run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -36,6 +39,11 @@ def run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            env={
+                **os.environ,
+                "SOURCE_DATE_EPOCH": BUILD_SOURCE_DATE_EPOCH,
+                "UV_BUILD_CONSTRAINT": str(BUILD_CONSTRAINTS_PATH),
+            },
         )
     except subprocess.CalledProcessError as exc:
         output = exc.stdout if isinstance(exc.stdout, str) else ""

@@ -39,6 +39,21 @@ class QualificationContractTests(unittest.TestCase):
         record = self.validate()
         check_qualification.validate_files(record, REPOSITORY_ROOT)
 
+    def test_historical_qualification_is_retained_without_current_claim(self) -> None:
+        import hashlib
+
+        path = REPOSITORY_ROOT / "tools/history/qualification-0.1.0.json"
+        self.assertEqual(
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+            "0888bed363b63842c37baa8187c9883cdddff73d936596e497e4e013341cd849",
+        )
+        old = check_qualification.load_json(path)
+        self.assertEqual(old["qualification_posture"], "program-qualified")
+        self.assertEqual(old["packages"]["codex-app-server-client"]["version"], "0.1.0")
+        self.assertEqual(self.record["qualification_posture"], "candidate")
+        with self.assertRaisesRegex(RuntimeError, "must be a candidate"):
+            self.validate(old)
+
     def test_rejects_unknown_field(self) -> None:
         changed = copy.deepcopy(self.record)
         changed["consumer_acceptance"] = True

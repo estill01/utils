@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling>=1.27,<2"]
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [project]
 name = "codex-app-server-client"
-version = "0.1.0"
+version = "0.2.0"
 description = "Typed local process, transport, and protocol support for Codex app-server"
 readme = "README.md"
 requires-python = ">=3.11"

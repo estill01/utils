@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -494,6 +495,25 @@ class PackageIsolationAuditTests(unittest.TestCase):
             )
             self.assertEqual(source_count, 1)
             self.assertRegex(source_hash, r"^[0-9a-f]{64}$")
+
+    def test_build_environment_fixes_epoch_and_constraint_input(self) -> None:
+        import os
+        from unittest.mock import patch
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(
+                os.environ, {"SOURCE_DATE_EPOCH": "1609459200", "UV_BUILD_CONSTRAINT": "wrong"}
+            ),
+        ):
+            completed = check_package.run(
+                [sys.executable, "-c", "import json,os; print(json.dumps(dict(os.environ)))"],
+                cwd=Path(temporary),
+            )
+        observed = json.loads(completed.stdout)
+        self.assertEqual(observed["SOURCE_DATE_EPOCH"], "1580601600")
+        self.assertEqual(observed["UV_BUILD_CONSTRAINT"], str(check_package.BUILD_CONSTRAINTS_PATH))
+        self.assertTrue(check_package.BUILD_CONSTRAINTS_PATH.is_file())
 
     def test_child_failure_includes_bounded_captured_output(self) -> None:
         with (

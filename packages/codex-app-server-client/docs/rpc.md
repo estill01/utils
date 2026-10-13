@@ -34,9 +34,24 @@ response to a timed-out or cancelled call is consumed without resurrecting the
 call. Unmatched or duplicate responses fail the channel as `CorrelationError`
 and fail all remaining calls without retaining pending state.
 
-Validated remote errors expose only their request ID, integer code, and whether
-data was present. The arbitrary remote message and `data` payload are not kept
-on the public exception. Framing, validation, size, capacity, correlation, and
+Validated remote errors expose only their request ID, integer code, whether
+data was present, and a closed `RemoteRpcErrorCategory` in `category`. The
+arbitrary remote message and `data` payload are not kept on the public
+exception. `THREAD_NOT_LOADED` requires all of: the correlated operation is
+`thread/read`, code is `-32600`, the data key is absent, and the entire message
+is `thread not loaded: ` followed by one canonical lowercase hyphenated UUID.
+Every other validated rejection is `UNKNOWN`, including a null data field,
+message prefix/suffix, noncanonical ID, or identical text from another method.
+The category does not retry, resume a thread, or establish product policy.
+
+The classifier follows exact upstream commit
+`be6e8eac029b183056b7e4402879f15d2c85f61b`:
+[thread read rejection](https://github.com/openai/codex/blob/be6e8eac029b183056b7e4402879f15d2c85f61b/codex-rs/app-server/src/request_processors/thread_processor.rs#L2323),
+[invalid-request error](https://github.com/openai/codex/blob/be6e8eac029b183056b7e4402879f15d2c85f61b/codex-rs/app-server/src/error_code.rs#L10),
+[absent data serialization](https://github.com/openai/codex/blob/be6e8eac029b183056b7e4402879f15d2c85f61b/codex-rs/app-server-protocol/src/rpc.rs#L82),
+and [UUID thread IDs](https://github.com/openai/codex/blob/be6e8eac029b183056b7e4402879f15d2c85f61b/codex-rs/protocol/src/thread_id.rs).
+
+Framing, validation, size, capacity, correlation, and
 remote failures use distinct subclasses of `AppServerClientError`; none logs
 request or response content.
 

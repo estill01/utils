@@ -3,6 +3,12 @@
 Block 9 freezes the complete `codex-app-server-client==0.1.0` distribution
 without adding protocol methods, transports, retry policy, or product behavior.
 
+The local `0.2.0` API candidate adds two root exports, `InitializeInfo` and
+`RemoteRpcErrorCategory`, for a total of 94. Its focused offline metadata,
+RPC, session, public-conformance, and frozen-protocol checks are separate from
+the historical Block 9 qualification. No installed-wheel matrix or official
+binary smoke is claimed for this candidate.
+
 The installed-wheel matrix runs from outside the checkout and covers the exact
 92-export public root, all eight typed operations, all fifteen selected server
 notifications, all three policy-neutral callback families, explicit close,

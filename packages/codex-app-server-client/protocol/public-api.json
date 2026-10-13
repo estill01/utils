@@ -15,7 +15,8 @@
     "AppServerSession.generation": "property -> int",
     "AppServerSession.capabilities": "property -> FeatureSet",
     "AppServerSession.events": "async () -> AsyncIterator[ServerEvent]",
-    "AppServerSession.callbacks": "async () -> AsyncIterator[ServerCallback]"
+    "AppServerSession.callbacks": "async () -> AsyncIterator[ServerCallback]",
+    "AppServerSession.initialize_info": "property -> InitializeInfo"
   },
   "session_operations": {
     "start_thread": {
@@ -166,7 +167,8 @@
     "ClientIdentity": "(name: str, version: str, title: str | None = None)",
     "ClientLimits": "(max_message_bytes: int = 8388608, max_pending_calls: int = 256, max_events: int = 1024, max_callbacks: int = 64, max_backoff_seconds: float = 30.0)",
     "RestartContext": "(failed_generation: int, replacement_generation: int, cause: AppServerClientError)",
-    "BackoffHook": "Callable[[RestartContext], float]"
+    "BackoffHook": "Callable[[RestartContext], float]",
+    "InitializeInfo": "(codex_home: str, user_agent: str, platform_family: str, platform_os: str)"
   },
   "errors": {
     "base": "AppServerClientError",
@@ -196,7 +198,15 @@
       "DisconnectedError",
       "StaleGenerationError",
       "RestartError"
-    ]
+    ],
+    "categories": {
+      "RemoteRpcErrorCategory": {
+        "UNKNOWN": "unknown",
+        "THREAD_NOT_LOADED": "thread-not-loaded"
+      }
+    },
+    "remote_error": "RemoteRpcError(*, request_id: int, code: int, has_data: bool, category: RemoteRpcErrorCategory = RemoteRpcErrorCategory.UNKNOWN)",
+    "remote_error_category_rule": "THREAD_NOT_LOADED only for a thread/read rejection with code -32600, absent data, and the complete message thread not loaded: followed by one canonical lowercase hyphenated UUID; all other validated errors are UNKNOWN. Never retain the remote message or data."
   },
   "root_exports": [
     "__version__",
@@ -290,8 +300,11 @@
     "CallbackCapacityError",
     "DisconnectedError",
     "StaleGenerationError",
-    "RestartError"
+    "RestartError",
+    "InitializeInfo",
+    "RemoteRpcErrorCategory"
   ],
   "model_generation_rule": "For each selected top-level schema, generate immutable typed classes for every transitively reachable definition using its exact schema title or definition key; fail on same-name unequal schemas; required properties have no default, optional properties default to None, arrays become tuples, and schema unions become closed Python unions. Inbound operation results, notifications, callback parameters, and initialization results preserve deep-frozen additional JSON when additionalProperties is omitted or true; outbound operation parameters, callback responses, and initialization parameters reject unknown fields unless additionalProperties explicitly permits them.",
-  "root_exports_rule": "Export exactly root_exports and nothing else; export no raw request, raw notification, JSON value, method-string, or payload-dictionary API. Transitively generated nested schema models remain in codex_app_server_client.models."
+  "root_exports_rule": "Export exactly root_exports and nothing else; export no raw request, raw notification, JSON value, method-string, or payload-dictionary API. Transitively generated nested schema models remain in codex_app_server_client.models.",
+  "initialization_info_rule": "AppServerSession.initialize_info is a frozen, slotted InitializeInfo projected from the fully schema-validated v1/InitializeResponse after the initialized notification succeeds. Only codexHome, userAgent, platformFamily, and platformOs are projected to snake_case fields. Every replacement session owns its own immutable snapshot; unknown inbound fields are not exposed through this metadata."
 }

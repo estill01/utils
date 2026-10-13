@@ -145,8 +145,8 @@ class InstalledPublicConformanceTests(unittest.IsolatedAsyncioTestCase):
             (PACKAGE_ROOT / "protocol" / "public-api.json").read_text(encoding="utf-8")
         )
         self.assertEqual(set(fixture["root_exports"]), set(client_api.__all__))
-        self.assertEqual(len(client_api.__all__), 92)
-        self.assertEqual(client_api.__version__, "0.1.0")
+        self.assertEqual(len(client_api.__all__), 94)
+        self.assertEqual(client_api.__version__, "0.2.0")
         self.assertEqual(
             str(inspect.signature(client_api.ClientLimits)),
             "(max_message_bytes: 'int' = 8388608, max_pending_calls: 'int' = 256, "
