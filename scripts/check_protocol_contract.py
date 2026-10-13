@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from public_api_signatures import check_signatures
 from schema_tree import schema_entries, tree_root
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -51,6 +52,53 @@ EXPECTED_COMPATIBILITY = {
 }
 
 
+MODERN_ROOT = PROTOCOL_ROOT / "profiles" / "0.162.1"
+EXPECTED_MODERN_UPSTREAM = {
+    "repository": "https://github.com/openai/codex",
+    "npm_distribution": "@openai/codex",
+    "codex_version": "0.162.1",
+    "source_tag": "rust-v0.162.1",
+    "source_tag_object": "7a078f6bb4ce0dc2a81408b334ce52979d92c603",
+    "source_commit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+}
+EXPECTED_MODERN_ACQUISITION = {
+    "kind": "official-source-precomputed-stable-json-schema",
+    "bundle_path": (
+        "codex-rs/app-server-protocol/schema/precomputed/app-server-exports-stable.json.zst"
+    ),
+    "bundle_sha256": "ed720775cdc264c7c5a930d582c56a27f5f8b18408187f783f93b9713ed40d48",
+    "bundle_json_map": "json_schema",
+    "checked_in_json_directory": "codex-rs/app-server-protocol/schema/json",
+    "checked_in_json_byte_identical": True,
+    "experimental": False,
+    "codex_binary_executed": False,
+    "binary_generation_evidence": None,
+}
+EXPECTED_MODERN_COMPATIBILITY = {
+    "schema_version": 1,
+    "codex_version": "0.162.1",
+    "source_commit": "092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+    "schema_tree_root_sha256": ("56631e5e36c5d117bb21a2889708bee508127b340174a4719ee423468a5f7154"),
+    "semantic_schema_root_sha256": (
+        "a616a4522597421b8b790a65a0961bb3b22c73a918e8cc86fa39ef09ec7a243d"
+    ),
+    "schema_file_count": 317,
+    "schema_total_bytes": 3_602_403,
+    "selected_surface_root_sha256": (
+        "4da1fd7f18a8e9a9809dcc0f46ae5b3d594c0a2028a1f5b1aacf9d410768d87a"
+    ),
+    "public_api_sha256": "461e5741936604c0de62895d138afb74198c0205f0f89f82b737bd0e61f3e0ee",
+}
+EXPECTED_SIGNATURE_HASHES = {
+    "0.147.0": "ee5a3ea9f032bc69ecfd72de615d37d0ff6f9cbf1e8e8081806ad2f1e0b01482",
+    "0.162.1": "fdd3ee73b0fc0ceb0b1557411f3665b5f00650f84ccb1d85acc2cb6da40486b1",
+}
+PROFILES = {
+    "0.147.0": (PROTOCOL_ROOT, EXPECTED_UPSTREAM, EXPECTED_COMPATIBILITY),
+    "0.162.1": (MODERN_ROOT, EXPECTED_MODERN_UPSTREAM, EXPECTED_MODERN_COMPATIBILITY),
+}
+
+
 def methods(union: dict[str, object]) -> set[str]:
     result: set[str] = set()
     for variant in union["oneOf"]:
@@ -89,51 +137,77 @@ def require_schema_reference(schema_dir: Path, label: str, reference: str) -> No
             current = current[component]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)
-    parser.add_argument("--surface", type=Path, default=SURFACE_PATH)
-    parser.add_argument("--public-api", type=Path, default=PUBLIC_API_PATH)
-    args = parser.parse_args()
-    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-    surface = json.loads(args.surface.read_text(encoding="utf-8"))
-    api = json.loads(args.public_api.read_text(encoding="utf-8"))
-    compatibility = json.loads(COMPATIBILITY_PATH.read_text(encoding="utf-8"))
-    if manifest["upstream"] != EXPECTED_UPSTREAM:
+def check_profile(
+    version: str,
+    *,
+    manifest_path: Path | None = None,
+    surface_path: Path | None = None,
+    public_api_path: Path | None = None,
+    compatibility_path: Path | None = None,
+    signatures_path: Path | None = None,
+) -> dict[str, object]:
+    profile_root, expected_upstream, expected = PROFILES[version]
+    manifest_path = manifest_path or profile_root / "upstream-manifest.json"
+    surface_path = surface_path or profile_root / "supported-surface.json"
+    public_api_path = public_api_path or profile_root / "public-api.json"
+    compatibility_path = compatibility_path or profile_root / "compatibility.json"
+    signatures_path = signatures_path or profile_root / "public-api-signatures.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    surface = json.loads(surface_path.read_text(encoding="utf-8"))
+    api = json.loads(public_api_path.read_text(encoding="utf-8"))
+    compatibility = json.loads(compatibility_path.read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != 1:
+        raise RuntimeError("frozen manifest format changed")
+    if manifest["upstream"] != expected_upstream:
         raise RuntimeError("frozen upstream identity changed")
-    if manifest["generation"] != EXPECTED_GENERATION:
-        raise RuntimeError("frozen schema generation identity changed")
-    if compatibility != EXPECTED_COMPATIBILITY:
+    if version == "0.147.0":
+        if manifest.get("generation") != EXPECTED_GENERATION:
+            raise RuntimeError("frozen schema generation identity changed")
+    elif "generation" in manifest or manifest.get("acquisition") != EXPECTED_MODERN_ACQUISITION:
+        raise RuntimeError("frozen source-bundle acquisition identity changed")
+    if compatibility != expected:
         raise RuntimeError("frozen compatibility metadata changed")
     version = manifest["upstream"]["codex_version"]
     if surface["protocol"]["codex_version"] != version:
         raise RuntimeError("surface and upstream Codex versions differ")
-    schema_dir = PROTOCOL_ROOT / "upstream" / version
+    schema_dir = profile_root / "upstream" / version
     entries = schema_entries(schema_dir)
     recorded = manifest["schema_tree"]
     if entries != recorded["files"]:
         raise RuntimeError("retained schema file manifest mismatch")
     if tree_root(entries) != recorded["root_sha256"]:
         raise RuntimeError("retained schema tree root mismatch")
-    if recorded["root_sha256"] != EXPECTED_SCHEMA_ROOT:
+    if recorded["root_sha256"] != expected["schema_tree_root_sha256"]:
         raise RuntimeError("frozen schema tree root changed")
     if recorded["file_count"] != len(entries):
         raise RuntimeError("retained schema file count mismatch")
     if recorded["total_bytes"] != sum(int(entry["size"]) for entry in entries):
         raise RuntimeError("retained schema byte count mismatch")
-    if recorded["file_count"] != EXPECTED_SCHEMA_FILE_COUNT:
+    if recorded["file_count"] != expected["schema_file_count"]:
         raise RuntimeError("frozen schema file count changed")
-    if recorded["total_bytes"] != EXPECTED_SCHEMA_BYTES:
+    if recorded["total_bytes"] != expected["schema_total_bytes"]:
         raise RuntimeError("frozen schema byte count changed")
 
+    semantic_entries = []
+    for entry in entries:
+        document = json.loads((schema_dir / entry["path"]).read_bytes())
+        canonical = json.dumps(
+            document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+        semantic_entries.append(
+            {"path": entry["path"], "sha256": hashlib.sha256(canonical).hexdigest()}
+        )
+    if tree_root(semantic_entries) != expected["semantic_schema_root_sha256"]:
+        raise RuntimeError("retained semantic schema tree root mismatch")
+
     calculated_surface_root = surface_root(surface)
-    if calculated_surface_root != EXPECTED_SURFACE_ROOT:
+    if calculated_surface_root != expected["selected_surface_root_sha256"]:
         raise RuntimeError("frozen selected surface changed")
-    if surface["selected_surface_root"]["sha256"] != EXPECTED_SURFACE_ROOT:
+    if surface["selected_surface_root"]["sha256"] != expected["selected_surface_root_sha256"]:
         raise RuntimeError("recorded selected-surface root mismatch")
-    if api["selected_surface_root_sha256"] != EXPECTED_SURFACE_ROOT:
+    if api["selected_surface_root_sha256"] != expected["selected_surface_root_sha256"]:
         raise RuntimeError("public API and selected-surface roots differ")
-    if hashlib.sha256(args.public_api.read_bytes()).hexdigest() != EXPECTED_PUBLIC_API_SHA256:
+    if hashlib.sha256(public_api_path.read_bytes()).hexdigest() != expected["public_api_sha256"]:
         raise RuntimeError("frozen public API manifest changed")
 
     aggregate = json.loads((schema_dir / "codex_app_server_protocol.v2.schemas.json").read_text())
@@ -227,29 +301,64 @@ def main() -> int:
     }
     for callback in api["callback_models"].values():
         required_exports.update((callback["callback"], callback["params"], callback["response"]))
+    expected_module = (
+        "codex_app_server_client" if version == "0.147.0" else "codex_app_server_client.v0_162_1"
+    )
+    if api["root_module"] != expected_module:
+        raise RuntimeError("public API root module differs from the retained profile")
     root_exports = api["root_exports"]
     if len(root_exports) != len(set(root_exports)):
         raise RuntimeError("public root exports contain a duplicate")
     if set(root_exports) != required_exports:
         raise RuntimeError("public root exports differ from the exact API map")
 
-    print(
-        json.dumps(
-            {
-                "codex_version": version,
-                "public_api_sha256": EXPECTED_PUBLIC_API_SHA256,
-                "public_callbacks": len(public_callbacks),
-                "public_notifications": len(public_notifications),
-                "public_requests": len(public_requests),
-                "schema_files": len(entries),
-                "schema_root_sha256": tree_root(entries),
-                "selected_surface_root_sha256": calculated_surface_root,
-                "transports": sorted(transports),
-            },
-            indent=2,
-            sort_keys=True,
-        )
-    )
+    if (
+        hashlib.sha256(signatures_path.read_bytes()).hexdigest()
+        != EXPECTED_SIGNATURE_HASHES[version]
+    ):
+        raise RuntimeError("frozen public API signature fixture changed")
+    check_signatures(profile_root, api)
+
+    return {
+        "codex_version": version,
+        "provenance_kind": (
+            "retained-binary-generation"
+            if version == "0.147.0"
+            else EXPECTED_MODERN_ACQUISITION["kind"]
+        ),
+        "public_api_sha256": expected["public_api_sha256"],
+        "public_callbacks": len(public_callbacks),
+        "public_notifications": len(public_notifications),
+        "public_requests": len(public_requests),
+        "schema_files": len(entries),
+        "schema_root_sha256": tree_root(entries),
+        "selected_surface_root_sha256": calculated_surface_root,
+        "public_api_signatures_verified": True,
+        "transports": sorted(transports),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", choices=(*PROFILES, "all"), default="all")
+    parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--surface", type=Path)
+    parser.add_argument("--public-api", type=Path)
+    parser.add_argument("--compatibility", type=Path)
+    parser.add_argument("--signatures", type=Path)
+    args = parser.parse_args()
+    overrides = {
+        "manifest_path": args.manifest,
+        "surface_path": args.surface,
+        "public_api_path": args.public_api,
+        "compatibility_path": args.compatibility,
+        "signatures_path": args.signatures,
+    }
+    if args.profile == "all" and any(overrides.values()):
+        parser.error("fixture overrides require an explicit --profile")
+    versions = PROFILES if args.profile == "all" else (args.profile,)
+    results = [check_profile(version, **overrides) for version in versions]
+    print(json.dumps(results if args.profile == "all" else results[0], indent=2, sort_keys=True))
     return 0
 
 

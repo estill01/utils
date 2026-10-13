@@ -7,6 +7,7 @@ from collections import deque
 from collections.abc import AsyncIterator, Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import TYPE_CHECKING, TypeAlias
 
 from .errors import (
@@ -199,7 +200,15 @@ class _AsyncCoordinator:
         max_events: int,
         max_callbacks: int,
         generation: int,
+        notification_types: Mapping | None = None,
+        callback_specs: Mapping | None = None,
     ) -> None:
+        self._notification_types = MappingProxyType(
+            dict(_NOTIFICATION_TYPES if notification_types is None else notification_types)
+        )
+        self._callback_specs = MappingProxyType(
+            dict(_CALLBACK_SPECS if callback_specs is None else callback_specs)
+        )
         if generation != engine._generation:
             raise SessionStateError("coordinator generation must match its RPC engine")
         self._engine = engine
@@ -229,7 +238,7 @@ class _AsyncCoordinator:
             unselected = True
         if unselected:
             raise UnsupportedFeatureError("unselected server notification")
-        model_type = _NOTIFICATION_TYPES.get(capability)
+        model_type = self._notification_types.get(capability)
         if model_type is None or not self._features.supports(capability):
             raise UnsupportedFeatureError("unavailable server notification")
         if self._terminated:
@@ -250,7 +259,7 @@ class _AsyncCoordinator:
             unselected = True
         if unselected:
             raise UnsupportedFeatureError("unselected server callback")
-        spec = _CALLBACK_SPECS.get(capability)
+        spec = self._callback_specs.get(capability)
         if spec is None or not self._features.supports(capability):
             raise UnsupportedFeatureError("unavailable server callback")
         if self._terminated:
@@ -325,7 +334,12 @@ class _AsyncCoordinator:
         response: object,
         expected_response: type[object],
     ) -> None:
-        if type(response) is not expected_response:
+        spec = self._callback_specs.get(CallbackCapability(state.method))
+        if (
+            spec is None
+            or expected_response is not spec[1]
+            or type(response) is not expected_response
+        ):
             raise TypeError("callback response requires its exact frozen response model")
         if state.owner is not self:
             raise SessionStateError("callback belongs to a different coordinator")

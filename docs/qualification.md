@@ -2,7 +2,9 @@
 
 `tools/qualification_matrix.json` freezes the current repository-owned package
 set for deterministic CI verification. The unchanged Block 14 record is retained
-in `tools/history/qualification-0.1.0.json` as historical evidence only. It reconciles each distribution's accepted source,
+in `tools/history/qualification-0.1.0.json`; the prior `0.2.0` candidate is
+retained in `tools/history/qualification-0.2.0.json`. Both are historical
+evidence only. The current record reconciles each distribution's accepted source,
 version, wheel bytes, wheel content root, public contract inputs, executable
 README example, Python matrix, protocol roots, composition roots, and empty
 runtime-dependency inventory.
@@ -19,7 +21,11 @@ historical `program-qualified` posture applies only to the old frozen package
 set. Neither record is a production acceptance, release, license, or grant of
 reuse rights.
 
-The current client is `0.2.0`; its Codex protocol remains exactly `0.147.0`.
+The current client is `0.3.0`. Its default facade remains exactly `0.147.0`;
+the explicit `v0_162_1` facade retains the official stable `0.162.1` source
+schemas. Both profiles have deterministic typed model/session tests, while
+real `0.162.1` executable and model-work qualification remains unrun. The
+neutral three-package composition continues to exercise the default profile.
 The two sibling runtime packages remain unchanged at `0.1.0`. Build-only inputs
 are pinned in `tools/build-constraints.txt`; the maintained runners set
 `SOURCE_DATE_EPOCH=1580601600` and use those constraints for isolated builds.

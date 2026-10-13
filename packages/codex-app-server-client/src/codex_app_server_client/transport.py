@@ -11,7 +11,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
 
-from .compatibility import PINNED_PROTOCOL, BinaryIdentity
+from .compatibility import PINNED_PROTOCOL, BinaryIdentity, ProtocolTarget, _protocol_root_for
 from .errors import (
     JsonRpcFramingError,
     MessageTooLargeError,
@@ -411,16 +411,19 @@ class StdioTransport(_SingleUseTransport):
     """Own one exact Codex app-server process using JSON lines on stdio."""
 
     capability = TransportCapability.OWNED_STDIO
+    _PROTOCOL_TARGET = PINNED_PROTOCOL
 
     def __init__(self, binary: BinaryIdentity) -> None:
         if not isinstance(binary, BinaryIdentity):
             raise TypeError("binary must be BinaryIdentity")
         super().__init__()
         self._binary = binary
+        self._protocol_target = self._PROTOCOL_TARGET
+        _protocol_root_for(self._protocol_target)
 
     async def _open_channel(self) -> ByteChannel:
         self._claim()
-        if not _verify_binary(self._binary):
+        if not _verify_binary(self._binary, self._protocol_target):
             raise TransportStartError("owned stdio binary identity is not current")
         spawn_failed = False
         kwargs: dict[str, object] = {
@@ -456,7 +459,7 @@ class StdioTransport(_SingleUseTransport):
             process,
             owns_process_group=os.name == "posix",
         )
-        if not _verify_binary(self._binary):
+        if not _verify_binary(self._binary, self._protocol_target):
             await channel.close()
             raise TransportStartError("owned stdio binary changed during start")
         return channel
@@ -533,9 +536,10 @@ class InjectedTransport(_SingleUseTransport):
         return self._channel
 
 
-def _verify_binary(binary: BinaryIdentity) -> bool:
+def _verify_binary(binary: BinaryIdentity, target: ProtocolTarget = PINNED_PROTOCOL) -> bool:
+    _protocol_root_for(target)
     path = binary.path
-    if binary.reported_version != PINNED_PROTOCOL.codex_version or not path.is_absolute():
+    if binary.reported_version != target.codex_version or not path.is_absolute():
         return False
     try:
         if path.resolve(strict=True) != path or not path.is_file() or not os.access(path, os.X_OK):

@@ -7,18 +7,27 @@ import inspect
 import math
 import sys
 import weakref
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import aclosing, suppress
 from dataclasses import dataclass
-from typing import TypeVar
+from types import MappingProxyType
+from typing import Any, TypeVar
 
+from . import models as _legacy_models
 from .compatibility import (
     PINNED_PROTOCOL,
     CompatibilityResult,
+    ProtocolTarget,
     _load_json,
-    _packaged_protocol_root,
+    _protocol_root_for,
 )
-from .coordination import ServerCallback, ServerEvent, _AsyncCoordinator
+from .coordination import (
+    _CALLBACK_SPECS,
+    _NOTIFICATION_TYPES,
+    ServerCallback,
+    ServerEvent,
+    _AsyncCoordinator,
+)
 from .errors import (
     AppServerClientError,
     CallCancelledError,
@@ -50,7 +59,6 @@ from .models import (
     TurnStartResponse,
     TurnSteerParams,
     TurnSteerResponse,
-    _decode_document,
 )
 from .restart import BackoffHook, RestartContext
 from .rpc import _EnvelopeValidator, _RpcEngine, _RpcLimits
@@ -119,8 +127,8 @@ class ClientLimits:
             raise ValueError("max_backoff_seconds must be positive and finite")
 
 
-def _retained_notification_methods() -> tuple[str, ...]:
-    root = _packaged_protocol_root().joinpath("upstream", PINNED_PROTOCOL.codex_version)
+def _retained_notification_methods(target: ProtocolTarget = PINNED_PROTOCOL) -> tuple[str, ...]:
+    root = _protocol_root_for(target).joinpath("upstream", target.codex_version)
     schema = _load_json(root.joinpath("ServerNotification.json"), "ServerNotification")
     variants = schema.get("oneOf")
     if not isinstance(variants, list):
@@ -143,10 +151,14 @@ def _retained_notification_methods() -> tuple[str, ...]:
     return tuple(sorted(methods))
 
 
-def _notification_optouts(features: FeatureSet) -> tuple[str, ...]:
+def _notification_optouts(
+    features: FeatureSet, target: ProtocolTarget = PINNED_PROTOCOL
+) -> tuple[str, ...]:
     selected_available = {capability.value for capability in features.notifications}
     return tuple(
-        method for method in _retained_notification_methods() if method not in selected_available
+        method
+        for method in _retained_notification_methods(target)
+        if method not in selected_available
     )
 
 
@@ -174,10 +186,31 @@ class InitializeInfo:
                 raise TypeError(f"{name} must be a string")
 
 
+@dataclass(frozen=True, slots=True)
+class _SessionBinding:
+    """One immutable closed profile selected before transport ownership."""
+
+    target: ProtocolTarget
+    models: Mapping[str, Any]
+    decode_document: Callable[[str, object], Any]
+    notification_types: Mapping
+    callback_specs: Mapping
+    stdio_type: type[StdioTransport]
+    session_type: type[AppServerSession]
+
+    def __post_init__(self) -> None:
+        for name in ("models", "notification_types", "callback_specs"):
+            object.__setattr__(self, name, MappingProxyType(dict(getattr(self, name))))
+
+
 class AppServerClient:
     """The single connection owner before and after one initialization handshake."""
 
     _CONSTRUCTION_TOKEN = object()
+
+    @classmethod
+    def _binding(cls) -> _SessionBinding:
+        return _LEGACY_BINDING
 
     def __init__(
         self,
@@ -189,9 +222,11 @@ class AppServerClient:
         coordinator: _AsyncCoordinator,
         declared_lineage: object | None,
         channel_lineage: object,
+        binding: _SessionBinding,
     ) -> None:
         if token is not self._CONSTRUCTION_TOKEN:
             raise TypeError("use AppServerClient.connect")
+        self._selected_binding = binding
         self._transport = transport
         self._compatibility = compatibility
         self._limits = limits
@@ -209,7 +244,7 @@ class AppServerClient:
         self._max_connection_lineages = _MAX_CONNECTION_LINEAGES
         self._connection_lineages: list[weakref.ReferenceType[object]] = []
         self._injected_replacement_safe = type(transport) in (
-            StdioTransport,
+            binding.stdio_type,
             UnixSocketTransport,
         ) or (
             type(transport) is InjectedTransport
@@ -229,10 +264,13 @@ class AppServerClient:
             raise TypeError("compatibility must be CompatibilityResult")
         if not isinstance(limits, ClientLimits):
             raise TypeError("limits must be ClientLimits")
+        binding = cls._binding()
+        if compatibility.target != binding.target:
+            raise UnsupportedFeatureError("client and compatibility profiles differ")
         _EnvelopeValidator(compatibility)
         cls._validate_transport(transport, compatibility)
         engine, coordinator, declared_lineage, channel_lineage = await cls._open_connection(
-            transport, compatibility, limits, generation=1
+            transport, compatibility, limits, generation=1, binding=binding
         )
         return cls(
             cls._CONSTRUCTION_TOKEN,
@@ -243,12 +281,17 @@ class AppServerClient:
             coordinator,
             declared_lineage,
             channel_lineage,
+            binding,
         )
 
     @staticmethod
     def _validate_transport(
         transport: ClientTransport, compatibility: CompatibilityResult
     ) -> TransportCapability:
+        if isinstance(transport, StdioTransport) and (
+            transport._protocol_target != compatibility.target
+        ):
+            raise UnsupportedFeatureError("transport and compatibility profiles differ")
         capability = getattr(transport, "capability", None)
         if not isinstance(capability, TransportCapability) or not callable(
             getattr(transport, "_open_channel", None)
@@ -261,7 +304,7 @@ class AppServerClient:
         return capability
 
     def _replacement_transport_is_package_owned(self, transport: ClientTransport) -> bool:
-        if type(transport) in (StdioTransport, UnixSocketTransport):
+        if type(transport) in (self._selected_binding.stdio_type, UnixSocketTransport):
             return True
         return (
             self._injected_replacement_safe
@@ -351,7 +394,11 @@ class AppServerClient:
         limits: ClientLimits,
         *,
         generation: int,
+        binding: _SessionBinding | None = None,
     ) -> tuple[_RpcEngine, _AsyncCoordinator, object | None, object]:
+        binding = cls._binding() if binding is None else binding
+        if compatibility.target != binding.target:
+            raise UnsupportedFeatureError("connection and compatibility profiles differ")
         proposed_lineage = cls._proposed_transport_lineage(transport)
         try:
             channel = await transport._open_channel()
@@ -375,6 +422,8 @@ class AppServerClient:
                 max_events=limits.max_events,
                 max_callbacks=limits.max_callbacks,
                 generation=generation,
+                notification_types=binding.notification_types,
+                callback_specs=binding.callback_specs,
             )
             engine._set_inbound_handler(coordinator)
         except BaseException:
@@ -388,7 +437,7 @@ class AppServerClient:
         return engine, coordinator, proposed_lineage, channel
 
     async def initialize(self, identity: ClientIdentity) -> AppServerSession:
-        if not isinstance(identity, ClientIdentity):
+        if not isinstance(identity, self._selected_binding.models["ClientIdentity"]):
             raise TypeError("identity must be ClientIdentity")
         async with self._state_lock:
             if self._state != "connected":
@@ -412,8 +461,9 @@ class AppServerClient:
                 self._failure = InitializationError("app-server initialization failed")
                 await self._close_after_failed_initialization()
                 raise self._failure
-            self._session = AppServerSession(
-                AppServerSession._CONSTRUCTION_TOKEN,
+            session_type = self._selected_binding.session_type
+            self._session = session_type(
+                session_type._CONSTRUCTION_TOKEN,
                 self,
                 self._engine,
                 self._coordinator,
@@ -428,7 +478,7 @@ class AppServerClient:
     async def _initialize_engine(
         self, engine: _RpcEngine, identity: ClientIdentity
     ) -> InitializeInfo:
-        params = _decode_document(
+        params = self._selected_binding.decode_document(
             "v1/InitializeParams.json",
             {
                 "clientInfo": identity.to_dict(),
@@ -437,14 +487,16 @@ class AppServerClient:
                     "extensions": {},
                     "mcpServerOpenaiFormElicitation": False,
                     "optOutNotificationMethods": list(
-                        _notification_optouts(self._compatibility.features)
+                        _notification_optouts(
+                            self._compatibility.features, self._selected_binding.target
+                        )
                     ),
                     "requestAttestation": False,
                 },
             },
         )
         result = await engine._initialize(params.to_dict())
-        validated = _decode_document("v1/InitializeResponse.json", result)
+        validated = self._selected_binding.decode_document("v1/InitializeResponse.json", result)
         initialize_info = InitializeInfo(
             codex_home=validated.codexHome,
             user_agent=validated.userAgent,
@@ -549,6 +601,7 @@ class AppServerClient:
                     self._compatibility,
                     self._limits,
                     generation=replacement_generation,
+                    binding=self._selected_binding,
                 )
             except asyncio.CancelledError:
                 self._state = "cleanup-failed"
@@ -642,8 +695,9 @@ class AppServerClient:
                 )
                 self._failure = failure
                 raise failure
-            self._session = AppServerSession(
-                AppServerSession._CONSTRUCTION_TOKEN,
+            session_type = self._selected_binding.session_type
+            self._session = session_type(
+                session_type._CONSTRUCTION_TOKEN,
                 self,
                 engine,
                 coordinator,
@@ -1005,3 +1059,14 @@ class AppServerSession:
             raise failure
         self._ensure_current()
         return response
+
+
+_LEGACY_BINDING = _SessionBinding(
+    target=PINNED_PROTOCOL,
+    models=_legacy_models._REGISTRY.namespace,
+    decode_document=_legacy_models._REGISTRY.decode_document,
+    notification_types=_NOTIFICATION_TYPES,
+    callback_specs=_CALLBACK_SPECS,
+    stdio_type=StdioTransport,
+    session_type=AppServerSession,
+)
