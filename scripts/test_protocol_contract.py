@@ -15,8 +15,9 @@ PROTOCOL_ROOT = REPOSITORY_ROOT / "packages" / "codex-app-server-client" / "prot
 CHECKER = REPOSITORY_ROOT / "scripts" / "check_protocol_contract.py"
 
 
-def load(name: str) -> dict[str, object]:
-    return json.loads((PROTOCOL_ROOT / name).read_text(encoding="utf-8"))
+def load(name: str, profile: str = "0.147.0") -> dict[str, object]:
+    root = PROTOCOL_ROOT if profile == "0.147.0" else PROTOCOL_ROOT / "profiles" / profile
+    return json.loads((root / name).read_text(encoding="utf-8"))
 
 
 def expect_rejection(
@@ -24,6 +25,9 @@ def expect_rejection(
     manifest: dict[str, object] | None = None,
     surface: dict[str, object] | None = None,
     api: dict[str, object] | None = None,
+    compatibility: dict[str, object] | None = None,
+    signatures: dict[str, object] | None = None,
+    profile: str = "0.147.0",
     message: str,
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="utils-protocol-negative-") as temporary:
@@ -33,6 +37,8 @@ def expect_rejection(
             ("manifest", manifest, "upstream-manifest.json"),
             ("surface", surface, "supported-surface.json"),
             ("public-api", api, "public-api.json"),
+            ("compatibility", compatibility, "compatibility.json"),
+            ("signatures", signatures, "public-api-signatures.json"),
         ):
             if value is not None:
                 target = temporary_root / source
@@ -40,7 +46,7 @@ def expect_rejection(
                     json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
                 )
                 paths[key] = target
-        command = [sys.executable, str(CHECKER)]
+        command = [sys.executable, str(CHECKER), "--profile", profile]
         for key, target in paths.items():
             command.extend((f"--{key}", str(target)))
         completed = subprocess.run(
@@ -94,7 +100,62 @@ def main() -> int:
         message="frozen public API manifest changed",
     )
 
-    print("5 protocol-contract mutations rejected")
+    modern_manifest = load("upstream-manifest.json", "0.162.1")
+    changed_source = copy.deepcopy(modern_manifest)
+    changed_source["upstream"]["source_commit"] = "0" * 40
+    expect_rejection(
+        manifest=changed_source, profile="0.162.1", message="frozen upstream identity changed"
+    )
+    forged_generation = copy.deepcopy(modern_manifest)
+    forged_generation["generation"] = {"command": "codex app-server generate-json-schema"}
+    expect_rejection(
+        manifest=forged_generation,
+        profile="0.162.1",
+        message="frozen source-bundle acquisition identity changed",
+    )
+    changed_bundle = copy.deepcopy(modern_manifest)
+    changed_bundle["acquisition"]["bundle_sha256"] = "0" * 64
+    expect_rejection(
+        manifest=changed_bundle,
+        profile="0.162.1",
+        message="frozen source-bundle acquisition identity changed",
+    )
+    missing_schema = copy.deepcopy(modern_manifest)
+    missing_schema["schema_tree"]["files"].pop()
+    expect_rejection(
+        manifest=missing_schema,
+        profile="0.162.1",
+        message="retained schema file manifest mismatch",
+    )
+    changed_modern_surface = load("supported-surface.json", "0.162.1")
+    changed_modern_surface["client_requests"]["public_typed"].append("thread/fork")
+    expect_rejection(
+        surface=changed_modern_surface,
+        profile="0.162.1",
+        message="frozen selected surface changed",
+    )
+    changed_modern_api = load("public-api.json", "0.162.1")
+    changed_modern_api["lifecycle"]["AppServerClient.connect"] = "async (**kwargs) -> object"
+    expect_rejection(
+        api=changed_modern_api, profile="0.162.1", message="frozen public API manifest changed"
+    )
+    changed_compatibility = load("compatibility.json", "0.162.1")
+    changed_compatibility["public_api_sha256"] = "0" * 64
+    expect_rejection(
+        compatibility=changed_compatibility,
+        profile="0.162.1",
+        message="frozen compatibility metadata changed",
+    )
+    for version in ("0.147.0", "0.162.1"):
+        changed_signatures = load("public-api-signatures.json", version)
+        changed_signatures["callables"]["AppServerClient.initialize"]["signature"] = "(identity)"
+        expect_rejection(
+            signatures=changed_signatures,
+            profile=version,
+            message="frozen public API signature fixture changed",
+        )
+
+    print("14 protocol-contract mutations rejected across both retained profiles")
     return 0
 
 

@@ -202,7 +202,7 @@ class MetadataContractTests(unittest.TestCase):
         manifest = json.loads(manifest_bytes)
         compatibility = json.loads((root / "protocol/compatibility.json").read_bytes())
         self.assertEqual(set(manifest["root_exports"]), set(api.__all__))
-        self.assertEqual(api.__version__, "0.2.0")
+        self.assertEqual(api.__version__, "0.3.0")
         self.assertEqual(api.PINNED_PROTOCOL.codex_version, "0.147.0")
         self.assertEqual(
             hashlib.sha256(manifest_bytes).hexdigest(), compatibility["public_api_sha256"]

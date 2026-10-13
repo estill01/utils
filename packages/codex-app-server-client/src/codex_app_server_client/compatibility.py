@@ -68,6 +68,14 @@ PINNED_PROTOCOL = ProtocolTarget(
 )
 
 
+_PROTOCOL_0_162_1 = ProtocolTarget(
+    codex_version="0.162.1",
+    source_commit="092d3acd6bec3e3a14bdc7e7a2810ab628ab759d",
+    schema_tree_root_sha256="56631e5e36c5d117bb21a2889708bee508127b340174a4719ee423468a5f7154",
+    selected_surface_root_sha256="4da1fd7f18a8e9a9809dcc0f46ae5b3d594c0a2028a1f5b1aacf9d410768d87a",
+)
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -317,6 +325,15 @@ def _packaged_protocol_root() -> Traversable:
     return packaged
 
 
+def _protocol_root_for(target: ProtocolTarget) -> Traversable:
+    """Resolve only the two retained exact targets; never register custom profiles."""
+    if target == PINNED_PROTOCOL:
+        return _packaged_protocol_root()
+    if target == _PROTOCOL_0_162_1:
+        return _packaged_protocol_root().joinpath("profiles", "0.162.1")
+    raise SchemaRootMismatchError("protocol target is not a retained exact target")
+
+
 def inspect_compatibility(
     binary: BinaryIdentity,
     target: ProtocolTarget = PINNED_PROTOCOL,
@@ -329,10 +346,7 @@ def inspect_compatibility(
         raise CodexVersionError(
             f"expected Codex {target.codex_version}, got {binary.reported_version}"
         )
-    if target != PINNED_PROTOCOL:
-        raise SchemaRootMismatchError("protocol target differs from the frozen package target")
-
-    protocol_root = _packaged_protocol_root()
+    protocol_root = _protocol_root_for(target)
     surface = _load_json(protocol_root.joinpath("supported-surface.json"), "supported surface")
     actual_surface_root = _surface_root(surface)
     try:

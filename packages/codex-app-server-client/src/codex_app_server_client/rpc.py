@@ -13,10 +13,9 @@ from functools import partial
 from typing import Any, Protocol
 
 from .compatibility import (
-    PINNED_PROTOCOL,
     CompatibilityResult,
     _load_json,
-    _packaged_protocol_root,
+    _protocol_root_for,
 )
 from .errors import (
     AppServerClientError,
@@ -127,15 +126,13 @@ class _EnvelopeValidator:
     """Validate the three RPC envelopes against the retained official schemas."""
 
     def __init__(self, compatibility: CompatibilityResult) -> None:
-        if compatibility.target != PINNED_PROTOCOL:
-            raise SchemaRootMismatchError("RPC compatibility target is not the frozen target")
-        protocol_root = _packaged_protocol_root()
+        protocol_root = _protocol_root_for(compatibility.target)
         metadata = _load_json(
             protocol_root.joinpath("compatibility.json"), "compatibility metadata"
         )
         if compatibility.semantic_schema_root_sha256 != metadata["semantic_schema_root_sha256"]:
             raise SchemaRootMismatchError("RPC compatibility result has the wrong semantic root")
-        schema_root = protocol_root.joinpath("upstream", PINNED_PROTOCOL.codex_version)
+        schema_root = protocol_root.joinpath("upstream", compatibility.target.codex_version)
         self._request = _load_json(schema_root.joinpath("JSONRPCRequest.json"), "JSONRPCRequest")
         self._notification = _load_json(
             schema_root.joinpath("JSONRPCNotification.json"), "JSONRPCNotification"
