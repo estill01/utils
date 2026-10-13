@@ -23,11 +23,17 @@ TECHNICAL_SOURCE_EXCLUSIONS = {
 }
 EXPECTED_PACKAGE_SOURCES = {
     "codex-app-server-client": {
-        "accepted_source_commit": "a6f20e28ba228ddde91d32f12ca7253c5e2fb7b4",
-        "package_tree_object": "7419364f578291754c389e56e7129c9479d67b4f",
+        "accepted_source_commit": "259ba4b450d9db26a0524b033d66f77b7c94a590",
+        "package_tree_object": "084c139ee2954fd4beae74b96871e90486c1b191",
         "public_contracts": {
             "packages/codex-app-server-client/protocol/compatibility.json",
             "packages/codex-app-server-client/protocol/public-api.json",
+            "packages/codex-app-server-client/protocol/public-api-signatures.json",
+            "packages/codex-app-server-client/protocol/profiles/0.162.1/compatibility.json",
+            "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api.json",
+            "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api-signatures.json",
+            "packages/codex-app-server-client/protocol/profiles/0.162.1/upstream-manifest.json",
+            "packages/codex-app-server-client/protocol/profiles/0.162.1/supported-surface.json",
         },
     },
     "embedded-service-contract": {
