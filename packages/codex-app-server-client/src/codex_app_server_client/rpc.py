@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections import deque
 from collections.abc import Mapping
 from contextlib import suppress
@@ -26,6 +27,7 @@ from .errors import (
     JsonRpcValidationError,
     MessageTooLargeError,
     RemoteRpcError,
+    RemoteRpcErrorCategory,
     RequestLimitError,
     SchemaRootMismatchError,
     SessionStateError,
@@ -36,6 +38,23 @@ from .surface import RequestCapability
 
 _INT64_MIN = -(2**63)
 _INT64_MAX = 2**63 - 1
+_THREAD_NOT_LOADED_MESSAGE = re.compile(
+    r"thread not loaded: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+)
+
+
+def _remote_error_category(
+    capability: RequestCapability | None, remote: Mapping[str, Any]
+) -> RemoteRpcErrorCategory:
+    # Exact 0.147.0 thread-read rejection; never retain message or data.
+    if (
+        capability is RequestCapability.THREAD_READ
+        and remote["code"] == -32600
+        and "data" not in remote
+        and _THREAD_NOT_LOADED_MESSAGE.fullmatch(remote["message"]) is not None
+    ):
+        return RemoteRpcErrorCategory.THREAD_NOT_LOADED
+    return RemoteRpcErrorCategory.UNKNOWN
 
 
 def _current_task_is_cancelling() -> bool:
@@ -588,6 +607,7 @@ class _RpcEngine:
                     request_id=request_id,
                     code=remote["code"],
                     has_data="data" in remote,
+                    category=_remote_error_category(pending.capability, remote),
                 )
             )
         else:

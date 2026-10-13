@@ -28,6 +28,15 @@ or changed initialization is rejected and cannot create another session.
 a close waiter does not cancel cleanup, and later close calls retrieve the same
 typed cleanup result.
 
+`session.initialize_info` is a frozen, slotted `InitializeInfo` snapshot with
+exactly four string fields: `codex_home`, `user_agent`, `platform_family`, and
+`platform_os`. The complete retained `InitializeResponse` is validated before
+these fields are projected; no raw response or additional fields are exposed.
+Every replacement generation receives its own snapshot. A retired or closed
+session retains its original metadata, while its operations remain subject to
+the existing generation checks. This metadata is a peer-reported observation;
+the caller still owns path, identity, and resource-ownership policy.
+
 ## Exact operation surface
 
 | Python method | Protocol method | Parameter/result models |

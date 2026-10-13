@@ -30,6 +30,7 @@ from .errors import (
     JsonRpcValidationError,
     MessageTooLargeError,
     RemoteRpcError,
+    RemoteRpcErrorCategory,
     RequestLimitError,
     RestartError,
     SchemaMalformedError,
@@ -85,7 +86,7 @@ from .models import (
 )
 from .restart import BackoffHook, RestartContext
 from .rpc import ByteChannel
-from .session import AppServerClient, AppServerSession, ClientLimits
+from .session import AppServerClient, AppServerSession, ClientLimits, InitializeInfo
 from .surface import (
     CallbackCapability,
     FeatureSet,
@@ -101,7 +102,7 @@ from .transport import (
     UnixSocketTransport,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "__version__",
@@ -140,12 +141,14 @@ __all__ = [
     "JsonRpcValidationError",
     "InjectedTransport",
     "InitializationError",
+    "InitializeInfo",
     "MessageTooLargeError",
     "ItemCompletedNotification",
     "ItemStartedNotification",
     "PlanDeltaNotification",
     "ReasoningSummaryTextDeltaNotification",
     "RemoteRpcError",
+    "RemoteRpcErrorCategory",
     "RequestLimitError",
     "RestartContext",
     "RestartError",

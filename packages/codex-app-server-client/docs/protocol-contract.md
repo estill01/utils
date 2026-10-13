@@ -19,7 +19,7 @@ This is provenance evidence, not a claim that every upstream method is public.
 The selected-surface root is
 `9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f`.
 The exact public-API manifest SHA-256 is
-`11e02c9c460821ebd5dd08f80b6544eb45b2217a53b90918ca472c26d14e1a21`.
+`db748fe9d151a39d702379c00f9fb056e3662ed2583881016c4235b04c60d4de`.
 The maintained checker pins those roots plus the version, tag object, peeled
 commit, generation mode, wrapper/native hashes, schema count, byte count, and
 schema root; changing a self-consistent manifest alone therefore fails CI.

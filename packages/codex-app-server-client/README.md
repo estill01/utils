@@ -6,6 +6,11 @@ generation-safe restart. Block 1 provides the import/version skeleton. Block 2
 freezes the exact upstream target and deliberately narrowed public contract;
 Blocks 3–9 own its behavior and conformance.
 
+Local API candidate `0.2.0` adds immutable `session.initialize_info` metadata
+and content-free `RemoteRpcError.category` without changing the exact Codex
+`0.147.0` protocol target. These additions do not grant release or publication
+authority and do not inherit the earlier `0.1.0` qualification.
+
 The frozen protocol contract is in `docs/protocol-contract.md`, its Block
 ownership proof is in `docs/proof-map.md`, and the complete non-experimental
 official schema snapshot and manifest are under `protocol/`. Those artifacts

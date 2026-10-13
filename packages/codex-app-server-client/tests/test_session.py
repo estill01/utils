@@ -2036,7 +2036,7 @@ class AsyncCoordinationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(client_api.RestartContext, RestartContext)
         self.assertIs(client_api.RestartError, RestartError)
         self.assertIs(client_api.StaleGenerationError, StaleGenerationError)
-        self.assertEqual(len(client_api.__all__), 92)
+        self.assertEqual(len(client_api.__all__), 94)
         self.assertEqual(
             str(inspect.signature(ClientLimits)),
             "(max_message_bytes: 'int' = 8388608, max_pending_calls: 'int' = 256, "

@@ -159,6 +159,21 @@ def _consume_task_exception(task: asyncio.Task[None]) -> None:
 _DEFAULT_CLIENT_LIMITS = ClientLimits()
 
 
+@dataclass(frozen=True, slots=True)
+class InitializeInfo:
+    """The selected validated initialization facts for one session generation."""
+
+    codex_home: str
+    user_agent: str
+    platform_family: str
+    platform_os: str
+
+    def __post_init__(self) -> None:
+        for name in ("codex_home", "user_agent", "platform_family", "platform_os"):
+            if type(getattr(self, name)) is not str:
+                raise TypeError(f"{name} must be a string")
+
+
 class AppServerClient:
     """The single connection owner before and after one initialization handshake."""
 
@@ -382,7 +397,7 @@ class AppServerClient:
             self._state = "initializing"
             initialization_failed = False
             try:
-                await self._initialize_engine(self._engine, identity)
+                initialize_info = await self._initialize_engine(self._engine, identity)
             except asyncio.CancelledError:
                 self._state = "failed"
                 if _current_task_is_cancelling():
@@ -404,12 +419,15 @@ class AppServerClient:
                 self._coordinator,
                 self._session_capabilities(self._transport),
                 self._generation,
+                initialize_info,
             )
             self._failure = None
             self._state = "initialized"
             return self._session
 
-    async def _initialize_engine(self, engine: _RpcEngine, identity: ClientIdentity) -> None:
+    async def _initialize_engine(
+        self, engine: _RpcEngine, identity: ClientIdentity
+    ) -> InitializeInfo:
         params = _decode_document(
             "v1/InitializeParams.json",
             {
@@ -426,8 +444,15 @@ class AppServerClient:
             },
         )
         result = await engine._initialize(params.to_dict())
-        _decode_document("v1/InitializeResponse.json", result)
+        validated = _decode_document("v1/InitializeResponse.json", result)
+        initialize_info = InitializeInfo(
+            codex_home=validated.codexHome,
+            user_agent=validated.userAgent,
+            platform_family=validated.platformFamily,
+            platform_os=validated.platformOs,
+        )
         await engine._send_initialized()
+        return initialize_info
 
     def _session_capabilities(self, transport: ClientTransport) -> FeatureSet:
         return FeatureSet(
@@ -576,7 +601,7 @@ class AppServerClient:
             initialization_cancelled: asyncio.CancelledError | None = None
             cancellation_cleanup_failed = False
             try:
-                await self._initialize_engine(engine, self._identity)
+                initialize_info = await self._initialize_engine(engine, self._identity)
             except asyncio.CancelledError as error:
                 if _current_task_is_cancelling():
                     initialization_cancelled = error
@@ -624,6 +649,7 @@ class AppServerClient:
                 coordinator,
                 self._session_capabilities(transport),
                 replacement_generation,
+                initialize_info,
             )
             self._state = "initialized"
             self._failure = None
@@ -773,6 +799,7 @@ class AppServerSession:
         coordinator: _AsyncCoordinator,
         capabilities: FeatureSet,
         generation: int,
+        initialize_info: InitializeInfo,
     ) -> None:
         if token is not self._CONSTRUCTION_TOKEN:
             raise TypeError("sessions are created only by AppServerClient.initialize")
@@ -781,6 +808,7 @@ class AppServerSession:
         self._coordinator = coordinator
         self._capabilities = capabilities
         self._generation = generation
+        self._initialize_info = initialize_info
         if engine._generation != generation or coordinator._generation != generation:
             raise SessionStateError("session generation must match its private owners")
         self._retired_failure: StaleGenerationError | None = None
@@ -792,6 +820,10 @@ class AppServerSession:
     @property
     def capabilities(self) -> FeatureSet:
         return self._capabilities
+
+    @property
+    def initialize_info(self) -> InitializeInfo:
+        return self._initialize_info
 
     def _stale_error(self) -> StaleGenerationError:
         return StaleGenerationError(

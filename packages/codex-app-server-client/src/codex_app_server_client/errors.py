@@ -1,5 +1,7 @@
 """Public app-server client error taxonomy."""
 
+from enum import StrEnum
+
 
 class AppServerClientError(Exception):
     """Base class for every public client failure."""
@@ -53,6 +55,13 @@ class CorrelationError(AppServerClientError):
     """A response cannot be correlated exactly once to a pending request."""
 
 
+class RemoteRpcErrorCategory(StrEnum):
+    """Content-free classifications of exact known remote rejections."""
+
+    UNKNOWN = "unknown"
+    THREAD_NOT_LOADED = "thread-not-loaded"
+
+
 class RemoteRpcError(AppServerClientError):
     """The remote peer returned a validated JSON-RPC error envelope."""
 
@@ -62,11 +71,15 @@ class RemoteRpcError(AppServerClientError):
         request_id: int,
         code: int,
         has_data: bool,
+        category: RemoteRpcErrorCategory = RemoteRpcErrorCategory.UNKNOWN,
     ) -> None:
+        if not isinstance(category, RemoteRpcErrorCategory):
+            raise TypeError("category must be RemoteRpcErrorCategory")
         super().__init__(f"remote RPC error {code} for request {request_id}")
         self.request_id = request_id
         self.code = code
         self.has_data = has_data
+        self.category = category
 
 
 class TransportStartError(AppServerClientError):
