@@ -121,9 +121,7 @@ class SessionMetadataTests(unittest.IsolatedAsyncioTestCase):
             await session.read_thread(api.ThreadReadParams(threadId=THREAD_ID))
         error = raised.exception
         self.assertIs(error.category, api.RemoteRpcErrorCategory.THREAD_NOT_LOADED)
-        self.assertEqual(
-            set(vars(error)), {"request_id", "code", "has_data", "category"}
-        )
+        self.assertEqual(set(vars(error)), {"request_id", "code", "has_data", "category"})
         self.assertFalse(error.has_data)
         self.assertIsNone(error.__cause__)
         self.assertIsNone(error.__context__)
@@ -169,9 +167,7 @@ class SessionMetadataTests(unittest.IsolatedAsyncioTestCase):
                 error = raised.exception
                 self.assertIs(error.category, api.RemoteRpcErrorCategory.UNKNOWN)
                 self.assertEqual(error.has_data, "data" in remote)
-                self.assertEqual(
-                    set(vars(error)), {"request_id", "code", "has_data", "category"}
-                )
+                self.assertEqual(set(vars(error)), {"request_id", "code", "has_data", "category"})
                 self.assertNotIn(THREAD_ID, repr(error))
                 self.assertNotIn("private-", repr(error) + repr(vars(error)))
         self.assertIsNone(client._engine.failure)
