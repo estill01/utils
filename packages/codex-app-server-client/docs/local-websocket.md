@@ -25,8 +25,8 @@ await client.close()
 
 The caller must bind the socket to its intended daemon and retain that authority.
 Executable schema inspection cannot authenticate the process behind an arbitrary
-socket. Initialization validates the returned runtime identity through the shared
-session owner. This local transport has no TCP URL, proxy, credential discovery,
+socket. Initialization schema-validates and exposes returned metadata through the
+shared session owner; the caller verifies the intended daemon and version. This local transport has no TCP URL, proxy, credential discovery,
 listener, daemon start/stop, process ownership, or retry policy.
 
 The handshake has a five-second deadline and 16 KiB header bound. Only an exact

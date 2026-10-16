@@ -6,12 +6,20 @@ from __future__ import annotations
 import importlib
 import json
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from public_api_signatures import PROFILE_ROOTS, check_signatures, snapshot
+from public_api_signatures import PROFILE_ROOTS, annotation_name, check_signatures, snapshot
 
 
 class PublicApiSignatureTests(unittest.TestCase):
+    def test_path_uses_public_name_across_interpreter_layouts(self) -> None:
+        self.assertEqual(annotation_name(Path), "pathlib.Path")
+        self.assertEqual(annotation_name(list[Path]), "builtins.list[pathlib.Path]")
+        for internal_module in ("pathlib", "pathlib._local"):
+            with patch.object(Path, "__module__", internal_module):
+                self.assertEqual(annotation_name(Path), "pathlib.Path")
+
     def fixture(self, version: str) -> dict[str, object]:
         return json.loads((PROFILE_ROOTS[version] / "public-api.json").read_text())
 

@@ -2857,7 +2857,19 @@ first required the sparse checkout to include existing package metadata; no
 other package was built. Three old test assertions were updated for the new
 version and explicit per-profile capability admission. Initial native empty
 history failures are retained separately from successful transport evidence.
-Independent acceptance is pending; this record does not mark Block 17 complete.
+Independent review of `4737b85288ae7440d4c57cf2dd9edc7106a5fc93` found a
+Python-version-dependent `pathlib._local.Path` signature. The successor canonicalizes
+the public `pathlib.Path` identity, adds a regression covering both interpreter
+layouts, regenerates all three exact signature fixtures and clarifies that
+initialization metadata does not authenticate a daemon. The corrected installed
+wheel rerun passes 200 tests; five signature tests and all profile checks pass.
+Updated wheel SHA-256:
+`03d28f94ccf468409a06f85109cbb5d00d34b78e91fc2d439a7b700d026e4ca5`;
+content root `2a699da7195bca851735f94e525901f371566745f2420278d02995359a4e4f7b`.
+Earlier source/retained-data proof matched its frozen commit, while later doc
+edits changed the whole snapshot root; no byte-identical whole-snapshot claim
+is made. The corrected wheel has its own complete isolated snapshot evidence.
+Independent acceptance of this correction is pending.
 
 ### Resource and economy contract
 

@@ -159,7 +159,7 @@
       "async": false,
       "async_generator": false,
       "resolved_annotations": {
-        "path": "pathlib._local.Path",
+        "path": "pathlib.Path",
         "reported_version": "builtins.str",
         "return": "builtins.NoneType",
         "sha256": "builtins.str"
@@ -783,7 +783,7 @@
       "resolved_annotations": {
         "binary": "codex_app_server_client.compatibility.BinaryIdentity",
         "return": "codex_app_server_client.compatibility.CompatibilityResult",
-        "schema_dir": "types.UnionType[pathlib._local.Path, builtins.NoneType]",
+        "schema_dir": "types.UnionType[pathlib.Path, builtins.NoneType]",
         "target": "codex_app_server_client.compatibility.ProtocolTarget"
       },
       "signature": "(binary: 'BinaryIdentity', target: 'ProtocolTarget' = ProtocolTarget(codex_version='0.162.1', source_commit='092d3acd6bec3e3a14bdc7e7a2810ab628ab759d', schema_tree_root_sha256='56631e5e36c5d117bb21a2889708bee508127b340174a4719ee423468a5f7154', selected_surface_root_sha256='4da1fd7f18a8e9a9809dcc0f46ae5b3d594c0a2028a1f5b1aacf9d410768d87a'), *, schema_dir: 'Path | None' = None) -> 'CompatibilityResult'"

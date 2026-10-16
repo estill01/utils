@@ -159,7 +159,7 @@
       "async": false,
       "async_generator": false,
       "resolved_annotations": {
-        "path": "pathlib._local.Path",
+        "path": "pathlib.Path",
         "reported_version": "builtins.str",
         "return": "builtins.NoneType",
         "sha256": "builtins.str"

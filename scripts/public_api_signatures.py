@@ -22,6 +22,10 @@ PROFILE_ROOTS = {
 
 
 def annotation_name(annotation: object) -> str:
+    # CPython 3.13 moved this public class to pathlib._local internally.
+    # The public API contract must not depend on an interpreter's module layout.
+    if annotation is Path:
+        return "pathlib.Path"
     origin = get_origin(annotation)
     if origin is not None:
         return (
