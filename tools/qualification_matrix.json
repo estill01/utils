@@ -81,7 +81,7 @@
   },
   "composition": {
     "fixture_sha256": "7a7a112b345d1f7aa979b1627a6a9d90b76f3548953cafb97f45e2d3ff3e9f49",
-    "manifest_sha256": "d7b072e8a76ff4e0331320f4e334a998798672b55349fc2152316e9de116c203"
+    "manifest_sha256": "abf7f0f010fcdb456f76d6c9d6de68d6e28a2dacdcfa5f4b7770552cfdaae6e8"
   },
   "documentation": {
     "files": {
@@ -106,8 +106,8 @@
     }
   },
   "technical_source": {
-    "candidate_revision": "7c41db867b44125d8e4f90ff80edd8cd2ad192f8",
-    "root_sha256": "6ef386799cacbce25ce848a4bd9311dd9327e5031bd8df88503353e4e65e216e",
+    "candidate_revision": "8e00628ade88b6d2ceeb33eef7824e09477d87a2",
+    "root_sha256": "906e9f587b723ad150fb4d40f3ab22beb56753fb6f8b7f1a1d53a24748cf34d5",
     "files": 1029
   }
 }
