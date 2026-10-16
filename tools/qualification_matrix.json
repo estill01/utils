@@ -15,29 +15,29 @@
   ],
   "packages": {
     "codex-app-server-client": {
-      "accepted_source_commit": "f2d1263300b4d06f624aa6e6d742cca4439294c5",
-      "package_tree_object": "733d5b73a13f253f6106c4a4c3bd8d385cfa75aa",
+      "accepted_source_commit": "4b457e17b8ae3c386ebd89b7344598bb646b262f",
+      "package_tree_object": "c37073314213ef1f1cee04c3cb06cbadc5128539",
       "path": "packages/codex-app-server-client",
       "import": "codex_app_server_client",
-      "version": "0.4.2",
+      "version": "0.5.0",
       "runtime_dependencies": [],
-      "wheel": "codex_app_server_client-0.4.2-py3-none-any.whl",
-      "wheel_sha256": "12279630c478db8e659a7afd58dc2667e2d37c803afcb2e3403890c83f6822d2",
-      "wheel_content_root_sha256": "078ab0d0b92f31d3df3b2a61c09f53ef3fd3e1f6b40695ffa575f322501c25ae",
+      "wheel": "codex_app_server_client-0.5.0-py3-none-any.whl",
+      "wheel_sha256": "010be409bbd0aa86800e875a7a7a2fe37751cefa7f21933194890f32db55497c",
+      "wheel_content_root_sha256": "43a7916de5cd17a50fd0939a70ca561d7f32704ce4f9e58941a54c9af8deb4c9",
       "public_contracts": {
-        "packages/codex-app-server-client/protocol/compatibility.json": "e0d3028749a8d977b739a0c5aad2560f5c968b0205758909e64b4b7d9c49ca59",
-        "packages/codex-app-server-client/protocol/profiles/0.156.1/compatibility.json": "49f673c969747ef5bf3f80dec5cdd4ce5221256e194691d96e8c023ae868313c",
-        "packages/codex-app-server-client/protocol/profiles/0.156.1/public-api-signatures.json": "9d3e839e4b5bf7962a95c4f2cd598d3a83aba5d2a2ba555a1535fc442b578989",
-        "packages/codex-app-server-client/protocol/profiles/0.156.1/public-api.json": "591ca4671e974769457c4fac7caae18053caca771b5ffa5818d4b899fdfdd195",
-        "packages/codex-app-server-client/protocol/profiles/0.156.1/supported-surface.json": "250a5570c89351daf8cf2dd2d49f93e60b69fea814bab38d5f49290a94ce9370",
+        "packages/codex-app-server-client/protocol/compatibility.json": "6d902b00b1e4afdffd81fbe3f885bd9fbb99e8f24b50a7964d72f72dcc816d3b",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/compatibility.json": "b65a42e8bf5865e1f2d71f53ebe15b38f11030fbc81d8b82e7caad70bb5f3b7d",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/public-api-signatures.json": "26d1ad5d864dfbaf604ba4052e29408e34a243c373b27307302d581d63331b5e",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/public-api.json": "06cf4e125a712e294121edaf8e3e59b973f87fe55e8b256c3fe7c8e072a9b13d",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/supported-surface.json": "bf6858968d21e8a40bf63cde7a1bfb3bea3969e5d8f089700d8df78700e68033",
         "packages/codex-app-server-client/protocol/profiles/0.156.1/upstream-manifest.json": "5feb985f25d0c1493792f6f2d80427517b65b8118acbfc7267e8d0f4f189d0f3",
-        "packages/codex-app-server-client/protocol/profiles/0.162.1/compatibility.json": "99cec93f7ae17294942d71ceed60f06cd0fd39b5e3993abaf710130a4fd15208",
-        "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api-signatures.json": "ab962ccb6271dce3d247bca30da62ad90cb9d9a966aa8d109e04b2acf9d655ad",
-        "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api.json": "9138fa605dd36b1203b4c3409786360b665d7237afa66dd91a237606f5ad01b5",
+        "packages/codex-app-server-client/protocol/profiles/0.162.1/compatibility.json": "23fbb28461e69adc43bc2309e4864048bfd34f02e36127e66c35d8886d5ee7fe",
+        "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api-signatures.json": "378de6c5383b6b170e0ff0c4aa13d40e1c786a177d59fe08b61227720e7eacdb",
+        "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api.json": "661a39b475c5c1b62f9109a5caaaf3975416c97cbfbfad7159a8b604a9bc6193",
         "packages/codex-app-server-client/protocol/profiles/0.162.1/supported-surface.json": "914302e03be9ed32913dad7c4d0b7bffe9aad42bcfdcf0a39ef9e384a4fc06cd",
         "packages/codex-app-server-client/protocol/profiles/0.162.1/upstream-manifest.json": "28dd6b9e87c78b68e8547903cb69aff69209667c090819dee599a1a7ad1115d3",
-        "packages/codex-app-server-client/protocol/public-api-signatures.json": "f35d4250fbc6494263beb333c3a8bc328d08db36af1a939e914240040b7d5867",
-        "packages/codex-app-server-client/protocol/public-api.json": "d7c22e4d96cc33f3ee85ea05e7779fba409e0764732c7718a298838c13d5bc65"
+        "packages/codex-app-server-client/protocol/public-api-signatures.json": "caaf11fbf2b466f7e12db462affece06db6a1d1f77084294c64f500fe2456343",
+        "packages/codex-app-server-client/protocol/public-api.json": "0105415808843c26827a2a7356489b95a406dd59e66e181a7835f50ca9188f89"
       }
     },
     "embedded-service-contract": {
@@ -81,19 +81,19 @@
   },
   "composition": {
     "fixture_sha256": "7a7a112b345d1f7aa979b1627a6a9d90b76f3548953cafb97f45e2d3ff3e9f49",
-    "manifest_sha256": "abf7f0f010fcdb456f76d6c9d6de68d6e28a2dacdcfa5f4b7770552cfdaae6e8"
+    "manifest_sha256": "9a548448bb5aa5e71662b954df30ab45e7f2daa3926cd70f5072689a5c9f5d94"
   },
   "documentation": {
     "files": {
-      "packages/codex-app-server-client/README.md": "93bef3569308d31c0b9838f79f9a273830fe21d1ea0c423136b583d719dccf66",
+      "packages/codex-app-server-client/README.md": "5d7362898318f21d7032813299e8cdcdd59a5a99bf240babb6ad3ee72b238a7c",
       "packages/embedded-service-contract/README.md": "6870de7e8b97cb2cad68058699f68ea7d0a8bb59d1d612fbffd74e8bc8b62d5d",
       "packages/runtime-manifest/README.md": "9d7e5c87d3e49fe3b536a0a1e54ee7692da6b4fae6f9e49688e52d6d5ae96373",
-      "docs/qualification.md": "6b45f5bd4631c1814011fb0a4f5d5f84e8cc9d5ef3d707ea375909482a436428"
+      "docs/qualification.md": "d300c1a0843c6e887f0f6276b120b3a0bb653716b179a170264f49e9b17b78dc"
     },
     "executable_examples": {
       "codex-app-server-client": {
         "path": "packages/codex-app-server-client/README.md",
-        "sha256": "93bef3569308d31c0b9838f79f9a273830fe21d1ea0c423136b583d719dccf66"
+        "sha256": "5d7362898318f21d7032813299e8cdcdd59a5a99bf240babb6ad3ee72b238a7c"
       },
       "embedded-service-contract": {
         "path": "packages/embedded-service-contract/README.md",
@@ -106,8 +106,8 @@
     }
   },
   "technical_source": {
-    "candidate_revision": "8e00628ade88b6d2ceeb33eef7824e09477d87a2",
-    "root_sha256": "906e9f587b723ad150fb4d40f3ab22beb56753fb6f8b7f1a1d53a24748cf34d5",
-    "files": 1029
+    "candidate_revision": "66f0fed17b36c987abbb532c2a4f1d23af667f7d",
+    "root_sha256": "34637f361c7c03df2e0c7725e069b328ae5f83788346dc4ee489cd638bc5235c",
+    "files": 1030
   }
 }
