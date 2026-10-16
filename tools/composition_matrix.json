@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "fixture_sha256": "7a7a112b345d1f7aa979b1627a6a9d90b76f3548953cafb97f45e2d3ff3e9f49",
-  "manifest_sha256": "d7b072e8a76ff4e0331320f4e334a998798672b55349fc2152316e9de116c203",
+  "manifest_sha256": "abf7f0f010fcdb456f76d6c9d6de68d6e28a2dacdcfa5f4b7770552cfdaae6e8",
   "packages": {
     "codex-app-server-client": {
       "version": "0.4.2",
