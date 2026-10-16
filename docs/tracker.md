@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Blocks 17–18 accepted; package-set integration Block 19 in progress. Terminal utility outcome is a reviewed,
+Current frontier: Blocks 17–18 accepted; package-set integration Block 19 accepted. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -328,7 +328,7 @@ govern execution.
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `completed` |
 | 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `accepted` |
 | 18 | Check request preconditions after transport queuing | 17 | `accepted` |
-| 19 | Reconcile the successor package-set qualification | 18 | `in-progress` |
+| 19 | Reconcile the successor package-set qualification | 18 | `accepted` |
 
 Required order:
 
@@ -2995,7 +2995,7 @@ Stop before publication or consumer adoption; this is a dependency checkpoint.
 
 ## Block 19 — Reconcile the successor package-set qualification
 
-Status: `in-progress`
+Status: `accepted`
 
 ### Objective
 
@@ -3044,7 +3044,7 @@ Retain rejection of stale versions, changed artifacts, wrong contracts, changed 
 
 ### Completion evidence
 
-Independent integration review `/root/native_interface_review` found main-only changes in two qualification-owner files, no path overlap with PR3, and concrete qualification/composition CI version failures. Current main is being integrated without rewriting either branch. The 0.4.1 package tree remains exactly `49df3b355950824aa1880ec653af32c80fe2bc60`, matching independently accepted Block 18. Its measured installed wheel/content roots are reused from that unchanged candidate; maintained successor validation remains pending.
+Independent integration review `/root/native_interface_review` found main-only changes in two qualification-owner files, no path overlap with PR3, and concrete qualification/composition CI version failures. Current main is being integrated without rewriting either branch. The 0.4.1 package tree remains exactly `49df3b355950824aa1880ec653af32c80fe2bc60`, matching independently accepted Block 18. Its measured installed wheel/content roots are reused from that unchanged candidate. Independent reviewer `/root/native_interface_review` accepted the integrated candidate `234ec1944402435c1db9bc9d6b319018a6ab50b0`. All exact-head push/PR CI checks passed: repository contract, both Python package-isolation matrices, both neutral composition versions and technical qualification. The maintained local quality envelope also passed; 17 qualification and four composition record tests passed. Frozen technical candidate `0a0b1872a129876567c6eea12f10be3062a5106c` binds 1027 files with root `48b461f9e87631d2d187dafd7b192ec4bd1a9ab06b8fef9486182a65028cc35a`. This evidence-only update does not alter that source root. No native/model effect, downstream acceptance or publication is implied.
 
 ### Stop
 
