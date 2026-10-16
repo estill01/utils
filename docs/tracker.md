@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Blocks 17–20 accepted; bounded item pagination Block 21 is in progress. Terminal utility outcome is a reviewed,
+Current frontier: Blocks 17–20 accepted; bounded item pagination Block 21 is independently accepted. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -330,7 +330,7 @@ govern execution.
 | 18 | Check request preconditions after transport queuing | 17 | `accepted` |
 | 19 | Reconcile the successor package-set qualification | 18 | `accepted` |
 | 20 | Preserve final guards for injected process channels | 18–19 | `accepted` |
-| 21 | Read bounded native item pages | 17–20 | `in-progress` |
+| 21 | Read bounded native item pages | 17–20 | `accepted` |
 
 Required order:
 
@@ -3119,7 +3119,7 @@ Stop before publication; this is an enabling checkpoint in the continuing downst
 
 ## Block 21 — Read bounded native item pages
 
-Status: `in-progress`
+Status: `accepted`
 
 ### Objective
 
@@ -3168,7 +3168,9 @@ Missing/excessive limit, missing direction, wrong profile, malformed response, n
 
 ### Completion evidence
 
-Independent interface review identified stable thread/items/list in the retained exact schema and pinned upstream b412ff32c417f855c2b2d1581b77058eed87c84b. Implementation and qualification are in progress; no live consumer proof is claimed here.
+Independent interface review identified stable thread/items/list in the retained exact schema and pinned upstream b412ff32c417f855c2b2d1581b77058eed87c84b. Package candidate `4b457e17b8ae3c386ebd89b7344598bb646b262f` and final qualification `d1f867213baae5639be90cbb2cd32c3ca2428312` were independently accepted by `/root/native_interface_review`. The 209 pristine installed-wheel tests pass. Wheel `010be409bbd0aa86800e875a7a7a2fe37751cefa7f21933194890f32db55497c` and content root `43a7916de5cd17a50fd0939a70ca561d7f32704ce4f9e58941a54c9af8deb4c9` are measured from the new package. Independent adversarial tests preserve nonempty membership and string cursors, reject nine invalid requests before I/O, and fail-close malformed responses. All three profile/signature contracts pass; older selected operations and schema bytes stay unchanged.
+
+Actual neutral composition passed with canonical manifest `9a548448bb5aa5e71662b954df30ab45e7f2daa3926cd70f5072689a5c9f5d94`. The prior 0.4.2 record is byte-identical history. Current qualification/ancestry checks pass at technical root `34637f361c7c03df2e0c7725e069b328ae5f83788346dc4ee489cd638bc5235c`. CI runs `38895940354` and `38895933157` passed all package, composition, repository and qualification jobs. No live consumer proof is claimed here.
 
 ### Stop
 
