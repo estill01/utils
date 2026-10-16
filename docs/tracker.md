@@ -1,11 +1,23 @@
 # Shared Domain-Neutral Utilities Implementation Tracker
 
 - Tracker status: `implementation`
-- Tracker sequence: Blocks 0–16
+- Tracker sequence: Blocks 0–21
 - Repository: `https://github.com/estill01/utils`
 - Governing objective: provide narrow, independently versioned enabling
   packages with neutral internal contracts and conformance proof, without
   implementing, operating, testing, or tracking any downstream consumer.
+
+## Active bounded successor — NATIVE156
+
+The October 16, 2026 remote connection implementation request selects only the
+new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
+completion/evidence remain retained history. Source base is
+`259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
+Current frontier: Blocks 17–20 accepted; bounded item pagination Block 21 is independently accepted. Terminal utility outcome is a reviewed,
+pushed, independently installable client successor with exact 0.156.1 schemas,
+typed bounded turn pagination and local WebSocket attachment. Consumer adoption
+belongs to its separate owner; no consumer is imported or tested here. No license,
+package-index publication, release, or existing daemon mutation is authorized.
 
 ## 1. Purpose and intended outcome
 
@@ -314,6 +326,11 @@ govern execution.
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `completed` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `completed` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `completed` |
+| 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `accepted` |
+| 18 | Check request preconditions after transport queuing | 17 | `accepted` |
+| 19 | Reconcile the successor package-set qualification | 18 | `accepted` |
+| 20 | Preserve final guards for injected process channels | 18–19 | `accepted` |
+| 21 | Read bounded native item pages | 17–20 | `accepted` |
 
 Required order:
 
@@ -2769,6 +2786,397 @@ remain truthful, no external effect occurred, and the Stop is explicit.
 
 Stop before any license grant, publication, release, announcement, downstream
 adapter or cutover, consumer test, or unrelated utility admission.
+
+## Block 17 — Qualify 0.156.1 local attachment and paginated turns
+
+Status: `accepted`
+
+### Objective
+
+Expose the actual installed stable protocol through the existing typed client,
+with bounded local WebSocket attachment and complete-versus-summary turn reads.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: exact 0.156.1 compatibility and existing-daemon reads.
+- Potential capability loss or regression: weakening old profile gates or
+  treating a control socket as raw JSONL could misroute or corrupt operations.
+- Protected-capability effect: retain immutable protocol identities, shared RPC
+  ownership, bounded framing, callback handling and disconnect uncertainty.
+- Architecture and operating-model effect: one explicit facade and one local
+  transport use the existing compatibility, model registry and session owners.
+- Tradeoff and source evidence: actual 0.156.1 binary and official source commit
+  `b412ff32c417f855c2b2d1581b77058eed87c84b`; existing 0.3.0 has no custom-profile
+  API. Preserve old surface roots; no private consumer override or raw RPC escape.
+
+### Inputs and dependencies
+
+Accepted prior package behavior through Block 16 and current package 0.3.0 at
+`259ba4b450d9db26a0524b033d66f77b7c94a590`. Existing admitted client consumers need
+local attachment and paginated source reads; the package admission remains neutral.
+Official stable schema generation is allowed without model calls. No downstream
+source/runtime is an acceptance fixture.
+
+### Required work
+
+Retain actual stable generated 0.156.1 schemas with binary/source/tree pins. Add
+an explicit versioned facade, typed thread/turns/list and local WebSocket over a
+caller-selected Unix socket. Bound handshake/messages/frames, validate protocol
+framing, retain callback and session ownership, and close only the borrowed
+connection. Preserve old schemas and admitted surfaces. Version package/API,
+freeze provenance and signatures, document limits, and test through neutral
+local fakes plus a no-model official app-server protocol smoke.
+
+### Scope and non-goals
+
+Only this distribution and its necessary package tooling/docs. No networking
+listener, public network transport, consumer policy, scheduler, credentials,
+product persistence, daemon replacement, package publication or new provider.
+
+### Deliverables and recorded state
+
+Versioned package source, retained schemas and provenance, public contract,
+neutral tests, installed-wheel proof and exact independent review evidence.
+
+### Candidate verification evidence
+
+2026-10-16: package 0.4.0 candidate retains the 310-file generated stable schema
+root and exact native identity in its manifest. Installed-wheel isolation on
+CPython 3.13 passes all 200 package tests, including local framing, typed bounded
+turn reads, old-profile rejection and generation replacement. Wheel SHA-256:
+`b2725d0db20a3a8c5afb3fb48758eb74ceb0388b7f96708b15139d7baa04c6f4`;
+content root `7a34c713d57661e5986decbb2ef59d8ec1371bbdfc7cf5d2d6500a3c0b88815c`.
+Protocol/signature checks pass for all three exact profiles. Native no-model
+smoke confirms initialization, thread listing and client-only closure against
+0.156.1, using a disposable home without copied credentials. Its new empty
+thread receives error -32600 for history until materialized; no successful
+native turn page or model behavior is claimed. See package
+`docs/local-websocket.md` for the upstream source and complete limits.
+
+Discriminating failures repaired: completed write tasks could starve their own
+cleanup callbacks; a peer broken pipe could hide already-proven socket closure.
+Both retain fail-closed behavior when cleanup is unproven. The installed suite
+first required the sparse checkout to include existing package metadata; no
+other package was built. Three old test assertions were updated for the new
+version and explicit per-profile capability admission. Initial native empty
+history failures are retained separately from successful transport evidence.
+Independent review of `4737b85288ae7440d4c57cf2dd9edc7106a5fc93` found a
+Python-version-dependent `pathlib._local.Path` signature. The successor canonicalizes
+the public `pathlib.Path` identity, adds a regression covering both interpreter
+layouts, regenerates all three exact signature fixtures and clarifies that
+initialization metadata does not authenticate a daemon. The corrected installed
+wheel rerun passes 200 tests; five signature tests and all profile checks pass.
+Updated wheel SHA-256:
+`03d28f94ccf468409a06f85109cbb5d00d34b78e91fc2d439a7b700d026e4ca5`;
+content root `2a699da7195bca851735f94e525901f371566745f2420278d02995359a4e4f7b`.
+Earlier source/retained-data proof matched its frozen commit, while later doc
+edits changed the whole snapshot root; no byte-identical whole-snapshot claim
+is made. The corrected wheel has its own complete isolated snapshot evidence.
+Independent reviewer `/root/native_interface_review` accepted exact pushed commit
+`3f09c4f5b76fa43976ff4f99d6cdbc4d64d8d52b` on 2026-10-16. Reviewer independently
+ran five signature tests and all three profile checks, confirmed clean pushed
+HEAD, and recomputed source/schema/whole-snapshot roots matching corrected
+installed-wheel evidence. Dependency acceptance does not certify a consumer,
+successful native turn pagination, customer monitoring, or semantic outcomes.
+
+### Resource and economy contract
+
+Attached disk only; 250 MiB initial workspace/test allowance, one schema capture,
+one frozen mapped suite and installed-wheel check; targeted reruns only for a
+concrete changed defect. No model calls. Reuse unchanged older protocol evidence.
+Maintained source test envelope uses this repository root and package src/tests;
+package build uses scripts/check_package.py --package codex-app-server-client
+with the repository-pinned uv toolchain and an explicit existing Python.
+
+### QA and independent review
+
+A distinct reviewer accepts the frozen candidate. Exercise framing, wrong
+version/schema, wrong profile, bounded pagination, cancellation/uncertainty and
+connection cleanup. Retain no-model smoke limits and exact native binary identity.
+
+### Acceptance
+
+The successor installs alone, exposes exact 0.156.1 typed reads/controls, preserves
+old profile admission, rejects incompatible targets, and attaches/closes a local
+WebSocket connection without owning or terminating the server process. A real
+no-model native round trip and neutral adversarial tests bind exact evidence.
+
+### Negative tests
+
+Reject wrong version/profile, invalid upgrade/accept key, masked server frames,
+RSV/control/opcode violations, oversized/fragmented messages beyond bounds,
+arbitrary RPC, public-network addresses and implicit daemon ownership. Preserve
+unknown operations after disconnect; do not replay effects.
+
+### Completion evidence
+
+Pending.
+
+### Stop
+
+Stop before consumer adoption or any publication. This is an internal prerequisite
+checkpoint for the calling implementation, not closure of that larger request.
+
+---
+
+## Block 18 — Check request preconditions after transport queuing
+
+Status: `accepted`
+
+### Objective
+
+Preserve a caller's expiring precondition across asynchronous request queues.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: reject expired or abandoned queued requests before writing bytes.
+- Potential capability loss or regression: changes to shared request cleanup or old unguarded operations.
+- Protected-capability effect: retain protocol profiles, callback ownership and uncertain-effect handling.
+- Architecture and operating-model effect: neutral request guard at existing byte transport owner, no product policy.
+- Tradeoff and source evidence: independently reproduced delayed-write race; synchronous checks bound dispatch but do not retract already-dispatched bytes.
+
+### Inputs and dependencies
+
+Accepted Block 17; exact prior package pin 3f09c4f5b76fa43976ff4f99d6cdbc4d64d8d52b.
+
+### Required work
+
+Carry an optional synchronous guard to the final package-owned channel write after all lock waits. Fail before dispatch if a selected injected channel lacks this support, or if the request was abandoned. Preserve unguarded behavior and session ownership. Version the neutral public addition and freeze its exact signatures.
+
+### Scope and non-goals
+
+Only the app-server-client package, tests and contract tooling; no consumer imports, authority, provider calls or publications.
+
+### Deliverables and recorded state
+
+Versioned guard, exact public contract, contention and cancellation regressions, installed-wheel and distinct review proof.
+
+### Resource and economy contract
+
+Reuse accepted schema/native smoke proof; no changed protocol framing or model calls. Run changed guard/session/transport checks plus the maintained package installation suite.
+
+### QA and independent review
+
+Distinct reviewer checks the frozen candidate and both RPC/channel lock contention.
+
+### Acceptance
+
+A request valid before queuing but invalid at final write sends no bytes; a rejected request leaves the session usable and is never replayed. Old unguarded interfaces remain available.
+
+### Negative tests
+
+Exercise both write locks, expired/cancelled requests, injected channels without guard support and asynchronous guard misuse.
+
+### Completion evidence
+
+Independently accepted by `/root/native_correction_review` at pushed commit
+`59e978dfeaa37eed708995dbdb3fb1ba8ce192b1`. Reviewer independently ran all 10 local
+WebSocket tests and matched source, retained data and full package roots to the
+204-test isolated installed-wheel result. All three profile contract/signature
+checks pass. No consumer or model effects were performed.
+
+Package 0.4.1 wheel SHA-256:
+`75e244f432fd05e12f727bc0be041a2c47ee4a733d1967cb5bf7f2e72d252be9`;
+wheel contents `219edf1cd2418a899b2fde31eb2b55eeb31df447c197fe4a5284ce8a3766bdf3`;
+source root `7376f94d47750720bd8fbda66e552ffb4f726e3dac74f7d104ddf3eff42fc0b1`;
+retained data `897e2e697566bbfcfda666a29914308eab132bb0436c1db7e8c09c439c0d9fd7`;
+frozen package snapshot `bb998a135df747b76bce8fe774de47fd4e311205a46d891fefff7944eff58050`.
+
+The initial new cancellation fixture expected the wrong public exception and
+left its held lock unreleased; it was terminated and repaired with unconditional
+lock release. Version-matrix and API/signature pins were updated before the
+successful installed check. Earlier failed attempts do not stand as acceptance.
+
+### Stop
+
+Stop before publication or consumer adoption; this is a dependency checkpoint.
+
+---
+
+## Block 19 — Reconcile the successor package-set qualification
+
+Status: `accepted`
+
+### Objective
+
+The independently accepted 0.4.1 client composes with the unchanged sibling packages and current repository qualification owner.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: reproducible installation and composition of the accepted client successor.
+- Potential capability loss or regression: stale records can silently qualify an older package set.
+- Protected-capability effect: retain exact package source, measured artifacts and every supported profile.
+- Architecture and operating-model effect: update the existing qualification/composition owners only.
+- Tradeoff and source evidence: PR3 integration review found version mismatches in maintained CI despite passing package isolation; no protocol runtime change is needed.
+
+### Inputs and dependencies
+
+Accepted Block 18 at `59e978dfeaa37eed708995dbdb3fb1ba8ce192b1`; current main `635a366ff09a8a898703faf832a377d90d48f961` preserves the prior 0.3 qualification.
+
+### Required work
+
+Integrate current main without discarding its history. Retain the prior 0.3 record, bind the current package tree and all three profile contracts, reconcile measured wheel/composition/documentation roots, then freeze the technical candidate and run maintained CI. Reuse unchanged package proof by exact content identity.
+
+### Scope and non-goals
+
+Only repository qualification/composition records, their current-source checks and documentation. No consumer imports, package publication, license, runtime or model effects.
+
+### Deliverables and recorded state
+
+A committed exact technical candidate, measured qualification records, current maintained CI and distinct review.
+
+### Resource and economy contract
+
+Reuse unchanged installed-wheel proof; validate changed records and run the maintained CI matrix once per candidate. No native/model run for metadata reconciliation.
+
+### QA and independent review
+
+Distinct reviewer checks preservation of current main, exact source ancestry and measured successor records without relabeling historical proof.
+
+### Acceptance
+
+Repository-contract, package-isolation and neutral composition CI pass for the pushed candidate; no version/root check is weakened.
+
+### Negative tests
+
+Retain rejection of stale versions, changed artifacts, wrong contracts, changed source trees and altered release posture.
+
+### Completion evidence
+
+Independent integration review `/root/native_interface_review` found main-only changes in two qualification-owner files, no path overlap with PR3, and concrete qualification/composition CI version failures. Current main is being integrated without rewriting either branch. The 0.4.1 package tree remains exactly `49df3b355950824aa1880ec653af32c80fe2bc60`, matching independently accepted Block 18. Its measured installed wheel/content roots are reused from that unchanged candidate. Independent reviewer `/root/native_interface_review` accepted the integrated candidate `234ec1944402435c1db9bc9d6b319018a6ab50b0`. All exact-head push/PR CI checks passed: repository contract, both Python package-isolation matrices, both neutral composition versions and technical qualification. The maintained local quality envelope also passed; 17 qualification and four composition record tests passed. Frozen technical candidate `0a0b1872a129876567c6eea12f10be3062a5106c` binds 1027 files with root `48b461f9e87631d2d187dafd7b192ec4bd1a9ab06b8fef9486182a65028cc35a`. This evidence-only update does not alter that source root. No native/model effect, downstream acceptance or publication is implied.
+
+### Stop
+
+Stop before publication or consumer adoption; this integration checkpoint does not complete the downstream request.
+
+---
+
+## Block 20 — Preserve final guards for injected process channels
+
+Status: `accepted`
+
+### Objective
+
+Forward an existing guarded request through an injected channel to its final write.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: caller-owned process channels preserve the public dispatch precondition after every local queue.
+- Potential capability loss or regression: rejecting ordinary injected writes or dispatching cancelled requests later.
+- Protected-capability effect: retain fail-closed unsupported channels and unchanged unguarded behavior.
+- Architecture and operating-model effect: extend the existing neutral transport wrapper, with no product policy or process owner.
+- Tradeoff and source evidence: the wrapper previously hid an underlying channel's guarded write method; process consumers cannot otherwise use the existing public guard.
+
+### Inputs and dependencies
+
+Accepted Blocks 18–19; the existing RPC guard, injected transport ownership and cancellation contracts.
+
+### Required work
+
+Forward checks only to explicitly capable injected channels; check after the wrapper lock and preserve the final channel check. Retain cancellation cleanup and unsent rejection semantics. Version, document, test and independently review the successor package.
+
+### Scope and non-goals
+
+Neutral transport behavior, package records and deterministic fake peers only. No product authority, model call, consumer import, runtime mutation or publication.
+
+### Deliverables and recorded state
+
+Version 0.4.2 with neutral queued-expiry, unsupported-channel and cancellation regressions; exact installed-wheel and package-set qualification.
+
+### Resource and economy contract
+
+Use focused fake-channel tests first; build the changed wheel once, reuse unchanged sibling artifact proof, and run the maintained candidate CI matrix.
+
+### QA and independent review
+
+Distinct review checks final-write placement, unsent rejection, abandoned request cleanup, unchanged public signatures and exact qualification records.
+
+### Acceptance
+
+All guarded injected paths reject stale or cancelled effects before bytes; unguarded requests remain usable; current installed-wheel and maintained CI pass with independent exact-candidate review.
+
+### Negative tests
+
+Expire after each RPC, wrapper and channel lock; cancel while waiting for the injected channel; reject a channel lacking guard support without closing its otherwise usable session.
+
+### Completion evidence
+
+Independent reviewer `/root/native_interface_review` rejected initial package `5bb8f9c`: arbitrary channel-originated DispatchRejectedError could misclassify a partial write as unsent and expose channel text. The fixed wrapper only recognizes rejection originating from its supplied check, sanitizes it, and fails closed for every unproven channel failure. README now accurately states that a timed-out request is rejected when its queued write wakes; timeout does not itself release the channel lock.
+
+The reviewer accepted package `f2d1263300b4d06f624aa6e6d742cca4439294c5`, including the new partial-write negative that fails the rejected candidate. Fourteen focused tests and 208 pristine installed-wheel tests passed. Wheel SHA-256 `12279630c478db8e659a7afd58dc2667e2d37c803afcb2e3403890c83f6822d2`; content root `078ab0d0b92f31d3df3b2a61c09f53ef3fd3e1f6b40695ffa575f322501c25ae`. All three protocol/signature fixtures remain unchanged.
+
+CI exposed a stale canonical composition manifest hash; it was recomputed through the existing owner, and actual neutral composition passed. Independent metadata acceptance is `125736e7dd6a26fc4b5901079d495c44ca50fd00`, superseding the earlier incomplete metadata acceptance. All push and PR jobs passed at that exact revision (runs 38886143704 and 38886148819), including both Python package and composition matrices plus technical qualification. Historical 0.4.1 evidence remains byte-identical. No model run, customer runtime acceptance or publication is implied.
+
+### Stop
+
+Stop before publication; this is an enabling checkpoint in the continuing downstream request.
+
+---
+
+## Block 21 — Read bounded native item pages
+
+Status: `accepted`
+
+### Objective
+
+Expose stable 0.156.1 item pagination through its existing typed profile.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: bounded item discovery without full-turn hydration.
+- Potential capability loss or regression: a count limit cannot bound one large item.
+- Protected-capability effect: preserve byte limits, exact schema profiles, borrowed ownership and narrow operations.
+- Architecture and operating-model effect: extend the selected typed surface only.
+- Tradeoff and source evidence: retained ThreadItemsListParams/Response and pinned upstream processor support string cursors; larger full-turn limits cannot bound growing turns.
+
+### Inputs and dependencies
+
+Accepted Blocks 17–20; exact stable 0.156.1 schemas and current transport owner.
+
+### Required work
+
+Add typed list_items, explicit count/direction bounds, retained cursors and model validation. Reconcile the public enum/signatures, version, package proof and qualification records without widening older profiles.
+
+### Scope and non-goals
+
+Neutral package only. No transcript access, product coverage claim, remote control mutation, model work, daemon ownership or publication.
+
+### Deliverables and recorded state
+
+0.5.0 package candidate, typed fake-peer tests, exact installed-wheel evidence and independent review.
+
+### Resource and economy contract
+
+Reuse unchanged upstream schemas and sibling packages; focused fake peers first, changed wheel once, maintained CI for exact candidate.
+
+### QA and independent review
+
+Distinct review checks exact schemas/cursors, bounds and older-profile exclusions.
+
+### Acceptance
+
+Typed native pages preserve exact membership/cursors and reject unsupported or unbounded requests; installed package and current CI pass with independent acceptance.
+
+### Negative tests
+
+Missing/excessive limit, missing direction, wrong profile, malformed response, native unsupported method, overlarge frame, no raw RPC escape. Existing transport negatives remain applicable.
+
+### Completion evidence
+
+Independent interface review identified stable thread/items/list in the retained exact schema and pinned upstream b412ff32c417f855c2b2d1581b77058eed87c84b. Package candidate `4b457e17b8ae3c386ebd89b7344598bb646b262f` and final qualification `d1f867213baae5639be90cbb2cd32c3ca2428312` were independently accepted by `/root/native_interface_review`. The 209 pristine installed-wheel tests pass. Wheel `010be409bbd0aa86800e875a7a7a2fe37751cefa7f21933194890f32db55497c` and content root `43a7916de5cd17a50fd0939a70ca561d7f32704ce4f9e58941a54c9af8deb4c9` are measured from the new package. Independent adversarial tests preserve nonempty membership and string cursors, reject nine invalid requests before I/O, and fail-close malformed responses. All three profile/signature contracts pass; older selected operations and schema bytes stay unchanged.
+
+Actual neutral composition passed with canonical manifest `9a548448bb5aa5e71662b954df30ab45e7f2daa3926cd70f5072689a5c9f5d94`. The prior 0.4.2 record is byte-identical history. Current qualification/ancestry checks pass at technical root `34637f361c7c03df2e0c7725e069b328ae5f83788346dc4ee489cd638bc5235c`. CI runs `38895940354` and `38895933157` passed all package, composition, repository and qualification jobs. No live consumer proof is claimed here.
+
+### Stop
+
+Stop before consumer adoption and publication; resume the direct implementation queue through its owning repository.
+
+---
 
 ## 8. Verification matrix
 

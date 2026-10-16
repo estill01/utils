@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .compatibility import PINNED_PROTOCOL, BinaryIdentity, ProtocolTarget, _protocol_root_for
+from .dispatch import DispatchRejectedError, _check
 from .errors import (
     JsonRpcFramingError,
     MessageTooLargeError,
@@ -124,9 +125,14 @@ class _StreamByteChannel:
                 self._buffer.extend(chunk)
 
     async def write_line(self, data: bytes) -> None:
+        await self.guarded_write_line(data, None)
+
+    async def guarded_write_line(self, data: bytes, check) -> None:
         _validate_write_line(data)
         async with self._write_lock:
             self._ensure_open()
+            if check is not None:
+                _check(check)
             write_failed = False
             try:
                 self._writer.write(data)
@@ -175,6 +181,16 @@ class _StreamByteChannel:
             await asyncio.wait_for(self._writer.wait_closed(), _STREAM_CLOSE_SECONDS)
         except (AttributeError, NotImplementedError):
             pass
+        except (BrokenPipeError, ConnectionResetError):
+            # asyncio can retain the peer failure in wait_closed() after closing
+            # the socket. Accept that case only with direct descriptor proof.
+            socket = (
+                self._writer.get_extra_info("socket")
+                if isinstance(self._writer, asyncio.StreamWriter)
+                else None
+            )
+            if socket is None or socket.fileno() != -1:
+                cleanup_failed = True
         except Exception:
             cleanup_failed = True
         if not await self._close_owned_resource():
@@ -333,10 +349,33 @@ class _InjectedByteChannel:
             return line
 
     async def write_line(self, data: bytes) -> None:
+        await self.guarded_write_line(data, None)
+
+    async def guarded_write_line(self, data: bytes, check) -> None:
         _validate_write_line(data)
         async with self._write_lock:
             self._ensure_open()
-            task = asyncio.create_task(self._channel.write_line(data))
+            guard_rejected = False
+
+            def checked():
+                nonlocal guard_rejected
+                try:
+                    _check(check)
+                except DispatchRejectedError:
+                    guard_rejected = True
+                    raise
+
+            if check is None:
+                operation = self._channel.write_line(data)
+            else:
+                write = getattr(self._channel, "guarded_write_line", None)
+                if not callable(write):
+                    raise DispatchRejectedError(
+                        "injected channel does not support guarded dispatch"
+                    )
+                _check(check)
+                operation = write(data, checked)
+            task = asyncio.create_task(operation)
             self._active_write = task
             write_failed = False
             try:
@@ -347,6 +386,10 @@ class _InjectedByteChannel:
                 with suppress(asyncio.CancelledError, Exception):
                     await task
                 raise
+            except DispatchRejectedError:
+                if guard_rejected:
+                    raise DispatchRejectedError("request dispatch precondition rejected") from None
+                write_failed = True
             except Exception:
                 write_failed = True
             finally:

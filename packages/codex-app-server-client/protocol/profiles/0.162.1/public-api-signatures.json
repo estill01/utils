@@ -823,16 +823,19 @@
     },
     "RequestCapability": {
       "REVIEW_START": "review/start",
+      "THREAD_ITEMS_LIST": "thread/items/list",
       "THREAD_LIST": "thread/list",
       "THREAD_READ": "thread/read",
       "THREAD_RESUME": "thread/resume",
       "THREAD_START": "thread/start",
+      "THREAD_TURNS_LIST": "thread/turns/list",
       "TURN_INTERRUPT": "turn/interrupt",
       "TURN_START": "turn/start",
       "TURN_STEER": "turn/steer"
     },
     "TransportCapability": {
       "INJECTED_BYTE_CHANNEL": "injected-byte-channel",
+      "LOCAL_WEBSOCKET": "local-websocket",
       "OWNED_STDIO": "owned-stdio",
       "UNIX_SOCKET": "unix-socket"
     }

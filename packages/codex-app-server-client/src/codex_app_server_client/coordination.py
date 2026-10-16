@@ -409,6 +409,8 @@ class _AsyncCoordinator:
     async def wait_quiescent(self) -> None:
         while self._response_tasks:
             await asyncio.gather(*tuple(self._response_tasks), return_exceptions=True)
+            # Done-task callbacks own removal; gathering done tasks may not yield.
+            await asyncio.sleep(0)
 
     def retire(self, failure: AppServerClientError) -> None:
         if self._retired_failure is not None:

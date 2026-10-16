@@ -23,12 +23,17 @@ TECHNICAL_SOURCE_EXCLUSIONS = {
 }
 EXPECTED_PACKAGE_SOURCES = {
     "codex-app-server-client": {
-        "accepted_source_commit": "259ba4b450d9db26a0524b033d66f77b7c94a590",
-        "package_tree_object": "084c139ee2954fd4beae74b96871e90486c1b191",
+        "accepted_source_commit": "4b457e17b8ae3c386ebd89b7344598bb646b262f",
+        "package_tree_object": "c37073314213ef1f1cee04c3cb06cbadc5128539",
         "public_contracts": {
             "packages/codex-app-server-client/protocol/compatibility.json",
             "packages/codex-app-server-client/protocol/public-api.json",
             "packages/codex-app-server-client/protocol/public-api-signatures.json",
+            "packages/codex-app-server-client/protocol/profiles/0.156.1/compatibility.json",
+            "packages/codex-app-server-client/protocol/profiles/0.156.1/public-api.json",
+            "packages/codex-app-server-client/protocol/profiles/0.156.1/public-api-signatures.json",
+            "packages/codex-app-server-client/protocol/profiles/0.156.1/upstream-manifest.json",
+            "packages/codex-app-server-client/protocol/profiles/0.156.1/supported-surface.json",
             "packages/codex-app-server-client/protocol/profiles/0.162.1/compatibility.json",
             "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api.json",
             "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api-signatures.json",

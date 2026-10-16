@@ -17,10 +17,15 @@ PROTOCOL_ROOT = PACKAGE_ROOT / "protocol"
 PROFILE_ROOTS = {
     "0.147.0": PROTOCOL_ROOT,
     "0.162.1": PROTOCOL_ROOT / "profiles" / "0.162.1",
+    "0.156.1": PROTOCOL_ROOT / "profiles" / "0.156.1",
 }
 
 
 def annotation_name(annotation: object) -> str:
+    # CPython 3.13 moved this public class to pathlib._local internally.
+    # The public API contract must not depend on an interpreter's module layout.
+    if annotation is Path:
+        return "pathlib.Path"
     origin = get_origin(annotation)
     if origin is not None:
         return (
@@ -81,6 +86,8 @@ def snapshot(api: dict[str, object]) -> dict[str, object]:
     constructors = set(api["configuration_models"]) | set(api["schema_models"])
     constructors.update(api["notification_models"].values())
     constructors.update(("StdioTransport", "UnixSocketTransport", "InjectedTransport"))
+    if "LocalWebSocketTransport" in api["root_exports"]:
+        constructors.add("LocalWebSocketTransport")
     constructors.discard("BackoffHook")
     for callback in api["callback_models"].values():
         constructors.update((callback["params"], callback["response"]))

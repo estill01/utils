@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "qualification_posture": "candidate",
+  "release_posture": "no-license-selected/unpublished",
+  "python_matrix": [
+    "3.11",
+    "3.14"
+  ],
+  "commands": [
+    "python3 scripts/check_quality.py --expected-head <exact-pushed-revision>",
+    "python3 scripts/check_package.py --all --python 3.11 --tests",
+    "python3 scripts/check_package.py --all --python 3.14 --tests",
+    "python3 scripts/check_composition.py --python 3.11",
+    "python3 scripts/check_composition.py --python 3.14"
+  ],
+  "packages": {
+    "codex-app-server-client": {
+      "accepted_source_commit": "59e978dfeaa37eed708995dbdb3fb1ba8ce192b1",
+      "package_tree_object": "49df3b355950824aa1880ec653af32c80fe2bc60",
+      "path": "packages/codex-app-server-client",
+      "import": "codex_app_server_client",
+      "version": "0.4.1",
+      "runtime_dependencies": [],
+      "wheel": "codex_app_server_client-0.4.1-py3-none-any.whl",
+      "wheel_sha256": "75e244f432fd05e12f727bc0be041a2c47ee4a733d1967cb5bf7f2e72d252be9",
+      "wheel_content_root_sha256": "219edf1cd2418a899b2fde31eb2b55eeb31df447c197fe4a5284ce8a3766bdf3",
+      "public_contracts": {
+        "packages/codex-app-server-client/protocol/compatibility.json": "e0d3028749a8d977b739a0c5aad2560f5c968b0205758909e64b4b7d9c49ca59",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/compatibility.json": "49f673c969747ef5bf3f80dec5cdd4ce5221256e194691d96e8c023ae868313c",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/public-api-signatures.json": "9d3e839e4b5bf7962a95c4f2cd598d3a83aba5d2a2ba555a1535fc442b578989",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/public-api.json": "591ca4671e974769457c4fac7caae18053caca771b5ffa5818d4b899fdfdd195",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/supported-surface.json": "250a5570c89351daf8cf2dd2d49f93e60b69fea814bab38d5f49290a94ce9370",
+        "packages/codex-app-server-client/protocol/profiles/0.156.1/upstream-manifest.json": "5feb985f25d0c1493792f6f2d80427517b65b8118acbfc7267e8d0f4f189d0f3",
+        "packages/codex-app-server-client/protocol/profiles/0.162.1/compatibility.json": "99cec93f7ae17294942d71ceed60f06cd0fd39b5e3993abaf710130a4fd15208",
+        "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api-signatures.json": "ab962ccb6271dce3d247bca30da62ad90cb9d9a966aa8d109e04b2acf9d655ad",
+        "packages/codex-app-server-client/protocol/profiles/0.162.1/public-api.json": "9138fa605dd36b1203b4c3409786360b665d7237afa66dd91a237606f5ad01b5",
+        "packages/codex-app-server-client/protocol/profiles/0.162.1/supported-surface.json": "914302e03be9ed32913dad7c4d0b7bffe9aad42bcfdcf0a39ef9e384a4fc06cd",
+        "packages/codex-app-server-client/protocol/profiles/0.162.1/upstream-manifest.json": "28dd6b9e87c78b68e8547903cb69aff69209667c090819dee599a1a7ad1115d3",
+        "packages/codex-app-server-client/protocol/public-api-signatures.json": "f35d4250fbc6494263beb333c3a8bc328d08db36af1a939e914240040b7d5867",
+        "packages/codex-app-server-client/protocol/public-api.json": "d7c22e4d96cc33f3ee85ea05e7779fba409e0764732c7718a298838c13d5bc65"
+      }
+    },
+    "embedded-service-contract": {
+      "accepted_source_commit": "a6f20e28ba228ddde91d32f12ca7253c5e2fb7b4",
+      "package_tree_object": "8c5512360bd7f576a780c03af8bd544852c71a9b",
+      "path": "packages/embedded-service-contract",
+      "import": "embedded_service_contract",
+      "version": "0.1.0",
+      "runtime_dependencies": [],
+      "wheel": "embedded_service_contract-0.1.0-py3-none-any.whl",
+      "wheel_sha256": "ee27e335f49b3883657a623cfc8c003d5b1dad2269fe193211c8750b69b9859f",
+      "wheel_content_root_sha256": "3587486bbb1651e171954f84e178dba94df4946e4e00ef7c64516d5bc63785d2",
+      "public_contracts": {
+        "packages/embedded-service-contract/contract/conformance-fixtures.json": "31b33341b51c48b1e552f19600238b3dffd44c197cbfed5c1dd370e08de71ed4",
+        "packages/embedded-service-contract/contract/structural-contract.json": "c59856708a4ac80a266a83c382e6541da2afc78a920379f654dd2af20211facd",
+        "packages/embedded-service-contract/contract/supported-python.json": "ffd6652354d681053411ad82de6e7e8c8a687cdf873514c773fbad03ad834d73"
+      }
+    },
+    "runtime-manifest": {
+      "accepted_source_commit": "a6f20e28ba228ddde91d32f12ca7253c5e2fb7b4",
+      "package_tree_object": "a41de632ba7508a4bec9e334c10be723413be9ca",
+      "path": "packages/runtime-manifest",
+      "import": "runtime_manifest",
+      "version": "0.1.0",
+      "runtime_dependencies": [],
+      "wheel": "runtime_manifest-0.1.0-py3-none-any.whl",
+      "wheel_sha256": "c42ffee5415710e03a5bfeb9143268e0c0d313ab54cca4be7d6ea48430143c5b",
+      "wheel_content_root_sha256": "66c97400838155df78697e94e9c0817fbf3e7655eb94f0e962e86be3dec767b7",
+      "public_contracts": {
+        "packages/runtime-manifest/contract/compatibility-fixtures.json": "326aa3d0b865f24c12b385c5a6ac8b161cd1fa0c984ac9f7dadd7c2b05b0c7f9",
+        "packages/runtime-manifest/contract/manifest-schema.json": "1f6a7c0a46e69600d0ec3ee0917da1be185fba0097e845e99f6152cd1a31ad18",
+        "packages/runtime-manifest/contract/public-api.json": "ab4c1d7fd98b6b405dc0a2f0fd2f31957dae8fb0872796f46ba4b448c34e0c37",
+        "packages/runtime-manifest/contract/supported-python.json": "ffd6652354d681053411ad82de6e7e8c8a687cdf873514c773fbad03ad834d73"
+      }
+    }
+  },
+  "protocol": {
+    "version": "0.147.0",
+    "schema_root_sha256": "eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aae5926faa",
+    "selected_surface_root_sha256": "9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f"
+  },
+  "composition": {
+    "fixture_sha256": "7a7a112b345d1f7aa979b1627a6a9d90b76f3548953cafb97f45e2d3ff3e9f49",
+    "manifest_sha256": "d7b072e8a76ff4e0331320f4e334a998798672b55349fc2152316e9de116c203"
+  },
+  "documentation": {
+    "files": {
+      "packages/codex-app-server-client/README.md": "14657cf1f9ca60f586f764b3c5facd1dc96d6aeb8514ec2849103addddf07deb",
+      "packages/embedded-service-contract/README.md": "6870de7e8b97cb2cad68058699f68ea7d0a8bb59d1d612fbffd74e8bc8b62d5d",
+      "packages/runtime-manifest/README.md": "9d7e5c87d3e49fe3b536a0a1e54ee7692da6b4fae6f9e49688e52d6d5ae96373",
+      "docs/qualification.md": "809416a51b1420cef99bb4518304aa466ee0d868000879dfd0ca31dc6e1ca8e0"
+    },
+    "executable_examples": {
+      "codex-app-server-client": {
+        "path": "packages/codex-app-server-client/README.md",
+        "sha256": "14657cf1f9ca60f586f764b3c5facd1dc96d6aeb8514ec2849103addddf07deb"
+      },
+      "embedded-service-contract": {
+        "path": "packages/embedded-service-contract/README.md",
+        "sha256": "6870de7e8b97cb2cad68058699f68ea7d0a8bb59d1d612fbffd74e8bc8b62d5d"
+      },
+      "runtime-manifest": {
+        "path": "packages/runtime-manifest/README.md",
+        "sha256": "9d7e5c87d3e49fe3b536a0a1e54ee7692da6b4fae6f9e49688e52d6d5ae96373"
+      }
+    }
+  },
+  "technical_source": {
+    "candidate_revision": "0a0b1872a129876567c6eea12f10be3062a5106c",
+    "root_sha256": "48b461f9e87631d2d187dafd7b192ec4bd1a9ab06b8fef9486182a65028cc35a",
+    "files": 1027
+  }
+}

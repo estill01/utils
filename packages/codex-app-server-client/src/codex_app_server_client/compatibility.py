@@ -76,6 +76,14 @@ _PROTOCOL_0_162_1 = ProtocolTarget(
 )
 
 
+_PROTOCOL_0_156_1 = ProtocolTarget(
+    codex_version="0.156.1",
+    source_commit="b412ff32c417f855c2b2d1581b77058eed87c84b",
+    schema_tree_root_sha256="d66a1b1c52622a4f78fc87c9acf3a58e608e3ae53c308c455a9f49b9c9e0c248",
+    selected_surface_root_sha256="bbcbb815d3ed76c54066dd1192cbd28748d5354f798d945c424c03a3a929fdc4",
+)
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -326,9 +334,11 @@ def _packaged_protocol_root() -> Traversable:
 
 
 def _protocol_root_for(target: ProtocolTarget) -> Traversable:
-    """Resolve only the two retained exact targets; never register custom profiles."""
+    """Resolve only the retained exact targets; never register custom profiles."""
     if target == PINNED_PROTOCOL:
         return _packaged_protocol_root()
+    if target == _PROTOCOL_0_156_1:
+        return _packaged_protocol_root().joinpath("profiles", "0.156.1")
     if target == _PROTOCOL_0_162_1:
         return _packaged_protocol_root().joinpath("profiles", "0.162.1")
     raise SchemaRootMismatchError("protocol target is not a retained exact target")

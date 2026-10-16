@@ -41,6 +41,7 @@ from .errors import (
     TransportCleanupError,
     UnsupportedFeatureError,
 )
+from .local_websocket import LocalWebSocketTransport
 from .models import (
     ClientIdentity,
     ReviewStartParams,
@@ -246,6 +247,7 @@ class AppServerClient:
         self._injected_replacement_safe = type(transport) in (
             binding.stdio_type,
             UnixSocketTransport,
+            LocalWebSocketTransport,
         ) or (
             type(transport) is InjectedTransport
             and transport._ownership is TransportOwnership.OWNED
@@ -304,7 +306,11 @@ class AppServerClient:
         return capability
 
     def _replacement_transport_is_package_owned(self, transport: ClientTransport) -> bool:
-        if type(transport) in (self._selected_binding.stdio_type, UnixSocketTransport):
+        if type(transport) in (
+            self._selected_binding.stdio_type,
+            UnixSocketTransport,
+            LocalWebSocketTransport,
+        ):
             return True
         return (
             self._injected_replacement_safe

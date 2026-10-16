@@ -17,6 +17,7 @@ from .compatibility import (
     _load_json,
     _protocol_root_for,
 )
+from .dispatch import DispatchRejectedError, _check, _guard
 from .errors import (
     AppServerClientError,
     CallCancelledError,
@@ -456,9 +457,24 @@ class _RpcEngine:
 
     async def _write_request(self, line: bytes, request_id: int) -> None:
         write_failed = False
+        guard = _guard.get()
+
+        def check():
+            if request_id not in self._pending:
+                raise DispatchRejectedError("request is no longer pending")
+            _check(guard)
+
         try:
             async with self._write_lock:
-                await self._channel.write_line(line)
+                if guard is None:
+                    await self._channel.write_line(line)
+                else:
+                    write = getattr(self._channel, "guarded_write_line", None)
+                    if write is None:
+                        raise DispatchRejectedError("channel does not support guarded dispatch")
+                    await write(line, check)
+        except DispatchRejectedError:
+            raise
         except asyncio.CancelledError:
             failure = CallCancelledError(f"request write was cancelled: {request_id}")
             await self._fail(failure)
@@ -481,6 +497,9 @@ class _RpcEngine:
     async def wait_quiescent(self) -> None:
         while self._request_write_tasks:
             await asyncio.gather(*tuple(self._request_write_tasks), return_exceptions=True)
+            # Python may complete gather synchronously for already-done tasks.
+            # Let their queued ownership callbacks remove them before rechecking.
+            await asyncio.sleep(0)
 
     async def close(self, failure: AppServerClientError | None = None) -> None:
         if self._failure is None:

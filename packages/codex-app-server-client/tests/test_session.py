@@ -484,7 +484,16 @@ class TypedSessionTests(unittest.IsolatedAsyncioTestCase):
             session.capabilities.transports,
             frozenset({TransportCapability.INJECTED_BYTE_CHANNEL}),
         )
-        self.assertTrue(all(session.capabilities.supports(item) for item in RequestCapability))
+        self.assertEqual(
+            session.capabilities.requests,
+            frozenset(
+                item
+                for item in RequestCapability
+                if item
+                not in {RequestCapability.THREAD_TURNS_LIST, RequestCapability.THREAD_ITEMS_LIST}
+            ),
+        )
+        self.assertFalse(session.capabilities.supports(RequestCapability.THREAD_TURNS_LIST))
         self.assertEqual(session.capabilities.notifications, frozenset(NotificationCapability))
         self.assertEqual(
             {item.value for item in session.capabilities.callbacks},

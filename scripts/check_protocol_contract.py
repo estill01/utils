@@ -36,7 +36,7 @@ EXPECTED_SCHEMA_ROOT = "eb325d394d19f2f8d133203885b3d1c2f74dbc5a176f22078a4f99aa
 EXPECTED_SCHEMA_FILE_COUNT = 285
 EXPECTED_SCHEMA_BYTES = 2_925_973
 EXPECTED_SURFACE_ROOT = "9a773e75f2e5aa827b4cc711345bd9ca1bc2a037f19d114284a04f306097a42f"
-EXPECTED_PUBLIC_API_SHA256 = "db748fe9d151a39d702379c00f9fb056e3662ed2583881016c4235b04c60d4de"
+EXPECTED_PUBLIC_API_SHA256 = "0105415808843c26827a2a7356489b95a406dd59e66e181a7835f50ca9188f89"
 EXPECTED_COMPATIBILITY = {
     "schema_version": 1,
     "codex_version": "0.147.0",
@@ -87,16 +87,51 @@ EXPECTED_MODERN_COMPATIBILITY = {
     "selected_surface_root_sha256": (
         "4da1fd7f18a8e9a9809dcc0f46ae5b3d594c0a2028a1f5b1aacf9d410768d87a"
     ),
-    "public_api_sha256": "461e5741936604c0de62895d138afb74198c0205f0f89f82b737bd0e61f3e0ee",
+    "public_api_sha256": "661a39b475c5c1b62f9109a5caaaf3975416c97cbfbfad7159a8b604a9bc6193",
 }
 EXPECTED_SIGNATURE_HASHES = {
-    "0.147.0": "ee5a3ea9f032bc69ecfd72de615d37d0ff6f9cbf1e8e8081806ad2f1e0b01482",
-    "0.162.1": "fdd3ee73b0fc0ceb0b1557411f3665b5f00650f84ccb1d85acc2cb6da40486b1",
+    "0.147.0": "caaf11fbf2b466f7e12db462affece06db6a1d1f77084294c64f500fe2456343",
+    "0.156.1": "26d1ad5d864dfbaf604ba4052e29408e34a243c373b27307302d581d63331b5e",
+    "0.162.1": "378de6c5383b6b170e0ff0c4aa13d40e1c786a177d59fe08b61227720e7eacdb",
 }
 PROFILES = {
     "0.147.0": (PROTOCOL_ROOT, EXPECTED_UPSTREAM, EXPECTED_COMPATIBILITY),
     "0.162.1": (MODERN_ROOT, EXPECTED_MODERN_UPSTREAM, EXPECTED_MODERN_COMPATIBILITY),
 }
+
+
+LOCAL_ROOT = PROTOCOL_ROOT / "profiles" / "0.156.1"
+EXPECTED_LOCAL_UPSTREAM = {
+    "codex_version": "0.156.1",
+    "npm_distribution": "@openai/codex",
+    "repository": "https://github.com/openai/codex",
+    "source_commit": "b412ff32c417f855c2b2d1581b77058eed87c84b",
+    "source_tag": "rust-v0.156.1",
+    "source_tag_object": "81e8e29b2956dfe9b092c63953a9ed282781e77c",
+}
+EXPECTED_LOCAL_GENERATION = {
+    "command": "codex app-server generate-json-schema --out <disposable-dir>",
+    "experimental": False,
+    "native_sha256": "0b2e9301d6100dddda3b9d5c80ebaeaa3a2f1962388f2f36f6b96a9f08b1f33f",
+    "native_target": "x86_64-unknown-linux-musl",
+    "wrapper_sha256": "0b2e9301d6100dddda3b9d5c80ebaeaa3a2f1962388f2f36f6b96a9f08b1f33f",
+}
+EXPECTED_LOCAL_COMPATIBILITY = {
+    "codex_version": "0.156.1",
+    "public_api_sha256": "06cf4e125a712e294121edaf8e3e59b973f87fe55e8b256c3fe7c8e072a9b13d",
+    "schema_file_count": 310,
+    "schema_total_bytes": 3513066,
+    "schema_tree_root_sha256": "d66a1b1c52622a4f78fc87c9acf3a58e608e3ae53c308c455a9f49b9c9e0c248",
+    "schema_version": 1,
+    "selected_surface_root_sha256": (
+        "bbcbb815d3ed76c54066dd1192cbd28748d5354f798d945c424c03a3a929fdc4"
+    ),
+    "semantic_schema_root_sha256": (
+        "b960e4d0666a0f322af1cf192cec319a7914067eaac5c46cabc37d90769c50c7"
+    ),
+    "source_commit": "b412ff32c417f855c2b2d1581b77058eed87c84b",
+}
+PROFILES["0.156.1"] = (LOCAL_ROOT, EXPECTED_LOCAL_UPSTREAM, EXPECTED_LOCAL_COMPATIBILITY)
 
 
 def methods(union: dict[str, object]) -> set[str]:
@@ -163,6 +198,9 @@ def check_profile(
     if version == "0.147.0":
         if manifest.get("generation") != EXPECTED_GENERATION:
             raise RuntimeError("frozen schema generation identity changed")
+    elif version == "0.156.1":
+        if manifest.get("generation") != EXPECTED_LOCAL_GENERATION:
+            raise RuntimeError("frozen local schema generation identity changed")
     elif "generation" in manifest or manifest.get("acquisition") != EXPECTED_MODERN_ACQUISITION:
         raise RuntimeError("frozen source-bundle acquisition identity changed")
     if compatibility != expected:
@@ -251,13 +289,13 @@ def check_profile(
         raise RuntimeError("public notification model map differs from selected surface")
     if set(api["callback_models"]) != public_callbacks:
         raise RuntimeError("public callback model map differs from selected surface")
-    if enum_values(api, "RequestCapability") != public_requests:
+    if not public_requests <= enum_values(api, "RequestCapability"):
         raise RuntimeError("request capability enum differs from selected surface")
     if enum_values(api, "NotificationCapability") != public_notifications:
         raise RuntimeError("notification capability enum differs from selected surface")
     if enum_values(api, "CallbackCapability") != public_callbacks:
         raise RuntimeError("callback capability enum differs from selected surface")
-    if enum_values(api, "TransportCapability") != transports:
+    if not transports <= enum_values(api, "TransportCapability"):
         raise RuntimeError("transport capability enum differs from selected surface")
     for key, selected in {
         "requests": public_requests,
@@ -301,9 +339,13 @@ def check_profile(
     }
     for callback in api["callback_models"].values():
         required_exports.update((callback["callback"], callback["params"], callback["response"]))
-    expected_module = (
-        "codex_app_server_client" if version == "0.147.0" else "codex_app_server_client.v0_162_1"
-    )
+    expected_module = {
+        "0.147.0": "codex_app_server_client",
+        "0.162.1": "codex_app_server_client.v0_162_1",
+        "0.156.1": "codex_app_server_client.v0_156_1",
+    }[version]
+    if version == "0.156.1":
+        required_exports.add("LocalWebSocketTransport")
     if api["root_module"] != expected_module:
         raise RuntimeError("public API root module differs from the retained profile")
     root_exports = api["root_exports"]
@@ -323,7 +365,7 @@ def check_profile(
         "codex_version": version,
         "provenance_kind": (
             "retained-binary-generation"
-            if version == "0.147.0"
+            if version in {"0.147.0", "0.156.1"}
             else EXPECTED_MODERN_ACQUISITION["kind"]
         ),
         "public_api_sha256": expected["public_api_sha256"],
