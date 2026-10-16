@@ -355,6 +355,16 @@ class _InjectedByteChannel:
         _validate_write_line(data)
         async with self._write_lock:
             self._ensure_open()
+            guard_rejected = False
+
+            def checked():
+                nonlocal guard_rejected
+                try:
+                    _check(check)
+                except DispatchRejectedError:
+                    guard_rejected = True
+                    raise
+
             if check is None:
                 operation = self._channel.write_line(data)
             else:
@@ -364,7 +374,7 @@ class _InjectedByteChannel:
                         "injected channel does not support guarded dispatch"
                     )
                 _check(check)
-                operation = write(data, check)
+                operation = write(data, checked)
             task = asyncio.create_task(operation)
             self._active_write = task
             write_failed = False
@@ -377,7 +387,9 @@ class _InjectedByteChannel:
                     await task
                 raise
             except DispatchRejectedError:
-                raise
+                if guard_rejected:
+                    raise DispatchRejectedError("request dispatch precondition rejected") from None
+                write_failed = True
             except Exception:
                 write_failed = True
             finally:

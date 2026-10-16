@@ -4,6 +4,7 @@ import asyncio
 import unittest
 
 from codex_app_server_client import v0_156_1 as api
+from test_transport import MemoryChannel
 from test_versioned_session import identity, peer_for
 
 
@@ -94,3 +95,28 @@ class InjectedDispatchTests(unittest.IsolatedAsyncioTestCase):
         for _ in range(10):
             await asyncio.sleep(0)
         self.assertEqual(len(peer.peer.writes), before)
+
+    async def test_channel_originated_rejection_is_not_unsent_proof(self):
+        class PartialPeer(MemoryChannel):
+            async def guarded_write_line(self, data, check):
+                check()
+                await self.write_line(data)
+
+        for guarded in (False, True):
+            peer = PartialPeer()
+            peer.write_error = api.DispatchRejectedError("private-channel-detail")
+            channel = await api.InjectedTransport(
+                peer, ownership=api.TransportOwnership.OWNED
+            )._open_channel()
+            try:
+                with self.assertRaises(api.TransportClosedError) as raised:
+                    if guarded:
+                        await channel.guarded_write_line(b'{"id":1}\n', lambda: None)
+                    else:
+                        await channel.write_line(b'{"id":1}\n')
+                self.assertNotIn("private", str(raised.exception))
+                self.assertTrue(peer.writes)
+                with self.assertRaises(api.TransportClosedError):
+                    await channel.write_line(b'{"id":2}\n')
+            finally:
+                await channel.close()

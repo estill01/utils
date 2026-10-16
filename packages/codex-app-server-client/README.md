@@ -42,7 +42,9 @@ channel's `guarded_write_line(data, check)` method after the wrapper lock. The
 channel must call `check()` after its own final queue/lock wait immediately
 before writing any bytes. A channel without this method rejects guarded
 requests before dispatch; ordinary `write_line` behavior is unchanged. The
-wrapper cancels an abandoned write so it cannot wake and send later. This is a
+final RPC check rejects an abandoned request when a queued write wakes. A
+request timeout does not itself release the channel's lock; session close
+cancels active transport operations. This is a
 local dispatch precondition, not proof of a remote effect.
 
 The immutable `session.initialize_info` and content-free
