@@ -35,9 +35,13 @@ class ModelRegistry:
     namespace: Mapping[str, object]
     module_name: str
 
-    def __init__(self, schema_root: Traversable, module_name: str) -> None:
+    def __init__(
+        self, schema_root: Traversable, module_name: str, *, extra_operations: tuple[str, ...] = ()
+    ) -> None:
         object.__setattr__(self, "module_name", module_name)
-        object.__setattr__(self, "namespace", _build_model_namespace(schema_root, module_name))
+        object.__setattr__(
+            self, "namespace", _build_model_namespace(schema_root, module_name, extra_operations)
+        )
 
     def decode_document(self, source: str, value: object) -> object:
         return self.namespace["_decode_document"](source, value)
@@ -49,7 +53,9 @@ class ModelRegistry:
         return self.namespace["_to_json"](value, **kwargs)
 
 
-def _build_model_namespace(schema_root: Traversable, module_name: str) -> Mapping[str, object]:
+def _build_model_namespace(
+    schema_root: Traversable, module_name: str, extra_operations: tuple[str, ...] = ()
+) -> Mapping[str, object]:
     namespace: dict[str, object] = {}
     _OPERATION_SCHEMA_FILES = (
         "v2/ThreadStartParams.json",
@@ -68,6 +74,7 @@ def _build_model_namespace(schema_root: Traversable, module_name: str) -> Mappin
         "v2/TurnInterruptResponse.json",
         "v2/ReviewStartParams.json",
         "v2/ReviewStartResponse.json",
+        *extra_operations,
     )
     _NOTIFICATION_SCHEMA_FILES = (
         "v2/ErrorNotification.json",

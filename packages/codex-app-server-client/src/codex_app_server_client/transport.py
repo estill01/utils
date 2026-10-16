@@ -175,6 +175,16 @@ class _StreamByteChannel:
             await asyncio.wait_for(self._writer.wait_closed(), _STREAM_CLOSE_SECONDS)
         except (AttributeError, NotImplementedError):
             pass
+        except (BrokenPipeError, ConnectionResetError):
+            # asyncio can retain the peer failure in wait_closed() after closing
+            # the socket. Accept that case only with direct descriptor proof.
+            socket = (
+                self._writer.get_extra_info("socket")
+                if isinstance(self._writer, asyncio.StreamWriter)
+                else None
+            )
+            if socket is None or socket.fileno() != -1:
+                cleanup_failed = True
         except Exception:
             cleanup_failed = True
         if not await self._close_owned_resource():

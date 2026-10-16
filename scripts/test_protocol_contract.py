@@ -146,7 +146,7 @@ def main() -> int:
         profile="0.162.1",
         message="frozen compatibility metadata changed",
     )
-    for version in ("0.147.0", "0.162.1"):
+    for version in ("0.147.0", "0.156.1", "0.162.1"):
         changed_signatures = load("public-api-signatures.json", version)
         changed_signatures["callables"]["AppServerClient.initialize"]["signature"] = "(identity)"
         expect_rejection(
@@ -155,7 +155,19 @@ def main() -> int:
             message="frozen public API signature fixture changed",
         )
 
-    print("14 protocol-contract mutations rejected across both retained profiles")
+    local_manifest = load("upstream-manifest.json", "0.156.1")
+    local_manifest["generation"]["experimental"] = True
+    expect_rejection(
+        manifest=local_manifest,
+        profile="0.156.1",
+        message="frozen schema generation identity changed",
+    )
+    local_surface = load("supported-surface.json", "0.156.1")
+    local_surface["client_requests"]["public_typed"].remove("thread/turns/list")
+    expect_rejection(
+        surface=local_surface, profile="0.156.1", message="frozen selected surface changed"
+    )
+    print("17 protocol-contract mutations rejected across three retained profiles")
     return 0
 
 

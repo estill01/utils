@@ -481,6 +481,9 @@ class _RpcEngine:
     async def wait_quiescent(self) -> None:
         while self._request_write_tasks:
             await asyncio.gather(*tuple(self._request_write_tasks), return_exceptions=True)
+            # Python may complete gather synchronously for already-done tasks.
+            # Let their queued ownership callbacks remove them before rechecking.
+            await asyncio.sleep(0)
 
     async def close(self, failure: AppServerClientError | None = None) -> None:
         if self._failure is None:

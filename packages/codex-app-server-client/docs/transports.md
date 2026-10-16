@@ -1,6 +1,7 @@
 # Local transport ownership
 
-The package exposes exactly three local transport configurations. Every
+The root facade exposes three local transport configurations. The 0.156.1
+facade additionally exposes a local WebSocket transport. Every
 transport instance is single-use: one later client owner claims one channel,
 and a second claim raises `TransportOwnershipError`. There is no process,
 connection, or ownership singleton.
@@ -31,7 +32,7 @@ been reaped and the owned group is absent; failure to prove either raises
 Unix-domain socket. It creates no listener and owns no process. Paths must be
 absolute, contain no parent traversal or NUL, and fit the conservative
 cross-platform Unix-socket path bound. Relative, byte, traversal, and oversized
-paths fail before I/O. TCP, WebSocket, remote proxy, daemon discovery, and
+paths fail before I/O. For this raw JSON-line transport, TCP, WebSocket, remote proxy, daemon discovery, and
 ambient control-socket lookup are absent.
 
 ## Injected channel
@@ -52,3 +53,10 @@ enter, and cancelling `close()` cannot cancel the retained cleanup task; a
 later close awaits the same cleanup result. Tests use deterministic in-memory
 channels, disposable executable/process-group fixtures, and temporary local
 Unix sockets only.
+
+## Local WebSocket (0.156.1 only)
+
+`v0_156_1.LocalWebSocketTransport(path)` uses the same explicit absolute Unix
+socket addressing, with an RFC 6455 HTTP upgrade and masked client text frames.
+It owns only its client connection. It neither reads daemon state nor owns the
+listener or process. See [bounds and qualification](local-websocket.md).

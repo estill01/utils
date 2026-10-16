@@ -159,7 +159,7 @@
       "async": false,
       "async_generator": false,
       "resolved_annotations": {
-        "path": "pathlib.Path",
+        "path": "pathlib._local.Path",
         "reported_version": "builtins.str",
         "return": "builtins.NoneType",
         "sha256": "builtins.str"
@@ -813,12 +813,14 @@
       "THREAD_READ": "thread/read",
       "THREAD_RESUME": "thread/resume",
       "THREAD_START": "thread/start",
+      "THREAD_TURNS_LIST": "thread/turns/list",
       "TURN_INTERRUPT": "turn/interrupt",
       "TURN_START": "turn/start",
       "TURN_STEER": "turn/steer"
     },
     "TransportCapability": {
       "INJECTED_BYTE_CHANNEL": "injected-byte-channel",
+      "LOCAL_WEBSOCKET": "local-websocket",
       "OWNED_STDIO": "owned-stdio",
       "UNIX_SOCKET": "unix-socket"
     }

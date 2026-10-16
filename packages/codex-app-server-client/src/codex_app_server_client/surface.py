@@ -11,6 +11,7 @@ class RequestCapability(StrEnum):
     THREAD_RESUME = "thread/resume"
     THREAD_READ = "thread/read"
     THREAD_LIST = "thread/list"
+    THREAD_TURNS_LIST = "thread/turns/list"
     TURN_START = "turn/start"
     TURN_STEER = "turn/steer"
     TURN_INTERRUPT = "turn/interrupt"
@@ -45,6 +46,7 @@ class TransportCapability(StrEnum):
     OWNED_STDIO = "owned-stdio"
     UNIX_SOCKET = "unix-socket"
     INJECTED_BYTE_CHANNEL = "injected-byte-channel"
+    LOCAL_WEBSOCKET = "local-websocket"
 
 
 Capability = RequestCapability | NotificationCapability | CallbackCapability | TransportCapability

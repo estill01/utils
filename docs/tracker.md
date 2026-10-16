@@ -7,6 +7,18 @@
   packages with neutral internal contracts and conformance proof, without
   implementing, operating, testing, or tracking any downstream consumer.
 
+## Active bounded successor — NATIVE156
+
+The October 16, 2026 remote connection implementation request selects only the
+new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
+completion/evidence remain retained history. Source base is
+`259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
+Current frontier: Block 17, in-progress. Terminal utility outcome is a reviewed,
+pushed, independently installable client successor with exact 0.156.1 schemas,
+typed bounded turn pagination and local WebSocket attachment. Consumer adoption
+belongs to its separate owner; no consumer is imported or tested here. No license,
+package-index publication, release, or existing daemon mutation is authorized.
+
 ## 1. Purpose and intended outcome
 
 Create an organizational monorepo of individually named Python distributions:
@@ -314,6 +326,7 @@ govern execution.
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `completed` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `completed` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `completed` |
+| 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `in-progress` |
 
 Required order:
 
@@ -2769,6 +2782,122 @@ remain truthful, no external effect occurred, and the Stop is explicit.
 
 Stop before any license grant, publication, release, announcement, downstream
 adapter or cutover, consumer test, or unrelated utility admission.
+
+## Block 17 — Qualify 0.156.1 local attachment and paginated turns
+
+Status: `in-progress`
+
+### Objective
+
+Expose the actual installed stable protocol through the existing typed client,
+with bounded local WebSocket attachment and complete-versus-summary turn reads.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: exact 0.156.1 compatibility and existing-daemon reads.
+- Potential capability loss or regression: weakening old profile gates or
+  treating a control socket as raw JSONL could misroute or corrupt operations.
+- Protected-capability effect: retain immutable protocol identities, shared RPC
+  ownership, bounded framing, callback handling and disconnect uncertainty.
+- Architecture and operating-model effect: one explicit facade and one local
+  transport use the existing compatibility, model registry and session owners.
+- Tradeoff and source evidence: actual 0.156.1 binary and official source commit
+  `b412ff32c417f855c2b2d1581b77058eed87c84b`; existing 0.3.0 has no custom-profile
+  API. Preserve old surface roots; no private consumer override or raw RPC escape.
+
+### Inputs and dependencies
+
+Accepted prior package behavior through Block 16 and current package 0.3.0 at
+`259ba4b450d9db26a0524b033d66f77b7c94a590`. Existing admitted client consumers need
+local attachment and paginated source reads; the package admission remains neutral.
+Official stable schema generation is allowed without model calls. No downstream
+source/runtime is an acceptance fixture.
+
+### Required work
+
+Retain actual stable generated 0.156.1 schemas with binary/source/tree pins. Add
+an explicit versioned facade, typed thread/turns/list and local WebSocket over a
+caller-selected Unix socket. Bound handshake/messages/frames, validate protocol
+framing, retain callback and session ownership, and close only the borrowed
+connection. Preserve old schemas and admitted surfaces. Version package/API,
+freeze provenance and signatures, document limits, and test through neutral
+local fakes plus a no-model official app-server protocol smoke.
+
+### Scope and non-goals
+
+Only this distribution and its necessary package tooling/docs. No networking
+listener, public network transport, consumer policy, scheduler, credentials,
+product persistence, daemon replacement, package publication or new provider.
+
+### Deliverables and recorded state
+
+Versioned package source, retained schemas and provenance, public contract,
+neutral tests, installed-wheel proof and exact independent review evidence.
+
+### Candidate verification evidence
+
+2026-10-16: package 0.4.0 candidate retains the 310-file generated stable schema
+root and exact native identity in its manifest. Installed-wheel isolation on
+CPython 3.13 passes all 200 package tests, including local framing, typed bounded
+turn reads, old-profile rejection and generation replacement. Wheel SHA-256:
+`b2725d0db20a3a8c5afb3fb48758eb74ceb0388b7f96708b15139d7baa04c6f4`;
+content root `7a34c713d57661e5986decbb2ef59d8ec1371bbdfc7cf5d2d6500a3c0b88815c`.
+Protocol/signature checks pass for all three exact profiles. Native no-model
+smoke confirms initialization, thread listing and client-only closure against
+0.156.1, using a disposable home without copied credentials. Its new empty
+thread receives error -32600 for history until materialized; no successful
+native turn page or model behavior is claimed. See package
+`docs/local-websocket.md` for the upstream source and complete limits.
+
+Discriminating failures repaired: completed write tasks could starve their own
+cleanup callbacks; a peer broken pipe could hide already-proven socket closure.
+Both retain fail-closed behavior when cleanup is unproven. The installed suite
+first required the sparse checkout to include existing package metadata; no
+other package was built. Three old test assertions were updated for the new
+version and explicit per-profile capability admission. Initial native empty
+history failures are retained separately from successful transport evidence.
+Independent acceptance is pending; this record does not mark Block 17 complete.
+
+### Resource and economy contract
+
+Attached disk only; 250 MiB initial workspace/test allowance, one schema capture,
+one frozen mapped suite and installed-wheel check; targeted reruns only for a
+concrete changed defect. No model calls. Reuse unchanged older protocol evidence.
+Maintained source test envelope uses this repository root and package src/tests;
+package build uses scripts/check_package.py --package codex-app-server-client
+with the repository-pinned uv toolchain and an explicit existing Python.
+
+### QA and independent review
+
+A distinct reviewer accepts the frozen candidate. Exercise framing, wrong
+version/schema, wrong profile, bounded pagination, cancellation/uncertainty and
+connection cleanup. Retain no-model smoke limits and exact native binary identity.
+
+### Acceptance
+
+The successor installs alone, exposes exact 0.156.1 typed reads/controls, preserves
+old profile admission, rejects incompatible targets, and attaches/closes a local
+WebSocket connection without owning or terminating the server process. A real
+no-model native round trip and neutral adversarial tests bind exact evidence.
+
+### Negative tests
+
+Reject wrong version/profile, invalid upgrade/accept key, masked server frames,
+RSV/control/opcode violations, oversized/fragmented messages beyond bounds,
+arbitrary RPC, public-network addresses and implicit daemon ownership. Preserve
+unknown operations after disconnect; do not replay effects.
+
+### Completion evidence
+
+Pending.
+
+### Stop
+
+Stop before consumer adoption or any publication. This is an internal prerequisite
+checkpoint for the calling implementation, not closure of that larger request.
+
+---
 
 ## 8. Verification matrix
 

@@ -1,0 +1,1011 @@
+{
+  "callables": {
+    "AgentMessageDeltaNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "delta": "builtins.str",
+        "itemId": "builtins.str",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, delta: 'str', itemId: 'str', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "AppServerClient.close": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "return": "builtins.NoneType"
+      },
+      "signature": "(self) -> 'None'"
+    },
+    "AppServerClient.connect": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "compatibility": "codex_app_server_client.compatibility.CompatibilityResult",
+        "limits": "codex_app_server_client.session.ClientLimits",
+        "return": "codex_app_server_client.v0_156_1.AppServerClient",
+        "transport": "codex_app_server_client.transport.ClientTransport"
+      },
+      "signature": "(transport: 'ClientTransport', compatibility: 'CompatibilityResult', *, limits: 'ClientLimits' = ClientLimits(max_message_bytes=8388608, max_pending_calls=256, max_events=1024, max_callbacks=64, max_backoff_seconds=30.0)) -> 'AppServerClient'"
+    },
+    "AppServerClient.initialize": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "identity": "codex_app_server_client.v0_156_1.models.ClientIdentity",
+        "return": "codex_app_server_client.v0_156_1.AppServerSession"
+      },
+      "signature": "(self, identity: 'models.ClientIdentity') -> 'AppServerSession'"
+    },
+    "AppServerClient.replace": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "backoff": "types.UnionType[collections.abc.Callable[[<class 'codex_app_server_client.restart.RestartContext'>], builtins.float], builtins.NoneType]",
+        "return": "codex_app_server_client.v0_156_1.AppServerSession",
+        "transport": "codex_app_server_client.transport.ClientTransport"
+      },
+      "signature": "(self, transport: 'ClientTransport', *, backoff: 'BackoffHook | None' = None) -> 'AppServerSession'"
+    },
+    "AppServerSession.callbacks": {
+      "async": false,
+      "async_generator": true,
+      "resolved_annotations": {
+        "return": "collections.abc.AsyncIterator[types.UnionType[codex_app_server_client.v0_156_1.coordination.CommandExecutionApprovalCallback, codex_app_server_client.v0_156_1.coordination.FileChangeApprovalCallback, codex_app_server_client.v0_156_1.coordination.UserInputCallback]]"
+      },
+      "signature": "(self) -> 'AsyncIterator[ServerCallback]'"
+    },
+    "AppServerSession.close": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "return": "builtins.NoneType"
+      },
+      "signature": "(self) -> 'None'"
+    },
+    "AppServerSession.events": {
+      "async": false,
+      "async_generator": true,
+      "resolved_annotations": {
+        "return": "collections.abc.AsyncIterator[types.UnionType[codex_app_server_client.v0_156_1.models.ErrorNotification, codex_app_server_client.v0_156_1.models.WarningNotification, codex_app_server_client.v0_156_1.models.DeprecationNoticeNotification, codex_app_server_client.v0_156_1.models.ThreadStartedNotification, codex_app_server_client.v0_156_1.models.ThreadStatusChangedNotification, codex_app_server_client.v0_156_1.models.ThreadClosedNotification, codex_app_server_client.v0_156_1.models.TurnStartedNotification, codex_app_server_client.v0_156_1.models.TurnCompletedNotification, codex_app_server_client.v0_156_1.models.TurnDiffUpdatedNotification, codex_app_server_client.v0_156_1.models.TurnPlanUpdatedNotification, codex_app_server_client.v0_156_1.models.ItemStartedNotification, codex_app_server_client.v0_156_1.models.ItemCompletedNotification, codex_app_server_client.v0_156_1.models.AgentMessageDeltaNotification, codex_app_server_client.v0_156_1.models.PlanDeltaNotification, codex_app_server_client.v0_156_1.models.ReasoningSummaryTextDeltaNotification]]"
+      },
+      "signature": "(self) -> 'AsyncIterator[ServerEvent]'"
+    },
+    "AppServerSession.interrupt_turn": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.TurnInterruptParams",
+        "return": "codex_app_server_client.v0_156_1.models.TurnInterruptResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.TurnInterruptParams', *, timeout: 'float | None' = None) -> 'models.TurnInterruptResponse'"
+    },
+    "AppServerSession.list_threads": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.ThreadListParams",
+        "return": "codex_app_server_client.v0_156_1.models.ThreadListResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.ThreadListParams', *, timeout: 'float | None' = None) -> 'models.ThreadListResponse'"
+    },
+    "AppServerSession.list_turns": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.ThreadTurnsListParams",
+        "return": "codex_app_server_client.v0_156_1.models.ThreadTurnsListResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.ThreadTurnsListParams', *, timeout: 'float | None' = None) -> 'models.ThreadTurnsListResponse'"
+    },
+    "AppServerSession.read_thread": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.ThreadReadParams",
+        "return": "codex_app_server_client.v0_156_1.models.ThreadReadResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.ThreadReadParams', *, timeout: 'float | None' = None) -> 'models.ThreadReadResponse'"
+    },
+    "AppServerSession.resume_thread": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.ThreadResumeParams",
+        "return": "codex_app_server_client.v0_156_1.models.ThreadResumeResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.ThreadResumeParams', *, timeout: 'float | None' = None) -> 'models.ThreadResumeResponse'"
+    },
+    "AppServerSession.start_review": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.ReviewStartParams",
+        "return": "codex_app_server_client.v0_156_1.models.ReviewStartResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.ReviewStartParams', *, timeout: 'float | None' = None) -> 'models.ReviewStartResponse'"
+    },
+    "AppServerSession.start_thread": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.ThreadStartParams",
+        "return": "codex_app_server_client.v0_156_1.models.ThreadStartResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.ThreadStartParams', *, timeout: 'float | None' = None) -> 'models.ThreadStartResponse'"
+    },
+    "AppServerSession.start_turn": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.TurnStartParams",
+        "return": "codex_app_server_client.v0_156_1.models.TurnStartResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.TurnStartParams', *, timeout: 'float | None' = None) -> 'models.TurnStartResponse'"
+    },
+    "AppServerSession.steer_turn": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "params": "codex_app_server_client.v0_156_1.models.TurnSteerParams",
+        "return": "codex_app_server_client.v0_156_1.models.TurnSteerResponse",
+        "timeout": "types.UnionType[builtins.float, builtins.NoneType]"
+      },
+      "signature": "(self, params: 'models.TurnSteerParams', *, timeout: 'float | None' = None) -> 'models.TurnSteerResponse'"
+    },
+    "BinaryIdentity": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "path": "pathlib._local.Path",
+        "reported_version": "builtins.str",
+        "return": "builtins.NoneType",
+        "sha256": "builtins.str"
+      },
+      "signature": "(path: 'Path', reported_version: 'str', sha256: 'str') -> None"
+    },
+    "ClientIdentity": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "name": "builtins.str",
+        "return": "builtins.NoneType",
+        "title": "types.UnionType[builtins.str, builtins.NoneType]",
+        "version": "builtins.str"
+      },
+      "signature": "(name: 'str', version: 'str', title: 'str | None' = None) -> None"
+    },
+    "ClientLimits": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "max_backoff_seconds": "builtins.float",
+        "max_callbacks": "builtins.int",
+        "max_events": "builtins.int",
+        "max_message_bytes": "builtins.int",
+        "max_pending_calls": "builtins.int",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(max_message_bytes: 'int' = 8388608, max_pending_calls: 'int' = 256, max_events: 'int' = 1024, max_callbacks: 'int' = 64, max_backoff_seconds: 'float' = 30.0) -> None"
+    },
+    "CommandExecutionApprovalCallback.respond": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "response": "codex_app_server_client.v0_156_1.models.CommandExecutionRequestApprovalResponse",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(self, response: 'models.CommandExecutionRequestApprovalResponse') -> 'None'"
+    },
+    "CommandExecutionRequestApprovalParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "approvalId": "types.UnionType[builtins.str, builtins.NoneType]",
+        "command": "types.UnionType[builtins.str, builtins.NoneType]",
+        "commandActions": "types.UnionType[builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[ForwardRef('JsonValue'), Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], builtins.NoneType]",
+        "cwd": "types.UnionType[builtins.str, builtins.NoneType]",
+        "environmentId": "types.UnionType[builtins.str, builtins.NoneType]",
+        "itemId": "builtins.str",
+        "kind": "types.UnionType[codex_app_server_client.v0_156_1.models.CommandExecutionApprovalKind, builtins.NoneType]",
+        "networkApprovalContext": "types.UnionType[codex_app_server_client.v0_156_1.models.NetworkApprovalContext, builtins.NoneType]",
+        "proposedExecpolicyAmendment": "types.UnionType[builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[ForwardRef('JsonValue'), Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], builtins.NoneType]",
+        "proposedNetworkPolicyAmendments": "types.UnionType[builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[ForwardRef('JsonValue'), Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], builtins.NoneType]",
+        "reason": "types.UnionType[builtins.str, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "startedAtMs": "builtins.int",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, approvalId: 'str | None' = None, command: 'str | None' = None, commandActions: 'tuple[JsonValue, ...] | None' = None, cwd: 'LegacyAppPathString | None' = None, environmentId: 'str | None' = None, itemId: 'str', kind: 'CommandExecutionApprovalKind | None' = None, networkApprovalContext: 'NetworkApprovalContext | None' = None, proposedExecpolicyAmendment: 'tuple[JsonValue, ...] | None' = None, proposedNetworkPolicyAmendments: 'tuple[JsonValue, ...] | None' = None, reason: 'str | None' = None, startedAtMs: 'int', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "CommandExecutionRequestApprovalResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "decision": "typing.Union[typing.Literal['accept'], typing.Literal['acceptForSession'], codex_app_server_client.v0_156_1.models.AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision, codex_app_server_client.v0_156_1.models.ApplyNetworkPolicyAmendmentCommandExecutionApprovalDecision, typing.Literal['decline'], typing.Literal['cancel']]",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(*, decision: 'CommandExecutionApprovalDecision') -> None"
+    },
+    "CompatibilityResult": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "binary": "codex_app_server_client.compatibility.BinaryIdentity",
+        "features": "codex_app_server_client.surface.FeatureSet",
+        "return": "builtins.NoneType",
+        "semantic_schema_root_sha256": "builtins.str",
+        "target": "codex_app_server_client.compatibility.ProtocolTarget"
+      },
+      "signature": "(target: 'ProtocolTarget', binary: 'BinaryIdentity', semantic_schema_root_sha256: 'str', features: 'FeatureSet') -> None"
+    },
+    "DeprecationNoticeNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "details": "types.UnionType[builtins.str, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "summary": "builtins.str"
+      },
+      "signature": "(*, details: 'str | None' = None, summary: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ErrorNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "error": "codex_app_server_client.v0_156_1.models.TurnError",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str",
+        "willRetry": "builtins.bool"
+      },
+      "signature": "(*, error: 'TurnError', threadId: 'str', turnId: 'str', willRetry: 'bool', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "FileChangeApprovalCallback.respond": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "response": "codex_app_server_client.v0_156_1.models.FileChangeRequestApprovalResponse",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(self, response: 'models.FileChangeRequestApprovalResponse') -> 'None'"
+    },
+    "FileChangeRequestApprovalParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "grantRoot": "types.UnionType[builtins.str, builtins.NoneType]",
+        "itemId": "builtins.str",
+        "reason": "types.UnionType[builtins.str, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "startedAtMs": "builtins.int",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, grantRoot: 'str | None' = None, itemId: 'str', reason: 'str | None' = None, startedAtMs: 'int', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "FileChangeRequestApprovalResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "decision": "typing.Union[typing.Literal['accept'], typing.Literal['acceptForSession'], typing.Literal['decline'], typing.Literal['cancel']]",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(*, decision: 'FileChangeApprovalDecision') -> None"
+    },
+    "InitializeInfo": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "codex_home": "builtins.str",
+        "platform_family": "builtins.str",
+        "platform_os": "builtins.str",
+        "return": "builtins.NoneType",
+        "user_agent": "builtins.str"
+      },
+      "signature": "(codex_home: 'str', user_agent: 'str', platform_family: 'str', platform_os: 'str') -> None"
+    },
+    "InjectedTransport": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "channel": "codex_app_server_client.rpc.ByteChannel",
+        "ownership": "codex_app_server_client.transport.TransportOwnership",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(channel: 'ByteChannel', *, ownership: 'TransportOwnership') -> 'None'"
+    },
+    "ItemCompletedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "completedAtMs": "builtins.int",
+        "item": "types.UnionType[codex_app_server_client.v0_156_1.models.UserMessageThreadItem, codex_app_server_client.v0_156_1.models.HookPromptThreadItem, codex_app_server_client.v0_156_1.models.AgentMessageThreadItem, codex_app_server_client.v0_156_1.models.FunctionCallOutputThreadItem, codex_app_server_client.v0_156_1.models.PlanThreadItem, codex_app_server_client.v0_156_1.models.ReasoningThreadItem, codex_app_server_client.v0_156_1.models.CommandExecutionThreadItem, codex_app_server_client.v0_156_1.models.FileChangeThreadItem, codex_app_server_client.v0_156_1.models.McpToolCallThreadItem, codex_app_server_client.v0_156_1.models.DynamicToolCallThreadItem, codex_app_server_client.v0_156_1.models.CollabAgentToolCallThreadItem, codex_app_server_client.v0_156_1.models.SubAgentActivityThreadItem, codex_app_server_client.v0_156_1.models.WebSearchThreadItem, codex_app_server_client.v0_156_1.models.ImageViewThreadItem, codex_app_server_client.v0_156_1.models.SleepThreadItem, codex_app_server_client.v0_156_1.models.ImageGenerationThreadItem, codex_app_server_client.v0_156_1.models.EnteredReviewModeThreadItem, codex_app_server_client.v0_156_1.models.ExitedReviewModeThreadItem, codex_app_server_client.v0_156_1.models.ContextCompactionThreadItem]",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, completedAtMs: 'int', item: 'ThreadItem', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ItemStartedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "item": "types.UnionType[codex_app_server_client.v0_156_1.models.UserMessageThreadItem, codex_app_server_client.v0_156_1.models.HookPromptThreadItem, codex_app_server_client.v0_156_1.models.AgentMessageThreadItem, codex_app_server_client.v0_156_1.models.FunctionCallOutputThreadItem, codex_app_server_client.v0_156_1.models.PlanThreadItem, codex_app_server_client.v0_156_1.models.ReasoningThreadItem, codex_app_server_client.v0_156_1.models.CommandExecutionThreadItem, codex_app_server_client.v0_156_1.models.FileChangeThreadItem, codex_app_server_client.v0_156_1.models.McpToolCallThreadItem, codex_app_server_client.v0_156_1.models.DynamicToolCallThreadItem, codex_app_server_client.v0_156_1.models.CollabAgentToolCallThreadItem, codex_app_server_client.v0_156_1.models.SubAgentActivityThreadItem, codex_app_server_client.v0_156_1.models.WebSearchThreadItem, codex_app_server_client.v0_156_1.models.ImageViewThreadItem, codex_app_server_client.v0_156_1.models.SleepThreadItem, codex_app_server_client.v0_156_1.models.ImageGenerationThreadItem, codex_app_server_client.v0_156_1.models.EnteredReviewModeThreadItem, codex_app_server_client.v0_156_1.models.ExitedReviewModeThreadItem, codex_app_server_client.v0_156_1.models.ContextCompactionThreadItem]",
+        "return": "builtins.NoneType",
+        "startedAtMs": "builtins.int",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, item: 'ThreadItem', startedAtMs: 'int', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "LocalWebSocketTransport": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "return": "builtins.NoneType",
+        "socket_path": "types.UnionType[os.PathLike[builtins.str], builtins.str]"
+      },
+      "signature": "(socket_path: 'os.PathLike[str] | str') -> 'None'"
+    },
+    "PlanDeltaNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "delta": "builtins.str",
+        "itemId": "builtins.str",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, delta: 'str', itemId: 'str', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ProtocolTarget": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "codex_version": "builtins.str",
+        "return": "builtins.NoneType",
+        "schema_tree_root_sha256": "builtins.str",
+        "selected_surface_root_sha256": "builtins.str",
+        "source_commit": "builtins.str"
+      },
+      "signature": "(codex_version: 'str', source_commit: 'str', schema_tree_root_sha256: 'str', selected_surface_root_sha256: 'str') -> None"
+    },
+    "ReasoningSummaryTextDeltaNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "delta": "builtins.str",
+        "itemId": "builtins.str",
+        "return": "builtins.NoneType",
+        "summaryIndex": "builtins.int",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, delta: 'str', itemId: 'str', summaryIndex: 'int', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "RestartContext": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "cause": "codex_app_server_client.errors.AppServerClientError",
+        "failed_generation": "builtins.int",
+        "replacement_generation": "builtins.int",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(failed_generation: 'int', replacement_generation: 'int', cause: 'AppServerClientError') -> None"
+    },
+    "ReviewStartParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "delivery": "types.UnionType[codex_app_server_client.v0_156_1.models.ReviewDelivery, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "target": "types.UnionType[codex_app_server_client.v0_156_1.models.UncommittedChangesReviewTarget, codex_app_server_client.v0_156_1.models.BaseBranchReviewTarget, codex_app_server_client.v0_156_1.models.CommitReviewTarget, codex_app_server_client.v0_156_1.models.CustomReviewTarget]",
+        "threadId": "builtins.str"
+      },
+      "signature": "(*, delivery: 'ReviewDelivery | None' = None, target: 'ReviewTarget', threadId: 'str') -> None"
+    },
+    "ReviewStartResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "reviewThreadId": "builtins.str",
+        "turn": "codex_app_server_client.v0_156_1.models.Turn"
+      },
+      "signature": "(*, reviewThreadId: 'str', turn: 'Turn', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "StdioTransport": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "binary": "codex_app_server_client.compatibility.BinaryIdentity",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(binary: 'BinaryIdentity') -> 'None'"
+    },
+    "ThreadClosedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str"
+      },
+      "signature": "(*, threadId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ThreadListParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "archived": "types.UnionType[builtins.bool, builtins.NoneType]",
+        "cursor": "types.UnionType[builtins.str, builtins.NoneType]",
+        "cwd": "types.UnionType[builtins.str, builtins.tuple[builtins.str, Ellipsis], builtins.NoneType]",
+        "limit": "types.UnionType[builtins.int, builtins.NoneType]",
+        "modelProviders": "types.UnionType[builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[ForwardRef('JsonValue'), Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], builtins.NoneType]",
+        "originators": "types.UnionType[builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[ForwardRef('JsonValue'), Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "searchTerm": "types.UnionType[builtins.str, builtins.NoneType]",
+        "sectionId": "types.UnionType[builtins.str, builtins.NoneType]",
+        "sortDirection": "types.UnionType[codex_app_server_client.v0_156_1.models.SortDirection, builtins.NoneType]",
+        "sortKey": "types.UnionType[codex_app_server_client.v0_156_1.models.ThreadSortKey, builtins.NoneType]",
+        "sourceKinds": "types.UnionType[builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[ForwardRef('JsonValue'), Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], builtins.NoneType]",
+        "useStateDbOnly": "types.UnionType[builtins.bool, builtins.NoneType]"
+      },
+      "signature": "(*, archived: 'bool | None' = None, cursor: 'str | None' = None, cwd: 'ThreadListCwdFilter | None' = None, limit: 'int | None' = None, modelProviders: 'tuple[JsonValue, ...] | None' = None, originators: 'tuple[JsonValue, ...] | None' = None, searchTerm: 'str | None' = None, sectionId: 'str | None' = None, sortDirection: 'SortDirection | None' = None, sortKey: 'ThreadSortKey | None' = None, sourceKinds: 'tuple[JsonValue, ...] | None' = None, useStateDbOnly: 'bool | None' = None) -> None"
+    },
+    "ThreadListResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "backwardsCursor": "types.UnionType[builtins.str, builtins.NoneType]",
+        "data": "builtins.tuple[codex_app_server_client.v0_156_1.models.Thread, Ellipsis]",
+        "nextCursor": "types.UnionType[builtins.str, builtins.NoneType]",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(*, backwardsCursor: 'str | None' = None, data: 'tuple[Thread, ...]', nextCursor: 'str | None' = None, additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ThreadReadParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "includeTurns": "types.UnionType[builtins.bool, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str"
+      },
+      "signature": "(*, includeTurns: 'bool | None' = None, threadId: 'str') -> None"
+    },
+    "ThreadReadResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "thread": "codex_app_server_client.v0_156_1.models.Thread"
+      },
+      "signature": "(*, thread: 'Thread', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ThreadResumeParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "approvalPolicy": "typing.Union[typing.Literal['untrusted', 'on-request', 'never'], codex_app_server_client.v0_156_1.models.GranularAskForApproval, builtins.NoneType]",
+        "approvalsReviewer": "types.UnionType[codex_app_server_client.v0_156_1.models.ApprovalsReviewer, builtins.NoneType]",
+        "baseInstructions": "types.UnionType[builtins.str, builtins.NoneType]",
+        "config": "types.UnionType[codex_app_server_client.v0_156_1.models.FrozenJsonObject, builtins.NoneType]",
+        "cwd": "types.UnionType[builtins.str, builtins.NoneType]",
+        "developerInstructions": "types.UnionType[builtins.str, builtins.NoneType]",
+        "excludeTurns": "types.UnionType[builtins.bool, builtins.NoneType]",
+        "model": "types.UnionType[builtins.str, builtins.NoneType]",
+        "modelProvider": "types.UnionType[builtins.str, builtins.NoneType]",
+        "personality": "types.UnionType[codex_app_server_client.v0_156_1.models.Personality, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "sandbox": "types.UnionType[codex_app_server_client.v0_156_1.models.SandboxMode, builtins.NoneType]",
+        "serviceTier": "types.UnionType[builtins.str, builtins.NoneType]",
+        "threadId": "builtins.str"
+      },
+      "signature": "(*, approvalPolicy: 'AskForApproval | None' = None, approvalsReviewer: 'ApprovalsReviewer | None' = None, baseInstructions: 'str | None' = None, config: 'FrozenJsonObject | None' = None, cwd: 'str | None' = None, developerInstructions: 'str | None' = None, excludeTurns: 'bool | None' = None, model: 'str | None' = None, modelProvider: 'str | None' = None, personality: 'Personality | None' = None, sandbox: 'SandboxMode | None' = None, serviceTier: 'str | None' = None, threadId: 'str') -> None"
+    },
+    "ThreadResumeResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "approvalPolicy": "typing.Union[typing.Literal['untrusted', 'on-request', 'never'], codex_app_server_client.v0_156_1.models.GranularAskForApproval]",
+        "approvalsReviewer": "codex_app_server_client.v0_156_1.models.ApprovalsReviewer",
+        "collaborationMode": "types.UnionType[codex_app_server_client.v0_156_1.models.CollaborationMode, builtins.NoneType]",
+        "cwd": "builtins.str",
+        "disabledPluginIds": "types.UnionType[builtins.tuple[builtins.str, Ellipsis], builtins.NoneType]",
+        "instructionSources": "types.UnionType[builtins.tuple[builtins.str, Ellipsis], builtins.NoneType]",
+        "itemsBackwardsCursor": "types.UnionType[builtins.str, builtins.NoneType]",
+        "model": "builtins.str",
+        "modelProvider": "builtins.str",
+        "reasoningEffort": "types.UnionType[builtins.str, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "sandbox": "types.UnionType[codex_app_server_client.v0_156_1.models.DangerFullAccessSandboxPolicy, codex_app_server_client.v0_156_1.models.ReadOnlySandboxPolicy, codex_app_server_client.v0_156_1.models.ExternalSandboxSandboxPolicy, codex_app_server_client.v0_156_1.models.WorkspaceWriteSandboxPolicy]",
+        "serviceTier": "types.UnionType[builtins.str, builtins.NoneType]",
+        "thread": "codex_app_server_client.v0_156_1.models.Thread",
+        "turnsBackwardsCursor": "types.UnionType[builtins.str, builtins.NoneType]"
+      },
+      "signature": "(*, approvalPolicy: 'AskForApproval', approvalsReviewer: 'ApprovalsReviewer', collaborationMode: 'CollaborationMode | None' = None, cwd: 'AbsolutePathBuf', disabledPluginIds: 'tuple[str, ...] | None' = None, instructionSources: 'tuple[LegacyAppPathString, ...] | None' = None, itemsBackwardsCursor: 'str | None' = None, model: 'str', modelProvider: 'str', reasoningEffort: 'ReasoningEffort | None' = None, sandbox: 'SandboxPolicy', serviceTier: 'str | None' = None, thread: 'Thread', turnsBackwardsCursor: 'str | None' = None, additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ThreadStartParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "approvalPolicy": "typing.Union[typing.Literal['untrusted', 'on-request', 'never'], codex_app_server_client.v0_156_1.models.GranularAskForApproval, builtins.NoneType]",
+        "approvalsReviewer": "types.UnionType[codex_app_server_client.v0_156_1.models.ApprovalsReviewer, builtins.NoneType]",
+        "baseInstructions": "types.UnionType[builtins.str, builtins.NoneType]",
+        "config": "types.UnionType[codex_app_server_client.v0_156_1.models.FrozenJsonObject, builtins.NoneType]",
+        "cwd": "types.UnionType[builtins.str, builtins.NoneType]",
+        "developerInstructions": "types.UnionType[builtins.str, builtins.NoneType]",
+        "ephemeral": "types.UnionType[builtins.bool, builtins.NoneType]",
+        "model": "types.UnionType[builtins.str, builtins.NoneType]",
+        "modelProvider": "types.UnionType[builtins.str, builtins.NoneType]",
+        "personality": "types.UnionType[codex_app_server_client.v0_156_1.models.Personality, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "sandbox": "types.UnionType[codex_app_server_client.v0_156_1.models.SandboxMode, builtins.NoneType]",
+        "serviceName": "types.UnionType[builtins.str, builtins.NoneType]",
+        "serviceTier": "types.UnionType[builtins.str, builtins.NoneType]",
+        "sessionStartSource": "types.UnionType[codex_app_server_client.v0_156_1.models.ThreadStartSource, builtins.NoneType]",
+        "threadSource": "types.UnionType[builtins.str, builtins.NoneType]"
+      },
+      "signature": "(*, approvalPolicy: 'AskForApproval | None' = None, approvalsReviewer: 'ApprovalsReviewer | None' = None, baseInstructions: 'str | None' = None, config: 'FrozenJsonObject | None' = None, cwd: 'str | None' = None, developerInstructions: 'str | None' = None, ephemeral: 'bool | None' = None, model: 'str | None' = None, modelProvider: 'str | None' = None, personality: 'Personality | None' = None, sandbox: 'SandboxMode | None' = None, serviceName: 'str | None' = None, serviceTier: 'str | None' = None, sessionStartSource: 'ThreadStartSource | None' = None, threadSource: 'ThreadSource | None' = None) -> None"
+    },
+    "ThreadStartResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "approvalPolicy": "typing.Union[typing.Literal['untrusted', 'on-request', 'never'], codex_app_server_client.v0_156_1.models.GranularAskForApproval]",
+        "approvalsReviewer": "codex_app_server_client.v0_156_1.models.ApprovalsReviewer",
+        "cwd": "builtins.str",
+        "disabledPluginIds": "types.UnionType[builtins.tuple[builtins.str, Ellipsis], builtins.NoneType]",
+        "instructionSources": "types.UnionType[builtins.tuple[builtins.str, Ellipsis], builtins.NoneType]",
+        "model": "builtins.str",
+        "modelProvider": "builtins.str",
+        "reasoningEffort": "types.UnionType[builtins.str, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "sandbox": "types.UnionType[codex_app_server_client.v0_156_1.models.DangerFullAccessSandboxPolicy, codex_app_server_client.v0_156_1.models.ReadOnlySandboxPolicy, codex_app_server_client.v0_156_1.models.ExternalSandboxSandboxPolicy, codex_app_server_client.v0_156_1.models.WorkspaceWriteSandboxPolicy]",
+        "serviceTier": "types.UnionType[builtins.str, builtins.NoneType]",
+        "thread": "codex_app_server_client.v0_156_1.models.Thread"
+      },
+      "signature": "(*, approvalPolicy: 'AskForApproval', approvalsReviewer: 'ApprovalsReviewer', cwd: 'AbsolutePathBuf', disabledPluginIds: 'tuple[str, ...] | None' = None, instructionSources: 'tuple[LegacyAppPathString, ...] | None' = None, model: 'str', modelProvider: 'str', reasoningEffort: 'ReasoningEffort | None' = None, sandbox: 'SandboxPolicy', serviceTier: 'str | None' = None, thread: 'Thread', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ThreadStartedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "thread": "codex_app_server_client.v0_156_1.models.Thread"
+      },
+      "signature": "(*, thread: 'Thread', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ThreadStatusChangedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "status": "types.UnionType[codex_app_server_client.v0_156_1.models.NotLoadedThreadStatus, codex_app_server_client.v0_156_1.models.IdleThreadStatus, codex_app_server_client.v0_156_1.models.SystemErrorThreadStatus, codex_app_server_client.v0_156_1.models.ActiveThreadStatus]",
+        "threadId": "builtins.str"
+      },
+      "signature": "(*, status: 'ThreadStatus', threadId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ThreadTurnsListParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "cursor": "types.UnionType[builtins.str, builtins.NoneType]",
+        "itemsView": "typing.Union[typing.Literal['notLoaded'], typing.Literal['summary'], typing.Literal['full'], builtins.NoneType]",
+        "limit": "types.UnionType[builtins.int, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "sortDirection": "types.UnionType[codex_app_server_client.v0_156_1.models.SortDirection, builtins.NoneType]",
+        "threadId": "builtins.str"
+      },
+      "signature": "(*, cursor: 'str | None' = None, itemsView: 'TurnItemsView | None' = None, limit: 'int | None' = None, sortDirection: 'SortDirection | None' = None, threadId: 'str') -> None"
+    },
+    "ThreadTurnsListResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "backwardsCursor": "types.UnionType[builtins.str, builtins.NoneType]",
+        "data": "builtins.tuple[codex_app_server_client.v0_156_1.models.Turn, Ellipsis]",
+        "nextCursor": "types.UnionType[builtins.str, builtins.NoneType]",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(*, backwardsCursor: 'str | None' = None, data: 'tuple[Turn, ...]', nextCursor: 'str | None' = None, additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ToolRequestUserInputParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "autoResolutionMs": "types.UnionType[builtins.int, builtins.NoneType]",
+        "isBlocking": "builtins.bool",
+        "itemId": "builtins.str",
+        "questions": "builtins.tuple[codex_app_server_client.v0_156_1.models.ToolRequestUserInputQuestion, Ellipsis]",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, autoResolutionMs: 'int | None' = None, isBlocking: 'bool', itemId: 'str', questions: 'tuple[ToolRequestUserInputQuestion, ...]', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "ToolRequestUserInputResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "answers": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(*, answers: 'FrozenJsonObject') -> None"
+    },
+    "TurnCompletedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turn": "codex_app_server_client.v0_156_1.models.Turn"
+      },
+      "signature": "(*, threadId: 'str', turn: 'Turn', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "TurnDiffUpdatedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "diff": "builtins.str",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, diff: 'str', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "TurnInterruptParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, threadId: 'str', turnId: 'str') -> None"
+    },
+    "TurnInterruptResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(*, additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "TurnPlanUpdatedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "explanation": "types.UnionType[builtins.str, builtins.NoneType]",
+        "plan": "builtins.tuple[codex_app_server_client.v0_156_1.models.TurnPlanStep, Ellipsis]",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, explanation: 'str | None' = None, plan: 'tuple[TurnPlanStep, ...]', threadId: 'str', turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "TurnStartParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "approvalPolicy": "typing.Union[typing.Literal['untrusted', 'on-request', 'never'], codex_app_server_client.v0_156_1.models.GranularAskForApproval, builtins.NoneType]",
+        "approvalsReviewer": "types.UnionType[codex_app_server_client.v0_156_1.models.ApprovalsReviewer, builtins.NoneType]",
+        "clientUserMessageId": "types.UnionType[builtins.str, builtins.NoneType]",
+        "cwd": "types.UnionType[builtins.str, builtins.NoneType]",
+        "disabledPluginIds": "types.UnionType[builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[types.UnionType[builtins.NoneType, builtins.bool, builtins.int, builtins.float, builtins.str, builtins.tuple[ForwardRef('JsonValue'), Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], codex_app_server_client.v0_156_1.models.FrozenJsonObject], Ellipsis], builtins.NoneType]",
+        "effort": "types.UnionType[builtins.str, builtins.NoneType]",
+        "input": "builtins.tuple[types.UnionType[codex_app_server_client.v0_156_1.models.TextUserInput, codex_app_server_client.v0_156_1.models.ImageUserInput, codex_app_server_client.v0_156_1.models.LocalImageUserInput, codex_app_server_client.v0_156_1.models.AudioUserInput, codex_app_server_client.v0_156_1.models.LocalAudioUserInput, codex_app_server_client.v0_156_1.models.SkillUserInput, codex_app_server_client.v0_156_1.models.MentionUserInput], Ellipsis]",
+        "model": "types.UnionType[builtins.str, builtins.NoneType]",
+        "outputSchema": "types.UnionType[builtins.object, builtins.NoneType]",
+        "personality": "types.UnionType[codex_app_server_client.v0_156_1.models.Personality, builtins.NoneType]",
+        "return": "builtins.NoneType",
+        "sandboxPolicy": "types.UnionType[codex_app_server_client.v0_156_1.models.DangerFullAccessSandboxPolicy, codex_app_server_client.v0_156_1.models.ReadOnlySandboxPolicy, codex_app_server_client.v0_156_1.models.ExternalSandboxSandboxPolicy, codex_app_server_client.v0_156_1.models.WorkspaceWriteSandboxPolicy, builtins.NoneType]",
+        "serviceTier": "types.UnionType[builtins.str, builtins.NoneType]",
+        "serviceTierForTurn": "types.UnionType[builtins.str, builtins.NoneType]",
+        "summary": "typing.Union[typing.Literal['auto', 'concise', 'detailed'], typing.Literal['none'], builtins.NoneType]",
+        "threadId": "builtins.str",
+        "toolOutput": "types.UnionType[codex_app_server_client.v0_156_1.models.TurnToolOutput, builtins.NoneType]",
+        "turnTrigger": "types.UnionType[builtins.str, builtins.NoneType]"
+      },
+      "signature": "(*, approvalPolicy: 'AskForApproval | None' = None, approvalsReviewer: 'ApprovalsReviewer | None' = None, clientUserMessageId: 'str | None' = None, cwd: 'str | None' = None, disabledPluginIds: 'tuple[JsonValue, ...] | None' = None, effort: 'ReasoningEffort | None' = None, input: 'tuple[UserInput, ...]', model: 'str | None' = None, outputSchema: 'object | None' = None, personality: 'Personality | None' = None, sandboxPolicy: 'SandboxPolicy | None' = None, serviceTier: 'str | None' = None, serviceTierForTurn: 'str | None' = None, summary: 'ReasoningSummary | None' = None, threadId: 'str', toolOutput: 'TurnToolOutput | None' = None, turnTrigger: 'str | None' = None) -> None"
+    },
+    "TurnStartResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "turn": "codex_app_server_client.v0_156_1.models.Turn"
+      },
+      "signature": "(*, turn: 'Turn', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "TurnStartedNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str",
+        "turn": "codex_app_server_client.v0_156_1.models.Turn"
+      },
+      "signature": "(*, threadId: 'str', turn: 'Turn', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "TurnSteerParams": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "clientUserMessageId": "types.UnionType[builtins.str, builtins.NoneType]",
+        "expectedTurnId": "builtins.str",
+        "input": "builtins.tuple[types.UnionType[codex_app_server_client.v0_156_1.models.TextUserInput, codex_app_server_client.v0_156_1.models.ImageUserInput, codex_app_server_client.v0_156_1.models.LocalImageUserInput, codex_app_server_client.v0_156_1.models.AudioUserInput, codex_app_server_client.v0_156_1.models.LocalAudioUserInput, codex_app_server_client.v0_156_1.models.SkillUserInput, codex_app_server_client.v0_156_1.models.MentionUserInput], Ellipsis]",
+        "return": "builtins.NoneType",
+        "threadId": "builtins.str"
+      },
+      "signature": "(*, clientUserMessageId: 'str | None' = None, expectedTurnId: 'str', input: 'tuple[UserInput, ...]', threadId: 'str') -> None"
+    },
+    "TurnSteerResponse": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "return": "builtins.NoneType",
+        "turnId": "builtins.str"
+      },
+      "signature": "(*, turnId: 'str', additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "UnixSocketTransport": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "return": "builtins.NoneType",
+        "socket_path": "types.UnionType[os.PathLike[builtins.str], builtins.str]"
+      },
+      "signature": "(socket_path: 'os.PathLike[str] | str') -> 'None'"
+    },
+    "UserInputCallback.respond": {
+      "async": true,
+      "async_generator": false,
+      "resolved_annotations": {
+        "response": "codex_app_server_client.v0_156_1.models.ToolRequestUserInputResponse",
+        "return": "builtins.NoneType"
+      },
+      "signature": "(self, response: 'models.ToolRequestUserInputResponse') -> 'None'"
+    },
+    "WarningNotification": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "additional_properties": "codex_app_server_client.v0_156_1.models.FrozenJsonObject",
+        "message": "builtins.str",
+        "return": "builtins.NoneType",
+        "threadId": "types.UnionType[builtins.str, builtins.NoneType]"
+      },
+      "signature": "(*, message: 'str', threadId: 'str | None' = None, additional_properties: 'FrozenJsonObject' = <factory>) -> None"
+    },
+    "inspect_compatibility": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "binary": "codex_app_server_client.compatibility.BinaryIdentity",
+        "return": "codex_app_server_client.compatibility.CompatibilityResult",
+        "schema_dir": "types.UnionType[pathlib._local.Path, builtins.NoneType]",
+        "target": "codex_app_server_client.compatibility.ProtocolTarget"
+      },
+      "signature": "(binary: 'BinaryIdentity', target: 'ProtocolTarget' = ProtocolTarget(codex_version='0.156.1', source_commit='b412ff32c417f855c2b2d1581b77058eed87c84b', schema_tree_root_sha256='d66a1b1c52622a4f78fc87c9acf3a58e608e3ae53c308c455a9f49b9c9e0c248', selected_surface_root_sha256='45800c823e20f8b97e9cce3fe97ffec95e0d454377d289a4f2cc15e039d34450'), *, schema_dir: 'Path | None' = None) -> 'CompatibilityResult'"
+    },
+    "resolve_codex_binary": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "executable": "types.UnionType[builtins.str, os.PathLike[builtins.str], builtins.NoneType]",
+        "return": "codex_app_server_client.compatibility.BinaryIdentity"
+      },
+      "signature": "(executable: 'str | os.PathLike[str] | None' = None) -> 'BinaryIdentity'"
+    }
+  },
+  "capability_enums": {
+    "CallbackCapability": {
+      "COMMAND_EXECUTION_APPROVAL": "item/commandExecution/requestApproval",
+      "FILE_CHANGE_APPROVAL": "item/fileChange/requestApproval",
+      "USER_INPUT": "item/tool/requestUserInput"
+    },
+    "NotificationCapability": {
+      "AGENT_MESSAGE_DELTA": "item/agentMessage/delta",
+      "DEPRECATION_NOTICE": "deprecationNotice",
+      "ERROR": "error",
+      "ITEM_COMPLETED": "item/completed",
+      "ITEM_STARTED": "item/started",
+      "PLAN_DELTA": "item/plan/delta",
+      "REASONING_SUMMARY_TEXT_DELTA": "item/reasoning/summaryTextDelta",
+      "THREAD_CLOSED": "thread/closed",
+      "THREAD_STARTED": "thread/started",
+      "THREAD_STATUS_CHANGED": "thread/status/changed",
+      "TURN_COMPLETED": "turn/completed",
+      "TURN_DIFF_UPDATED": "turn/diff/updated",
+      "TURN_PLAN_UPDATED": "turn/plan/updated",
+      "TURN_STARTED": "turn/started",
+      "WARNING": "warning"
+    },
+    "RequestCapability": {
+      "REVIEW_START": "review/start",
+      "THREAD_LIST": "thread/list",
+      "THREAD_READ": "thread/read",
+      "THREAD_RESUME": "thread/resume",
+      "THREAD_START": "thread/start",
+      "THREAD_TURNS_LIST": "thread/turns/list",
+      "TURN_INTERRUPT": "turn/interrupt",
+      "TURN_START": "turn/start",
+      "TURN_STEER": "turn/steer"
+    },
+    "TransportCapability": {
+      "INJECTED_BYTE_CHANNEL": "injected-byte-channel",
+      "LOCAL_WEBSOCKET": "local-websocket",
+      "OWNED_STDIO": "owned-stdio",
+      "UNIX_SOCKET": "unix-socket"
+    }
+  },
+  "properties": {
+    "AppServerSession.capabilities": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "return": "codex_app_server_client.surface.FeatureSet"
+      },
+      "signature": "(self) -> 'FeatureSet'"
+    },
+    "AppServerSession.generation": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "return": "builtins.int"
+      },
+      "signature": "(self) -> 'int'"
+    },
+    "AppServerSession.initialize_info": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "return": "codex_app_server_client.session.InitializeInfo"
+      },
+      "signature": "(self) -> 'InitializeInfo'"
+    }
+  },
+  "root_exports": [
+    "AgentMessageDeltaNotification",
+    "AmbiguousCodexBinaryError",
+    "AppServerClient",
+    "AppServerClientError",
+    "AppServerSession",
+    "BackoffHook",
+    "BinaryIdentity",
+    "ByteChannel",
+    "CallCancelledError",
+    "CallTimeoutError",
+    "CallbackCapability",
+    "CallbackCapacityError",
+    "ClientIdentity",
+    "ClientLimits",
+    "ClientTransport",
+    "CodexBinaryNotFoundError",
+    "CodexVersionError",
+    "CommandExecutionApprovalCallback",
+    "CommandExecutionRequestApprovalParams",
+    "CommandExecutionRequestApprovalResponse",
+    "CompatibilityResult",
+    "CorrelationError",
+    "DeprecationNoticeNotification",
+    "DisconnectedError",
+    "ErrorNotification",
+    "FeatureSet",
+    "FileChangeApprovalCallback",
+    "FileChangeRequestApprovalParams",
+    "FileChangeRequestApprovalResponse",
+    "InitializationError",
+    "InitializeInfo",
+    "InjectedTransport",
+    "ItemCompletedNotification",
+    "ItemStartedNotification",
+    "JsonRpcFramingError",
+    "JsonRpcValidationError",
+    "LocalWebSocketTransport",
+    "MessageTooLargeError",
+    "NotificationCapability",
+    "PINNED_PROTOCOL",
+    "PlanDeltaNotification",
+    "ProtocolTarget",
+    "ReasoningSummaryTextDeltaNotification",
+    "RemoteRpcError",
+    "RemoteRpcErrorCategory",
+    "RequestCapability",
+    "RequestLimitError",
+    "RestartContext",
+    "RestartError",
+    "ReviewStartParams",
+    "ReviewStartResponse",
+    "SchemaMalformedError",
+    "SchemaMissingError",
+    "SchemaRootMismatchError",
+    "ServerCallback",
+    "ServerEvent",
+    "SessionStateError",
+    "StaleGenerationError",
+    "StdioTransport",
+    "ThreadClosedNotification",
+    "ThreadListParams",
+    "ThreadListResponse",
+    "ThreadReadParams",
+    "ThreadReadResponse",
+    "ThreadResumeParams",
+    "ThreadResumeResponse",
+    "ThreadStartParams",
+    "ThreadStartResponse",
+    "ThreadStartedNotification",
+    "ThreadStatusChangedNotification",
+    "ThreadTurnsListParams",
+    "ThreadTurnsListResponse",
+    "ToolRequestUserInputParams",
+    "ToolRequestUserInputResponse",
+    "TransportCapability",
+    "TransportCleanupError",
+    "TransportClosedError",
+    "TransportOwnership",
+    "TransportOwnershipError",
+    "TransportStartError",
+    "TurnCompletedNotification",
+    "TurnDiffUpdatedNotification",
+    "TurnInterruptParams",
+    "TurnInterruptResponse",
+    "TurnPlanUpdatedNotification",
+    "TurnStartParams",
+    "TurnStartResponse",
+    "TurnStartedNotification",
+    "TurnSteerParams",
+    "TurnSteerResponse",
+    "UnixSocketTransport",
+    "UnsupportedFeatureError",
+    "UserInputCallback",
+    "WarningNotification",
+    "__version__",
+    "inspect_compatibility",
+    "resolve_codex_binary"
+  ],
+  "root_module": "codex_app_server_client.v0_156_1",
+  "schema_version": 1
+}

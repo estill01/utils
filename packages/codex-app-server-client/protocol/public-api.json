@@ -117,7 +117,8 @@
       "TURN_START": "turn/start",
       "TURN_STEER": "turn/steer",
       "TURN_INTERRUPT": "turn/interrupt",
-      "REVIEW_START": "review/start"
+      "REVIEW_START": "review/start",
+      "THREAD_TURNS_LIST": "thread/turns/list"
     },
     "NotificationCapability": {
       "ERROR": "error",
@@ -144,7 +145,8 @@
     "TransportCapability": {
       "OWNED_STDIO": "owned-stdio",
       "UNIX_SOCKET": "unix-socket",
-      "INJECTED_BYTE_CHANNEL": "injected-byte-channel"
+      "INJECTED_BYTE_CHANNEL": "injected-byte-channel",
+      "LOCAL_WEBSOCKET": "local-websocket"
     }
   },
   "support_query": "FeatureSet.supports(capability: RequestCapability | NotificationCapability | CallbackCapability | TransportCapability) -> bool",
