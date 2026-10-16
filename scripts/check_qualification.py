@@ -23,8 +23,8 @@ TECHNICAL_SOURCE_EXCLUSIONS = {
 }
 EXPECTED_PACKAGE_SOURCES = {
     "codex-app-server-client": {
-        "accepted_source_commit": "59e978dfeaa37eed708995dbdb3fb1ba8ce192b1",
-        "package_tree_object": "49df3b355950824aa1880ec653af32c80fe2bc60",
+        "accepted_source_commit": "5bb8f9cddf4a61f0c352f85ac9f47b13215be88f",
+        "package_tree_object": "9404b3453fdc02d7b78da50fe94a3bdcedaca058",
         "public_contracts": {
             "packages/codex-app-server-client/protocol/compatibility.json",
             "packages/codex-app-server-client/protocol/public-api.json",

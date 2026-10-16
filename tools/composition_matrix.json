@@ -4,9 +4,9 @@
   "manifest_sha256": "d7b072e8a76ff4e0331320f4e334a998798672b55349fc2152316e9de116c203",
   "packages": {
     "codex-app-server-client": {
-      "version": "0.4.1",
-      "wheel_sha256": "75e244f432fd05e12f727bc0be041a2c47ee4a733d1967cb5bf7f2e72d252be9",
-      "wheel_content_root_sha256": "219edf1cd2418a899b2fde31eb2b55eeb31df447c197fe4a5284ce8a3766bdf3"
+      "version": "0.4.2",
+      "wheel_sha256": "8db1b427a7b11d215d9556c7cd4e2783dfcf070a2fc3ba6b819615521b09766c",
+      "wheel_content_root_sha256": "699690ec35ba99ed4fd9666ec7baff02ac77d3f1f922f4ac36dc2457112c9ba7"
     },
     "embedded-service-contract": {
       "version": "0.1.0",
