@@ -326,7 +326,7 @@ govern execution.
 | 14 | Qualify the frozen package set, artifacts, documentation, and complete internal matrix | 13 | `completed` |
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `completed` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `completed` |
-| 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `in-progress` |
+| 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `accepted` |
 
 Required order:
 
