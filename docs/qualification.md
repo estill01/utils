@@ -21,10 +21,12 @@ historical `program-qualified` posture applies only to the old frozen package
 set. Neither record is a production acceptance, release, license, or grant of
 reuse rights.
 
-The current client is `0.4.2`. Its default facade remains exactly `0.147.0`;
+The prior `0.4.2` record is retained byte-for-byte in `tools/history/qualification-0.4.2.json`.
+
+The current client is `0.5.0`. Its default facade remains exactly `0.147.0`;
 the explicit `v0_162_1` facade retains the official stable `0.162.1` source
 schemas. The explicit `v0_156_1` facade adds the exact stable 0.156.1 schemas,
-bounded persisted turn pages and borrowed local WebSocket attachment. Its
+bounded persisted turn and item pages and borrowed local WebSocket attachment. Its
 synchronous request guard is checked after transport lock waits, before writing
 bytes. All three profiles have deterministic typed model/session tests, while
 real `0.162.1` executable and model-work qualification remains unrun. The

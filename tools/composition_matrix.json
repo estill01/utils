@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "fixture_sha256": "7a7a112b345d1f7aa979b1627a6a9d90b76f3548953cafb97f45e2d3ff3e9f49",
-  "manifest_sha256": "abf7f0f010fcdb456f76d6c9d6de68d6e28a2dacdcfa5f4b7770552cfdaae6e8",
+  "manifest_sha256": "9a548448bb5aa5e71662b954df30ab45e7f2daa3926cd70f5072689a5c9f5d94",
   "packages": {
     "codex-app-server-client": {
-      "version": "0.4.2",
-      "wheel_sha256": "12279630c478db8e659a7afd58dc2667e2d37c803afcb2e3403890c83f6822d2",
-      "wheel_content_root_sha256": "078ab0d0b92f31d3df3b2a61c09f53ef3fd3e1f6b40695ffa575f322501c25ae"
+      "version": "0.5.0",
+      "wheel_sha256": "010be409bbd0aa86800e875a7a7a2fe37751cefa7f21933194890f32db55497c",
+      "wheel_content_root_sha256": "43a7916de5cd17a50fd0939a70ca561d7f32704ce4f9e58941a54c9af8deb4c9"
     },
     "embedded-service-contract": {
       "version": "0.1.0",
