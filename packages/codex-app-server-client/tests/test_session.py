@@ -489,7 +489,8 @@ class TypedSessionTests(unittest.IsolatedAsyncioTestCase):
             frozenset(
                 item
                 for item in RequestCapability
-                if item is not RequestCapability.THREAD_TURNS_LIST
+                if item
+                not in {RequestCapability.THREAD_TURNS_LIST, RequestCapability.THREAD_ITEMS_LIST}
             ),
         )
         self.assertFalse(session.capabilities.supports(RequestCapability.THREAD_TURNS_LIST))

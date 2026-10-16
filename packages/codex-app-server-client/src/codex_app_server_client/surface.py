@@ -12,6 +12,7 @@ class RequestCapability(StrEnum):
     THREAD_READ = "thread/read"
     THREAD_LIST = "thread/list"
     THREAD_TURNS_LIST = "thread/turns/list"
+    THREAD_ITEMS_LIST = "thread/items/list"
     TURN_START = "turn/start"
     TURN_STEER = "turn/steer"
     TURN_INTERRUPT = "turn/interrupt"

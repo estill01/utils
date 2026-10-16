@@ -118,7 +118,8 @@
       "TURN_STEER": "turn/steer",
       "TURN_INTERRUPT": "turn/interrupt",
       "REVIEW_START": "review/start",
-      "THREAD_TURNS_LIST": "thread/turns/list"
+      "THREAD_TURNS_LIST": "thread/turns/list",
+      "THREAD_ITEMS_LIST": "thread/items/list"
     },
     "NotificationCapability": {
       "ERROR": "error",

@@ -82,3 +82,18 @@ does not echo caller error text. Custom injected byte channels without a
 `guarded_write_line(data, check)` contract reject guarded operations; ordinary
 calls are unchanged. This is a local dispatch precondition, not remote operation
 revocation or execution authority. Do not use it for initialization or callbacks.
+
+## Bounded native item pages
+
+The explicit `v0_156_1` session provides `list_items(ThreadItemsListParams(...))`
+for stable `thread/items/list`. Select a `threadId`, optional `turnId`, explicit
+`limit` from 1–100 and `sortDirection` (`asc` or `desc`). Preserve the returned
+opaque string `nextCursor` and `backwardsCursor`; each entry contains its
+`turnId` and typed `item`. This profile has no per-item timestamp or absolute
+item position. Page count bounds do not bound an individual item; transport
+message limits remain enforced. A thread store may reject pagination.
+
+Metadata-only thread reads and `notLoaded` turn pages can identify a run before
+reading items. No product completeness or application evidence is inferred by
+this neutral client. Older facades keep their selected operations unchanged and
+reject the new capability before I/O.

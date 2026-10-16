@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "selected_surface_root_sha256": "45800c823e20f8b97e9cce3fe97ffec95e0d454377d289a4f2cc15e039d34450",
+  "selected_surface_root_sha256": "bbcbb815d3ed76c54066dd1192cbd28748d5354f798d945c424c03a3a929fdc4",
   "root_module": "codex_app_server_client.v0_156_1",
   "compatibility_functions": {
     "resolve_codex_binary": "(executable: str | os.PathLike[str] | None = None) -> BinaryIdentity",
@@ -55,6 +55,10 @@
     "list_turns": {
       "protocol_method": "thread/turns/list",
       "signature": "async (params: ThreadTurnsListParams, *, timeout: float | None = None) -> ThreadTurnsListResponse"
+    },
+    "list_items": {
+      "protocol_method": "thread/items/list",
+      "signature": "async (params: ThreadItemsListParams, *, timeout: float | None = None) -> ThreadItemsListResponse"
     }
   },
   "schema_models": {
@@ -76,7 +80,9 @@
     "ReviewStartParams": "v2/ReviewStartParams.json#",
     "ReviewStartResponse": "v2/ReviewStartResponse.json#",
     "ThreadTurnsListParams": "v2/ThreadTurnsListParams.json#",
-    "ThreadTurnsListResponse": "v2/ThreadTurnsListResponse.json#"
+    "ThreadTurnsListResponse": "v2/ThreadTurnsListResponse.json#",
+    "ThreadItemsListParams": "v2/ThreadItemsListParams.json#",
+    "ThreadItemsListResponse": "v2/ThreadItemsListResponse.json#"
   },
   "notification_models": {
     "error": "ErrorNotification",
@@ -125,7 +131,8 @@
       "TURN_STEER": "turn/steer",
       "TURN_INTERRUPT": "turn/interrupt",
       "REVIEW_START": "review/start",
-      "THREAD_TURNS_LIST": "thread/turns/list"
+      "THREAD_TURNS_LIST": "thread/turns/list",
+      "THREAD_ITEMS_LIST": "thread/items/list"
     },
     "NotificationCapability": {
       "ERROR": "error",
@@ -317,7 +324,9 @@
     "__version__",
     "dispatch_guard",
     "inspect_compatibility",
-    "resolve_codex_binary"
+    "resolve_codex_binary",
+    "ThreadItemsListParams",
+    "ThreadItemsListResponse"
   ],
   "model_generation_rule": "For each selected top-level schema, generate immutable typed classes for every transitively reachable definition using its exact schema title or definition key; fail on same-name unequal schemas; required properties have no default, optional properties default to None, arrays become tuples, and schema unions become closed Python unions. Inbound operation results, notifications, callback parameters, and initialization results preserve deep-frozen additional JSON when additionalProperties is omitted or true; outbound operation parameters, callback responses, and initialization parameters reject unknown fields unless additionalProperties explicitly permits them. Composite object constraints retain required parent properties together with recognized child fields and enforce allOf/anyOf/oneOf; an anyOf permits multiple recognized child fields. Each profile owns an immutable independent model registry.",
   "root_exports_rule": "Export exactly root_exports and nothing else; export no raw request, raw notification, JSON value, method-string, or payload-dictionary API. Transitively generated nested schema models remain in codex_app_server_client.v0_162_1.models.",

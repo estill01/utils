@@ -2,7 +2,7 @@
   "schema_version": 1,
   "selected_surface_root": {
     "algorithm": "sha256 of compact sorted-key UTF-8 JSON plus terminal LF after removing selected_surface_root",
-    "sha256": "45800c823e20f8b97e9cce3fe97ffec95e0d454377d289a4f2cc15e039d34450"
+    "sha256": "bbcbb815d3ed76c54066dd1192cbd28748d5354f798d945c424c03a3a929fdc4"
   },
   "protocol": {
     "codex_version": "0.156.1",
@@ -35,7 +35,8 @@
       "turn/steer",
       "turn/interrupt",
       "review/start",
-      "thread/turns/list"
+      "thread/turns/list",
+      "thread/items/list"
     ]
   },
   "client_notifications": {
@@ -98,7 +99,8 @@
       "turn/steer": "add caller input to an active turn through the official typed operation",
       "turn/interrupt": "request remote turn termination; local call cancellation is not equivalent",
       "review/start": "start the official domain-neutral review operation without a raw method escape",
-      "thread/turns/list": "read bounded persisted turns with explicit full or summary item coverage"
+      "thread/turns/list": "read bounded persisted turns with explicit full or summary item coverage",
+      "thread/items/list": "read bounded native item pages and opaque cursors without full-turn hydration"
     },
     "notifications": {
       "error": "surface structured terminal or nonterminal server failure",

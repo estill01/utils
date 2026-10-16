@@ -1,7 +1,7 @@
 # Shared Domain-Neutral Utilities Implementation Tracker
 
 - Tracker status: `implementation`
-- Tracker sequence: Blocks 0–20
+- Tracker sequence: Blocks 0–21
 - Repository: `https://github.com/estill01/utils`
 - Governing objective: provide narrow, independently versioned enabling
   packages with neutral internal contracts and conformance proof, without
@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Blocks 17–19 accepted; injected-channel guard Block 20 accepted. Terminal utility outcome is a reviewed,
+Current frontier: Blocks 17–20 accepted; bounded item pagination Block 21 is in progress. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -330,6 +330,7 @@ govern execution.
 | 18 | Check request preconditions after transport queuing | 17 | `accepted` |
 | 19 | Reconcile the successor package-set qualification | 18 | `accepted` |
 | 20 | Preserve final guards for injected process channels | 18–19 | `accepted` |
+| 21 | Read bounded native item pages | 17–20 | `in-progress` |
 
 Required order:
 
@@ -3113,6 +3114,65 @@ CI exposed a stale canonical composition manifest hash; it was recomputed throug
 ### Stop
 
 Stop before publication; this is an enabling checkpoint in the continuing downstream request.
+
+---
+
+## Block 21 — Read bounded native item pages
+
+Status: `in-progress`
+
+### Objective
+
+Expose stable 0.156.1 item pagination through its existing typed profile.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: bounded item discovery without full-turn hydration.
+- Potential capability loss or regression: a count limit cannot bound one large item.
+- Protected-capability effect: preserve byte limits, exact schema profiles, borrowed ownership and narrow operations.
+- Architecture and operating-model effect: extend the selected typed surface only.
+- Tradeoff and source evidence: retained ThreadItemsListParams/Response and pinned upstream processor support string cursors; larger full-turn limits cannot bound growing turns.
+
+### Inputs and dependencies
+
+Accepted Blocks 17–20; exact stable 0.156.1 schemas and current transport owner.
+
+### Required work
+
+Add typed list_items, explicit count/direction bounds, retained cursors and model validation. Reconcile the public enum/signatures, version, package proof and qualification records without widening older profiles.
+
+### Scope and non-goals
+
+Neutral package only. No transcript access, product coverage claim, remote control mutation, model work, daemon ownership or publication.
+
+### Deliverables and recorded state
+
+0.5.0 package candidate, typed fake-peer tests, exact installed-wheel evidence and independent review.
+
+### Resource and economy contract
+
+Reuse unchanged upstream schemas and sibling packages; focused fake peers first, changed wheel once, maintained CI for exact candidate.
+
+### QA and independent review
+
+Distinct review checks exact schemas/cursors, bounds and older-profile exclusions.
+
+### Acceptance
+
+Typed native pages preserve exact membership/cursors and reject unsupported or unbounded requests; installed package and current CI pass with independent acceptance.
+
+### Negative tests
+
+Missing/excessive limit, missing direction, wrong profile, malformed response, native unsupported method, overlarge frame, no raw RPC escape. Existing transport negatives remain applicable.
+
+### Completion evidence
+
+Independent interface review identified stable thread/items/list in the retained exact schema and pinned upstream b412ff32c417f855c2b2d1581b77058eed87c84b. Implementation and qualification are in progress; no live consumer proof is claimed here.
+
+### Stop
+
+Stop before consumer adoption and publication; resume the direct implementation queue through its owning repository.
 
 ---
 

@@ -73,6 +73,23 @@ class AppServerSession(_session.AppServerSession):
 
     _CONSTRUCTION_TOKEN = object()
 
+    async def list_items(
+        self, params: models.ThreadItemsListParams, *, timeout: float | None = None
+    ) -> models.ThreadItemsListResponse:
+        if type(params) is not models.ThreadItemsListParams:
+            raise TypeError("Use this profile's ThreadItemsListParams")
+        if params.limit is None or not 1 <= params.limit <= 100:
+            raise ValueError("Explicit item page limit must be between 1 and 100")
+        if params.sortDirection not in ("asc", "desc"):
+            raise ValueError("Select explicit item ordering")
+        return await self._operation(
+            _surface.RequestCapability.THREAD_ITEMS_LIST,
+            params,
+            models.ThreadItemsListParams,
+            models.ThreadItemsListResponse,
+            timeout,
+        )
+
     async def list_turns(
         self, params: models.ThreadTurnsListParams, *, timeout: float | None = None
     ) -> models.ThreadTurnsListResponse:
@@ -265,6 +282,8 @@ __all__ = [
     *_legacy_exports,
     "ThreadTurnsListParams",
     "ThreadTurnsListResponse",
+    "ThreadItemsListParams",
+    "ThreadItemsListResponse",
     "LocalWebSocketTransport",
     "DispatchRejectedError",
     "dispatch_guard",

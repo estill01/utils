@@ -80,7 +80,7 @@ _PROTOCOL_0_156_1 = ProtocolTarget(
     codex_version="0.156.1",
     source_commit="b412ff32c417f855c2b2d1581b77058eed87c84b",
     schema_tree_root_sha256="d66a1b1c52622a4f78fc87c9acf3a58e608e3ae53c308c455a9f49b9c9e0c248",
-    selected_surface_root_sha256="45800c823e20f8b97e9cce3fe97ffec95e0d454377d289a4f2cc15e039d34450",
+    selected_surface_root_sha256="bbcbb815d3ed76c54066dd1192cbd28748d5354f798d945c424c03a3a929fdc4",
 )
 
 

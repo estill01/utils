@@ -6,7 +6,7 @@ generation-safe restart. Block 1 provides the import/version skeleton. Block 2
 freezes the exact upstream target and deliberately narrowed public contract;
 Blocks 3–9 own its behavior and conformance.
 
-API candidate `0.4.2` preserves the root `codex_app_server_client` facade at
+API candidate `0.5.0` preserves the root `codex_app_server_client` facade at
 exact Codex `0.147.0` and adds the explicit
 `codex_app_server_client.v0_162_1` facade for exact `0.162.1`. Import the facade
 that matches the executable you intend to use; profiles are never guessed,

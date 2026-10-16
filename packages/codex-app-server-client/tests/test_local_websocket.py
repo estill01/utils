@@ -70,6 +70,7 @@ class LocalWebSocketTests(unittest.IsolatedAsyncioTestCase):
         self.writers.append(writer)
         peer = peer_for(local)
         peer.responses["thread/turns/list"] = fixture(local, "ThreadTurnsListResponse")
+        peer.responses["thread/items/list"] = fixture(local, "ThreadItemsListResponse")
         self.peers.append(peer)
         try:
             request = await reader.readuntil(b"\r\n\r\n")
@@ -186,6 +187,40 @@ class LocalWebSocketTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(client._engine.pending_count, 0)
         # Rejection does not poison the borrowed session or leak the guard.
         await session.list_threads(local.ThreadListParams(limit=1))
+
+    async def test_typed_item_pages_preserve_native_cursor_and_reject_unbounded_reads(self):
+        client = await local.AppServerClient.connect(
+            local.LocalWebSocketTransport(self.socket), local.inspect_compatibility(identity(local))
+        )
+        self.addAsyncCleanup(client.close)
+        session = await client.initialize(local.ClientIdentity("neutral", "1"))
+        params = local.ThreadItemsListParams(
+            threadId="selected",
+            turnId="turn-selected",
+            cursor="opaque-native-cursor",
+            limit=16,
+            sortDirection="desc",
+        )
+        result = await session.list_items(params)
+        self.assertIs(type(result), local.ThreadItemsListResponse)
+        self.assertEqual(self.peers[-1].writes[-1]["params"], params.to_dict())
+        self.assertTrue(session.capabilities.supports(local.RequestCapability.THREAD_ITEMS_LIST))
+        before = len(self.peers[-1].writes)
+        for fields in (
+            dict(threadId="selected"),
+            dict(threadId="selected", limit=101, sortDirection="desc"),
+            dict(threadId="selected", limit=2),
+        ):
+            with self.assertRaises(ValueError):
+                await session.list_items(local.ThreadItemsListParams(**fields))
+        self.assertEqual(len(self.peers[-1].writes), before)
+        for api in (legacy, modern):
+            self.assertFalse(hasattr(api.AppServerSession, "list_items"))
+            self.assertFalse(
+                api.inspect_compatibility(identity(api)).features.supports(
+                    local.RequestCapability.THREAD_ITEMS_LIST
+                )
+            )
 
     async def test_cancelled_guarded_request_stays_unsent_after_queue_release(self):
         client = await local.AppServerClient.connect(

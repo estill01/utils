@@ -823,6 +823,7 @@
     },
     "RequestCapability": {
       "REVIEW_START": "review/start",
+      "THREAD_ITEMS_LIST": "thread/items/list",
       "THREAD_LIST": "thread/list",
       "THREAD_READ": "thread/read",
       "THREAD_RESUME": "thread/resume",

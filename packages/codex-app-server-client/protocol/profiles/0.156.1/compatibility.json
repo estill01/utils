@@ -6,6 +6,6 @@
   "semantic_schema_root_sha256": "b960e4d0666a0f322af1cf192cec319a7914067eaac5c46cabc37d90769c50c7",
   "schema_file_count": 310,
   "schema_total_bytes": 3513066,
-  "selected_surface_root_sha256": "45800c823e20f8b97e9cce3fe97ffec95e0d454377d289a4f2cc15e039d34450",
-  "public_api_sha256": "591ca4671e974769457c4fac7caae18053caca771b5ffa5818d4b899fdfdd195"
+  "selected_surface_root_sha256": "bbcbb815d3ed76c54066dd1192cbd28748d5354f798d945c424c03a3a929fdc4",
+  "public_api_sha256": "06cf4e125a712e294121edaf8e3e59b973f87fe55e8b256c3fe7c8e072a9b13d"
 }
