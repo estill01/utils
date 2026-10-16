@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Blocks 17–19 accepted; injected-channel guard Block 20 in progress. Terminal utility outcome is a reviewed,
+Current frontier: Blocks 17–19 accepted; injected-channel guard Block 20 accepted. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -329,7 +329,7 @@ govern execution.
 | 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `accepted` |
 | 18 | Check request preconditions after transport queuing | 17 | `accepted` |
 | 19 | Reconcile the successor package-set qualification | 18 | `accepted` |
-| 20 | Preserve final guards for injected process channels | 18–19 | `in-progress` |
+| 20 | Preserve final guards for injected process channels | 18–19 | `accepted` |
 
 Required order:
 
@@ -3055,7 +3055,7 @@ Stop before publication or consumer adoption; this integration checkpoint does n
 
 ## Block 20 — Preserve final guards for injected process channels
 
-Status: `in-progress`
+Status: `accepted`
 
 ### Objective
 
@@ -3104,7 +3104,11 @@ Expire after each RPC, wrapper and channel lock; cancel while waiting for the in
 
 ### Completion evidence
 
-Candidate only. Thirteen focused injected/WebSocket tests passed; an initially mistyped additional module name was corrected and transport tests pass separately. Installed wheel, current package-set qualification and independent review remain pending.
+Independent reviewer `/root/native_interface_review` rejected initial package `5bb8f9c`: arbitrary channel-originated DispatchRejectedError could misclassify a partial write as unsent and expose channel text. The fixed wrapper only recognizes rejection originating from its supplied check, sanitizes it, and fails closed for every unproven channel failure. README now accurately states that a timed-out request is rejected when its queued write wakes; timeout does not itself release the channel lock.
+
+The reviewer accepted package `f2d1263300b4d06f624aa6e6d742cca4439294c5`, including the new partial-write negative that fails the rejected candidate. Fourteen focused tests and 208 pristine installed-wheel tests passed. Wheel SHA-256 `12279630c478db8e659a7afd58dc2667e2d37c803afcb2e3403890c83f6822d2`; content root `078ab0d0b92f31d3df3b2a61c09f53ef3fd3e1f6b40695ffa575f322501c25ae`. All three protocol/signature fixtures remain unchanged.
+
+CI exposed a stale canonical composition manifest hash; it was recomputed through the existing owner, and actual neutral composition passed. Independent metadata acceptance is `125736e7dd6a26fc4b5901079d495c44ca50fd00`, superseding the earlier incomplete metadata acceptance. All push and PR jobs passed at that exact revision (runs 38886143704 and 38886148819), including both Python package and composition matrices plus technical qualification. Historical 0.4.1 evidence remains byte-identical. No model run, customer runtime acceptance or publication is implied.
 
 ### Stop
 
