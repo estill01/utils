@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Block 17 accepted; bounded dispatch-guard correction Block 18 in-progress. Terminal utility outcome is a reviewed,
+Current frontier: Block 17 accepted; bounded dispatch-guard correction Block 18 accepted. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -327,7 +327,7 @@ govern execution.
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `completed` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `completed` |
 | 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `accepted` |
-| 18 | Check request preconditions after transport queuing | 17 | `in-progress` |
+| 18 | Check request preconditions after transport queuing | 17 | `accepted` |
 
 Required order:
 
@@ -2919,7 +2919,7 @@ checkpoint for the calling implementation, not closure of that larger request.
 
 ## Block 18 — Check request preconditions after transport queuing
 
-Status: `in-progress`
+Status: `accepted`
 
 ### Objective
 
@@ -2968,7 +2968,23 @@ Exercise both write locks, expired/cancelled requests, injected channels without
 
 ### Completion evidence
 
-Pending.
+Independently accepted by `/root/native_correction_review` at pushed commit
+`59e978dfeaa37eed708995dbdb3fb1ba8ce192b1`. Reviewer independently ran all 10 local
+WebSocket tests and matched source, retained data and full package roots to the
+204-test isolated installed-wheel result. All three profile contract/signature
+checks pass. No consumer or model effects were performed.
+
+Package 0.4.1 wheel SHA-256:
+`75e244f432fd05e12f727bc0be041a2c47ee4a733d1967cb5bf7f2e72d252be9`;
+wheel contents `219edf1cd2418a899b2fde31eb2b55eeb31df447c197fe4a5284ce8a3766bdf3`;
+source root `7376f94d47750720bd8fbda66e552ffb4f726e3dac74f7d104ddf3eff42fc0b1`;
+retained data `897e2e697566bbfcfda666a29914308eab132bb0436c1db7e8c09c439c0d9fd7`;
+frozen package snapshot `bb998a135df747b76bce8fe774de47fd4e311205a46d891fefff7944eff58050`.
+
+The initial new cancellation fixture expected the wrong public exception and
+left its held lock unreleased; it was terminated and repaired with unconditional
+lock release. Version-matrix and API/signature pins were updated before the
+successful installed check. Earlier failed attempts do not stand as acceptance.
 
 ### Stop
 
