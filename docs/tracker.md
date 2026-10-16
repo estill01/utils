@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Block 17, in-progress. Terminal utility outcome is a reviewed,
+Current frontier: Block 17 accepted. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -2785,7 +2785,7 @@ adapter or cutover, consumer test, or unrelated utility admission.
 
 ## Block 17 — Qualify 0.156.1 local attachment and paginated turns
 
-Status: `in-progress`
+Status: `accepted`
 
 ### Objective
 
@@ -2869,7 +2869,12 @@ content root `2a699da7195bca851735f94e525901f371566745f2420278d02995359a4e4f7b`.
 Earlier source/retained-data proof matched its frozen commit, while later doc
 edits changed the whole snapshot root; no byte-identical whole-snapshot claim
 is made. The corrected wheel has its own complete isolated snapshot evidence.
-Independent acceptance of this correction is pending.
+Independent reviewer `/root/native_interface_review` accepted exact pushed commit
+`3f09c4f5b76fa43976ff4f99d6cdbc4d64d8d52b` on 2026-10-16. Reviewer independently
+ran five signature tests and all three profile checks, confirmed clean pushed
+HEAD, and recomputed source/schema/whole-snapshot roots matching corrected
+installed-wheel evidence. Dependency acceptance does not certify a consumer,
+successful native turn pagination, customer monitoring, or semantic outcomes.
 
 ### Resource and economy contract
 
