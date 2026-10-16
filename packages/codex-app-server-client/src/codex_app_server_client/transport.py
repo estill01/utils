@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .compatibility import PINNED_PROTOCOL, BinaryIdentity, ProtocolTarget, _protocol_root_for
-from .dispatch import _check
+from .dispatch import DispatchRejectedError, _check
 from .errors import (
     JsonRpcFramingError,
     MessageTooLargeError,
@@ -349,10 +349,23 @@ class _InjectedByteChannel:
             return line
 
     async def write_line(self, data: bytes) -> None:
+        await self.guarded_write_line(data, None)
+
+    async def guarded_write_line(self, data: bytes, check) -> None:
         _validate_write_line(data)
         async with self._write_lock:
             self._ensure_open()
-            task = asyncio.create_task(self._channel.write_line(data))
+            if check is None:
+                operation = self._channel.write_line(data)
+            else:
+                write = getattr(self._channel, "guarded_write_line", None)
+                if not callable(write):
+                    raise DispatchRejectedError(
+                        "injected channel does not support guarded dispatch"
+                    )
+                _check(check)
+                operation = write(data, check)
+            task = asyncio.create_task(operation)
             self._active_write = task
             write_failed = False
             try:
@@ -362,6 +375,8 @@ class _InjectedByteChannel:
                 task.cancel()
                 with suppress(asyncio.CancelledError, Exception):
                     await task
+                raise
+            except DispatchRejectedError:
                 raise
             except Exception:
                 write_failed = True

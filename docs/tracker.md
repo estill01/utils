@@ -1,7 +1,7 @@
 # Shared Domain-Neutral Utilities Implementation Tracker
 
 - Tracker status: `implementation`
-- Tracker sequence: Blocks 0–19
+- Tracker sequence: Blocks 0–20
 - Repository: `https://github.com/estill01/utils`
 - Governing objective: provide narrow, independently versioned enabling
   packages with neutral internal contracts and conformance proof, without
@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Blocks 17–18 accepted; package-set integration Block 19 accepted. Terminal utility outcome is a reviewed,
+Current frontier: Blocks 17–19 accepted; injected-channel guard Block 20 in progress. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -329,6 +329,7 @@ govern execution.
 | 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `accepted` |
 | 18 | Check request preconditions after transport queuing | 17 | `accepted` |
 | 19 | Reconcile the successor package-set qualification | 18 | `accepted` |
+| 20 | Preserve final guards for injected process channels | 18–19 | `in-progress` |
 
 Required order:
 
@@ -3049,6 +3050,65 @@ Independent integration review `/root/native_interface_review` found main-only c
 ### Stop
 
 Stop before publication or consumer adoption; this integration checkpoint does not complete the downstream request.
+
+---
+
+## Block 20 — Preserve final guards for injected process channels
+
+Status: `in-progress`
+
+### Objective
+
+Forward an existing guarded request through an injected channel to its final write.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: caller-owned process channels preserve the public dispatch precondition after every local queue.
+- Potential capability loss or regression: rejecting ordinary injected writes or dispatching cancelled requests later.
+- Protected-capability effect: retain fail-closed unsupported channels and unchanged unguarded behavior.
+- Architecture and operating-model effect: extend the existing neutral transport wrapper, with no product policy or process owner.
+- Tradeoff and source evidence: the wrapper previously hid an underlying channel's guarded write method; process consumers cannot otherwise use the existing public guard.
+
+### Inputs and dependencies
+
+Accepted Blocks 18–19; the existing RPC guard, injected transport ownership and cancellation contracts.
+
+### Required work
+
+Forward checks only to explicitly capable injected channels; check after the wrapper lock and preserve the final channel check. Retain cancellation cleanup and unsent rejection semantics. Version, document, test and independently review the successor package.
+
+### Scope and non-goals
+
+Neutral transport behavior, package records and deterministic fake peers only. No product authority, model call, consumer import, runtime mutation or publication.
+
+### Deliverables and recorded state
+
+Version 0.4.2 with neutral queued-expiry, unsupported-channel and cancellation regressions; exact installed-wheel and package-set qualification.
+
+### Resource and economy contract
+
+Use focused fake-channel tests first; build the changed wheel once, reuse unchanged sibling artifact proof, and run the maintained candidate CI matrix.
+
+### QA and independent review
+
+Distinct review checks final-write placement, unsent rejection, abandoned request cleanup, unchanged public signatures and exact qualification records.
+
+### Acceptance
+
+All guarded injected paths reject stale or cancelled effects before bytes; unguarded requests remain usable; current installed-wheel and maintained CI pass with independent exact-candidate review.
+
+### Negative tests
+
+Expire after each RPC, wrapper and channel lock; cancel while waiting for the injected channel; reject a channel lacking guard support without closing its otherwise usable session.
+
+### Completion evidence
+
+Candidate only. Thirteen focused injected/WebSocket tests passed; an initially mistyped additional module name was corrected and transport tests pass separately. Installed wheel, current package-set qualification and independent review remain pending.
+
+### Stop
+
+Stop before publication; this is an enabling checkpoint in the continuing downstream request.
 
 ---
 

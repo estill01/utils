@@ -6,7 +6,7 @@ generation-safe restart. Block 1 provides the import/version skeleton. Block 2
 freezes the exact upstream target and deliberately narrowed public contract;
 Blocks 3–9 own its behavior and conformance.
 
-API candidate `0.4.1` preserves the root `codex_app_server_client` facade at
+API candidate `0.4.2` preserves the root `codex_app_server_client` facade at
 exact Codex `0.147.0` and adds the explicit
 `codex_app_server_client.v0_162_1` facade for exact `0.162.1`. Import the facade
 that matches the executable you intend to use; profiles are never guessed,
@@ -36,6 +36,14 @@ Only that facade admits these features: the shared capability enum is vocabulary
 not permission for the two older profiles. Their selected surfaces and schema
 roots remain unchanged; their enum manifests and signatures record the extension.
 See [0.156.1 qualification](docs/local-websocket.md) for bounds and evidence.
+
+A guarded `InjectedTransport` now forwards the synchronous check to an injected
+channel's `guarded_write_line(data, check)` method after the wrapper lock. The
+channel must call `check()` after its own final queue/lock wait immediately
+before writing any bytes. A channel without this method rejects guarded
+requests before dispatch; ordinary `write_line` behavior is unchanged. The
+wrapper cancels an abandoned write so it cannot wake and send later. This is a
+local dispatch precondition, not proof of a remote effect.
 
 The immutable `session.initialize_info` and content-free
 `RemoteRpcError.category` added in `0.2.0` remain available in both profiles.
