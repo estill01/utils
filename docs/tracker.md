@@ -1,7 +1,7 @@
 # Shared Domain-Neutral Utilities Implementation Tracker
 
 - Tracker status: `implementation`
-- Tracker sequence: Blocks 0–18
+- Tracker sequence: Blocks 0–19
 - Repository: `https://github.com/estill01/utils`
 - Governing objective: provide narrow, independently versioned enabling
   packages with neutral internal contracts and conformance proof, without
@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Block 17 accepted; bounded dispatch-guard correction Block 18 accepted. Terminal utility outcome is a reviewed,
+Current frontier: Blocks 17–18 accepted; package-set integration Block 19 in progress. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -328,6 +328,7 @@ govern execution.
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `completed` |
 | 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `accepted` |
 | 18 | Check request preconditions after transport queuing | 17 | `accepted` |
+| 19 | Reconcile the successor package-set qualification | 18 | `in-progress` |
 
 Required order:
 
@@ -2989,6 +2990,65 @@ successful installed check. Earlier failed attempts do not stand as acceptance.
 ### Stop
 
 Stop before publication or consumer adoption; this is a dependency checkpoint.
+
+---
+
+## Block 19 — Reconcile the successor package-set qualification
+
+Status: `in-progress`
+
+### Objective
+
+The independently accepted 0.4.1 client composes with the unchanged sibling packages and current repository qualification owner.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: reproducible installation and composition of the accepted client successor.
+- Potential capability loss or regression: stale records can silently qualify an older package set.
+- Protected-capability effect: retain exact package source, measured artifacts and every supported profile.
+- Architecture and operating-model effect: update the existing qualification/composition owners only.
+- Tradeoff and source evidence: PR3 integration review found version mismatches in maintained CI despite passing package isolation; no protocol runtime change is needed.
+
+### Inputs and dependencies
+
+Accepted Block 18 at `59e978dfeaa37eed708995dbdb3fb1ba8ce192b1`; current main `635a366ff09a8a898703faf832a377d90d48f961` preserves the prior 0.3 qualification.
+
+### Required work
+
+Integrate current main without discarding its history. Retain the prior 0.3 record, bind the current package tree and all three profile contracts, reconcile measured wheel/composition/documentation roots, then freeze the technical candidate and run maintained CI. Reuse unchanged package proof by exact content identity.
+
+### Scope and non-goals
+
+Only repository qualification/composition records, their current-source checks and documentation. No consumer imports, package publication, license, runtime or model effects.
+
+### Deliverables and recorded state
+
+A committed exact technical candidate, measured qualification records, current maintained CI and distinct review.
+
+### Resource and economy contract
+
+Reuse unchanged installed-wheel proof; validate changed records and run the maintained CI matrix once per candidate. No native/model run for metadata reconciliation.
+
+### QA and independent review
+
+Distinct reviewer checks preservation of current main, exact source ancestry and measured successor records without relabeling historical proof.
+
+### Acceptance
+
+Repository-contract, package-isolation and neutral composition CI pass for the pushed candidate; no version/root check is weakened.
+
+### Negative tests
+
+Retain rejection of stale versions, changed artifacts, wrong contracts, changed source trees and altered release posture.
+
+### Completion evidence
+
+Independent integration review `/root/native_interface_review` found main-only changes in two qualification-owner files, no path overlap with PR3, and concrete qualification/composition CI version failures. Current main is being integrated without rewriting either branch. The 0.4.1 package tree remains exactly `49df3b355950824aa1880ec653af32c80fe2bc60`, matching independently accepted Block 18. Its measured installed wheel/content roots are reused from that unchanged candidate; maintained successor validation remains pending.
+
+### Stop
+
+Stop before publication or consumer adoption; this integration checkpoint does not complete the downstream request.
 
 ---
 
