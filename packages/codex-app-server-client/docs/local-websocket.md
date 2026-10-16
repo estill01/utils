@@ -73,3 +73,12 @@ rejects history reads before the first user message materializes the thread.
 The smoke records error code -32600, not a successful native turn page. Successful
 pagination responses are covered by neutral peer tests; live-run evidence belongs
 to each consumer qualification.
+
+Package 0.4.1 adds `v0_156_1.dispatch_guard(check)`. Wrap the exact typed request
+in this synchronous context manager. The callback runs after RPC and transport
+write locks and must synchronously return None or raise. An abandoned request
+or a rejected guard writes no bytes and is not retried. `DispatchRejectedError`
+does not echo caller error text. Custom injected byte channels without a
+`guarded_write_line(data, check)` contract reject guarded operations; ordinary
+calls are unchanged. This is a local dispatch precondition, not remote operation
+revocation or execution authority. Do not use it for initialization or callbacks.

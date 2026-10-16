@@ -91,7 +91,7 @@ EXPECTED_MODERN_COMPATIBILITY = {
 }
 EXPECTED_SIGNATURE_HASHES = {
     "0.147.0": "f35d4250fbc6494263beb333c3a8bc328d08db36af1a939e914240040b7d5867",
-    "0.156.1": "d8ce73035407d9b9423f5f49c2200e8b6cc4f8dcd60d2d40e9dd0c0303f7ffc8",
+    "0.156.1": "9d3e839e4b5bf7962a95c4f2cd598d3a83aba5d2a2ba555a1535fc442b578989",
     "0.162.1": "ab962ccb6271dce3d247bca30da62ad90cb9d9a966aa8d109e04b2acf9d655ad",
 }
 PROFILES = {
@@ -118,7 +118,7 @@ EXPECTED_LOCAL_GENERATION = {
 }
 EXPECTED_LOCAL_COMPATIBILITY = {
     "codex_version": "0.156.1",
-    "public_api_sha256": "efea57ee95bbe08e3112954fb8d1f664387970f347c80a3b3221883f0c0d8aed",
+    "public_api_sha256": "591ca4671e974769457c4fac7caae18053caca771b5ffa5818d4b899fdfdd195",
     "schema_file_count": 310,
     "schema_total_bytes": 3513066,
     "schema_tree_root_sha256": "d66a1b1c52622a4f78fc87c9acf3a58e608e3ae53c308c455a9f49b9c9e0c248",

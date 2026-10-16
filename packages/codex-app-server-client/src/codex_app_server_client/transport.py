@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .compatibility import PINNED_PROTOCOL, BinaryIdentity, ProtocolTarget, _protocol_root_for
+from .dispatch import _check
 from .errors import (
     JsonRpcFramingError,
     MessageTooLargeError,
@@ -124,9 +125,14 @@ class _StreamByteChannel:
                 self._buffer.extend(chunk)
 
     async def write_line(self, data: bytes) -> None:
+        await self.guarded_write_line(data, None)
+
+    async def guarded_write_line(self, data: bytes, check) -> None:
         _validate_write_line(data)
         async with self._write_lock:
             self._ensure_open()
+            if check is not None:
+                _check(check)
             write_failed = False
             try:
                 self._writer.write(data)

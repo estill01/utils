@@ -12,6 +12,7 @@ import hashlib
 import os
 import struct
 
+from .dispatch import _check
 from .errors import (
     JsonRpcFramingError,
     MessageTooLargeError,
@@ -78,7 +79,7 @@ class _WebSocketByteChannel(_StreamByteChannel):
         finally:
             self._active_read = None
 
-    async def _send(self, opcode: int, payload: bytes) -> None:
+    async def _send(self, opcode: int, payload: bytes, check=None) -> None:
         async with self._write_lock:
             self._ensure_open()
             length = len(payload)
@@ -91,6 +92,8 @@ class _WebSocketByteChannel(_StreamByteChannel):
                 header += bytes([0x80 | 127]) + struct.pack("!Q", length)
             mask = os.urandom(4)
             encoded = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
+            if check is not None:
+                _check(check)
             self._writer.write(header + mask + encoded)
             task = asyncio.create_task(self._writer.drain())
             self._active_write = task
@@ -103,6 +106,9 @@ class _WebSocketByteChannel(_StreamByteChannel):
                 self._active_write = None
 
     async def write_line(self, data: bytes) -> None:
+        await self.guarded_write_line(data, None)
+
+    async def guarded_write_line(self, data: bytes, check) -> None:
         _validate_write_line(data)
         if len(data) > _MAX_MESSAGE:
             raise MessageTooLargeError("Local WebSocket message exceeds its bound")
@@ -110,7 +116,7 @@ class _WebSocketByteChannel(_StreamByteChannel):
             data.decode("utf-8")
         except UnicodeError as error:
             raise JsonRpcFramingError("WebSocket text must be UTF-8") from error
-        await self._send(1, data[:-1])
+        await self._send(1, data[:-1], check)
 
     async def read_line(self, *, max_bytes: int) -> bytes:
         if max_bytes < 1:

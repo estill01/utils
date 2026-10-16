@@ -1,7 +1,7 @@
 # Shared Domain-Neutral Utilities Implementation Tracker
 
 - Tracker status: `implementation`
-- Tracker sequence: Blocks 0–17
+- Tracker sequence: Blocks 0–18
 - Repository: `https://github.com/estill01/utils`
 - Governing objective: provide narrow, independently versioned enabling
   packages with neutral internal contracts and conformance proof, without
@@ -13,7 +13,7 @@ The October 16, 2026 remote connection implementation request selects only the
 new **NATIVE156 Block 17** below as an enabling dependency. Blocks 0–16 and their
 completion/evidence remain retained history. Source base is
 `259ba4b450d9db26a0524b033d66f77b7c94a590`; no previous schema profile is relabelled.
-Current frontier: Block 17 accepted. Terminal utility outcome is a reviewed,
+Current frontier: Block 17 accepted; bounded dispatch-guard correction Block 18 in-progress. Terminal utility outcome is a reviewed,
 pushed, independently installable client successor with exact 0.156.1 schemas,
 typed bounded turn pagination and local WebSocket attachment. Consumer adoption
 belongs to its separate owner; no consumer is imported or tested here. No license,
@@ -327,6 +327,7 @@ govern execution.
 | 15 | Audit the frozen package set for downstream coupling and product/release authority leakage | 14 | `completed` |
 | 16 | Record the no-license/unpublished posture and close without external effects | 15 | `completed` |
 | 17 | Qualify exact 0.156.1, paginated turns and local WebSocket attachment | 16 | `accepted` |
+| 18 | Check request preconditions after transport queuing | 17 | `in-progress` |
 
 Required order:
 
@@ -2913,6 +2914,65 @@ Pending.
 
 Stop before consumer adoption or any publication. This is an internal prerequisite
 checkpoint for the calling implementation, not closure of that larger request.
+
+---
+
+## Block 18 — Check request preconditions after transport queuing
+
+Status: `in-progress`
+
+### Objective
+
+Preserve a caller's expiring precondition across asynchronous request queues.
+
+### Target-product capability delta
+
+- Posture: `consequential`.
+- Intended capability gain: reject expired or abandoned queued requests before writing bytes.
+- Potential capability loss or regression: changes to shared request cleanup or old unguarded operations.
+- Protected-capability effect: retain protocol profiles, callback ownership and uncertain-effect handling.
+- Architecture and operating-model effect: neutral request guard at existing byte transport owner, no product policy.
+- Tradeoff and source evidence: independently reproduced delayed-write race; synchronous checks bound dispatch but do not retract already-dispatched bytes.
+
+### Inputs and dependencies
+
+Accepted Block 17; exact prior package pin 3f09c4f5b76fa43976ff4f99d6cdbc4d64d8d52b.
+
+### Required work
+
+Carry an optional synchronous guard to the final package-owned channel write after all lock waits. Fail before dispatch if a selected injected channel lacks this support, or if the request was abandoned. Preserve unguarded behavior and session ownership. Version the neutral public addition and freeze its exact signatures.
+
+### Scope and non-goals
+
+Only the app-server-client package, tests and contract tooling; no consumer imports, authority, provider calls or publications.
+
+### Deliverables and recorded state
+
+Versioned guard, exact public contract, contention and cancellation regressions, installed-wheel and distinct review proof.
+
+### Resource and economy contract
+
+Reuse accepted schema/native smoke proof; no changed protocol framing or model calls. Run changed guard/session/transport checks plus the maintained package installation suite.
+
+### QA and independent review
+
+Distinct reviewer checks the frozen candidate and both RPC/channel lock contention.
+
+### Acceptance
+
+A request valid before queuing but invalid at final write sends no bytes; a rejected request leaves the session usable and is never replayed. Old unguarded interfaces remain available.
+
+### Negative tests
+
+Exercise both write locks, expired/cancelled requests, injected channels without guard support and asynchronous guard misuse.
+
+### Completion evidence
+
+Pending.
+
+### Stop
+
+Stop before publication or consumer adoption; this is a dependency checkpoint.
 
 ---
 

@@ -21,6 +21,7 @@ from .. import session as _session
 from .. import surface as _surface
 from .. import transport as _transport
 from ..compatibility import BinaryIdentity, CompatibilityResult, ProtocolTarget
+from ..dispatch import DispatchRejectedError, dispatch_guard
 from ..local_websocket import LocalWebSocketTransport
 from ..restart import BackoffHook
 from ..session import ClientLimits
@@ -265,4 +266,6 @@ __all__ = [
     "ThreadTurnsListParams",
     "ThreadTurnsListResponse",
     "LocalWebSocketTransport",
+    "DispatchRejectedError",
+    "dispatch_guard",
 ]

@@ -819,6 +819,15 @@
       },
       "signature": "(*, message: 'str', threadId: 'str | None' = None, additional_properties: 'FrozenJsonObject' = <factory>) -> None"
     },
+    "dispatch_guard": {
+      "async": false,
+      "async_generator": false,
+      "resolved_annotations": {
+        "check": "collections.abc.Callable[[], None]",
+        "return": "collections.abc.Iterator[None]"
+      },
+      "signature": "(check: collections.abc.Callable[[], None]) -> collections.abc.Iterator[None]"
+    },
     "inspect_compatibility": {
       "async": false,
       "async_generator": false,
@@ -932,6 +941,7 @@
     "CorrelationError",
     "DeprecationNoticeNotification",
     "DisconnectedError",
+    "DispatchRejectedError",
     "ErrorNotification",
     "FeatureSet",
     "FileChangeApprovalCallback",
@@ -1003,6 +1013,7 @@
     "UserInputCallback",
     "WarningNotification",
     "__version__",
+    "dispatch_guard",
     "inspect_compatibility",
     "resolve_codex_binary"
   ],

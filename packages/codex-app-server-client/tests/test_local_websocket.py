@@ -118,6 +118,7 @@ class LocalWebSocketTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIs(type(result), local.ThreadTurnsListResponse)
             self.assertEqual(self.peers[-1].writes[-1]["params"]["threadId"], "selected")
+
             self.assertEqual(self.peers[-1].writes[-1]["params"]["itemsView"], coverage)
         before = len(self.peers[-1].writes)
         for params in (
@@ -139,6 +140,106 @@ class LocalWebSocketTests(unittest.IsolatedAsyncioTestCase):
         await client.close()
         self.assertTrue(self.server.is_serving())
         self.assertEqual(len(self.peers), 2)
+
+    async def test_dispatch_guard_runs_after_each_write_lock(self):
+        client = await local.AppServerClient.connect(
+            local.LocalWebSocketTransport(self.socket), local.inspect_compatibility(identity(local))
+        )
+        self.addAsyncCleanup(client.close)
+        session = await client.initialize(local.ClientIdentity("neutral", "1"))
+        for lock in (client._engine._write_lock, client._engine._channel._write_lock):
+            with self.subTest(lock=lock):
+                times = []
+                clock = [100]
+
+                def check(times=times, clock=clock):
+                    times.append(clock[0])
+                    if clock[0] >= 112:
+                        raise ValueError("expired secret detail")
+
+                await lock.acquire()
+
+                async def invoke(check=check):
+                    with local.dispatch_guard(check):
+                        return await session.steer_turn(
+                            local.TurnSteerParams(
+                                threadId="selected",
+                                expectedTurnId="turn-selected",
+                                input=[{"type": "text", "text": "bounded input"}],
+                            )
+                        )
+
+                task = asyncio.create_task(invoke())
+                # Let model validation, RPC registration and the write task run.
+                for _ in range(10):
+                    await asyncio.sleep(0)
+                self.assertFalse(task.done())
+                self.assertEqual(times, [])
+                before = len(self.peers[-1].writes)
+                clock[0] = 115
+                lock.release()
+                with self.assertRaises(local.DispatchRejectedError) as error:
+                    await task
+                self.assertNotIn("secret", str(error.exception))
+                self.assertEqual(times, [115])
+                self.assertEqual(len(self.peers[-1].writes), before)
+                self.assertEqual(client._engine.pending_count, 0)
+        # Rejection does not poison the borrowed session or leak the guard.
+        await session.list_threads(local.ThreadListParams(limit=1))
+
+    async def test_cancelled_guarded_request_stays_unsent_after_queue_release(self):
+        client = await local.AppServerClient.connect(
+            local.LocalWebSocketTransport(self.socket), local.inspect_compatibility(identity(local))
+        )
+        self.addAsyncCleanup(client.close)
+        session = await client.initialize(local.ClientIdentity("neutral", "1"))
+        lock = client._engine._channel._write_lock
+        await lock.acquire()
+
+        async def invoke():
+            with local.dispatch_guard(lambda: None):
+                await session.list_threads(local.ThreadListParams(limit=1))
+
+        task = asyncio.create_task(invoke())
+        for _ in range(10):
+            await asyncio.sleep(0)
+        before = len(self.peers[-1].writes)
+        task.cancel()
+        try:
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+        finally:
+            lock.release()
+        await client._engine.wait_quiescent()
+        self.assertEqual(len(self.peers[-1].writes), before)
+
+    async def test_guard_rejects_unsupported_injected_channel_without_writes(self):
+        peer = peer_for(local)
+        client = await local.AppServerClient.connect(
+            local.InjectedTransport(peer, ownership=local.TransportOwnership.BORROWED),
+            local.inspect_compatibility(identity(local)),
+        )
+        self.addAsyncCleanup(client.close)
+        session = await client.initialize(local.ClientIdentity("neutral", "1"))
+        before = len(peer.writes)
+        with local.dispatch_guard(lambda: None), self.assertRaises(local.DispatchRejectedError):
+            await session.list_threads(local.ThreadListParams(limit=1))
+        self.assertEqual(len(peer.writes), before)
+
+    async def test_stream_guard_checks_after_channel_lock(self):
+        from types import SimpleNamespace
+
+        from codex_app_server_client.transport import _StreamByteChannel
+
+        writes = []
+        channel = _StreamByteChannel(asyncio.StreamReader(), SimpleNamespace(write=writes.append))
+
+        async def invalid_async_check():
+            pass
+
+        with self.assertRaises(local.DispatchRejectedError):
+            await channel.guarded_write_line(b"{}\n", invalid_async_check)
+        self.assertEqual(writes, [])
 
     async def test_legacy_profiles_reject_new_capabilities_before_io(self):
         for api in (legacy, modern):
