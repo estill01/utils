@@ -160,7 +160,7 @@ def main() -> int:
     expect_rejection(
         manifest=local_manifest,
         profile="0.156.1",
-        message="frozen schema generation identity changed",
+        message="frozen local schema generation identity changed",
     )
     local_surface = load("supported-surface.json", "0.156.1")
     local_surface["client_requests"]["public_typed"].remove("thread/turns/list")

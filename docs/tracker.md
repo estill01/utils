@@ -1,7 +1,7 @@
 # Shared Domain-Neutral Utilities Implementation Tracker
 
 - Tracker status: `implementation`
-- Tracker sequence: Blocks 0–16
+- Tracker sequence: Blocks 0–17
 - Repository: `https://github.com/estill01/utils`
 - Governing objective: provide narrow, independently versioned enabling
   packages with neutral internal contracts and conformance proof, without
